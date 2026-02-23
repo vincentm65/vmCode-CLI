@@ -1,6 +1,8 @@
 # vmCode
 
-A terminal-based AI coding assistant powered by OpenAI-style function calling with tools for codebase search, file editing, and web search.
+A CLI-based AI coding assistant capable of codebase search, file editing, computer use, and web search.
+
+<img width="1850" height="396" alt="image" src="https://github.com/user-attachments/assets/4f20cc22-a7d9-4423-afbf-15bbe1e29890" />
 
 ## Features
 
@@ -129,17 +131,20 @@ vmcode
 - `/config` - Show all configuration settings
 - `/help` - Display all available commands
 
+/help Menu:
+<img width="1843" height="1349" alt="image" src="https://github.com/user-attachments/assets/631ab805-f012-4bb6-a031-c82a339e94c5" />
+
+
 ## Project Structure
 
 ```
 vmcode/
 ├── bin/
-│   └── npm-wrapper.js   # npm entry point
+│   └── npm-wrapper.js  # npm entry point
 ├── scripts/
-│   └── install.js       # npm post-install script
-├── config.yaml.example   # Configuration template (committed)
+│   └── install.js      # npm post-install script
 ├── config.yaml         # Your API keys and settings (not in git)
-├── requirements.txt     # Python dependencies
+├── requirements.txt    # Python dependencies
 ├── package.json        # npm package definition
 ├── setup.sh            # Git clone setup script (Linux/macOS)
 ├── setup.bat           # Git clone setup script (Windows)
@@ -150,7 +155,7 @@ vmcode/
 │   ├── llm/            # LLM client and provider configurations
 │   ├── ui/             # CLI interface and commands
 │   └── utils/          # Utilities (file ops, search, validation)
-└── tests/              # Test suite (to be implemented)
+└── tests/              # Test suite (for development)
 ```
 
 ## Security
@@ -166,42 +171,3 @@ vmCode is currently in active development. Production readiness is in progress w
 - Documentation
 - Error handling improvements
 - Performance optimizations
-
-## Publishing to npm
-
-To publish vmCode to the npm registry:
-
-1. **Update package.json** with your details:
-   ```json
-   {
-     "name": "vmcode",
-     "author": "Your Name <email>",
-     "repository": {
-       "url": "https://github.com/yourusername/vmcode.git"
-     },
-     "homepage": "https://github.com/yourusername/vmcode"
-   }
-   ```
-
-2. **Test locally**:
-   ```bash
-   npm pack
-   npm install -g vmcode-0.1.0.tgz
-   vmcode
-   npm uninstall -g vmcode
-   ```
-
-3. **Publish**:
-   ```bash
-   npm login
-   npm publish
-   ```
-
-For scoped packages (e.g., `@yourusername/vmcode`):
-   ```bash
-   npm publish --access public
-   ```
-
-## License
-
-[Your License Here]
