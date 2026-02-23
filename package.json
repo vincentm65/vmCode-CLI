@@ -1,0 +1,42 @@
+{
+  "name": "vmcode",
+  "version": "1.0.0",
+  "description": "A terminal-based AI coding assistant powered by OpenAI-style function calling",
+  "main": "src/ui/main.py",
+  "bin": {
+    "vmcode": "./bin/npm-wrapper.js"
+  },
+  "scripts": {
+    "install": "node scripts/install.js",
+    "postinstall": "echo 'vmcode installed! Run with: vmcode'",
+    "start": "node bin/npm-wrapper.js"
+  },
+  "keywords": [
+    "ai",
+    "coding-assistant",
+    "terminal",
+    "llm",
+    "function-calling",
+    "python",
+    "gpt",
+    "claude"
+  ],
+  "author": "Vincent Miranda <vincentmiranda65@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vincentm65/vmCode-CLI"
+  },
+  "bugs": {
+    "url": "https://github.com/vincentm65/vmCode-CLI/issues"
+  },
+  "homepage": "https://github.com/vincentm65/vmCode-CLI",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
+}

@@ -1,0 +1,49 @@
+# =============================================================================
+# vmCode .gitignore
+# =============================================================================
+# Protects API keys and sensitive configuration from being committed
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Node.js
+node_modules/
+
+# Configuration (keep .example files!)
+config.yaml
+config_restored.yaml
+
+# Local model files
+llama.cpp/
+*.gguf
+
+# Logs and conversations
+conversations/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Other notes/files
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+nul
+notes.md

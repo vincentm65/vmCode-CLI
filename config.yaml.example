@@ -1,0 +1,99 @@
+# =============================================================================
+# vmCode Configuration Example
+# =============================================================================
+#
+# Copy this file to config.yaml and add your API keys
+#
+# API keys can also be set via environment variables (they take precedence):
+#   export OPENAI_API_KEY="sk-your-key-here"
+#   export ANTHROPIC_API_KEY="sk-ant-your-key-here"
+#   export GLM_API_KEY="your-glm-key-here"
+#   export GEMINI_API_KEY="your-gemini-key-here"
+#   export OPENROUTER_API_KEY="sk-or-your-key-here"
+#   export KIMI_API_KEY="your-kimi-key-here"
+#   export MINIMAX_API_KEY="your-minimax-key-here"
+#
+# Or set interactively in the app:
+#   /key sk-your-api-key-here
+#   /provider openai
+#
+# =============================================================================
+
+# Last selected provider (saved automatically)
+LAST_PROVIDER: openai
+
+# =============================================================================
+# API KEYS
+# =============================================================================
+
+# OpenAI (GPT models)
+OPENAI_API_KEY: "sk-your-openai-key-here"
+OPENAI_MODEL: gpt-4o-mini
+OPENAI_API_BASE: "https://api.openai.com/v1"
+
+# Anthropic (Claude models)
+ANTHROPIC_API_KEY: "sk-ant-your-anthropic-key-here"
+ANTHROPIC_MODEL: claude-3-5-sonnet-20241022
+ANTHROPIC_API_BASE: "https://api.anthropic.com/v1"
+
+# Google (Gemini models)
+GEMINI_API_KEY: "your-gemini-key-here"
+GEMINI_MODEL: gemini-1.5-flash
+GEMINI_API_BASE: "https://generativelanguage.googleapis.com/v1beta"
+
+# Zhipu AI (GLM models)
+GLM_API_KEY: "your-glm-key-here"
+GLM_MODEL: glm-4-flash
+GLM_API_BASE: "https://open.bigmodel.cn/api/paas/v4"
+
+# OpenRouter (multi-provider API)
+OPENROUTER_API_KEY: "sk-or-your-openrouter-key-here"
+OPENROUTER_MODEL: openai/gpt-4o-mini
+OPENROUTER_API_BASE: "https://openrouter.ai/api/v1"
+
+# Kimi (Moonshot AI)
+KIMI_API_KEY: "your-kimi-key-here"
+KIMI_MODEL: moonshot-v1-8k
+KIMI_API_BASE: "https://api.moonshot.cn/v1"
+
+# MiniMax
+MINIMAX_API_KEY: "your-minimax-key-here"
+MINIMAX_MODEL: "abab6.5s-chat"
+MINIMAX_API_BASE: "https://api.minimax.chat/v1"
+
+# =============================================================================
+# LOCAL MODEL SETTINGS (Optional)
+# =============================================================================
+# Uncomment to use local models via llama.cpp
+
+LOCAL_MODEL_PATH: "/path/to/your/model.gguf"
+LOCAL_SERVER_PATH: "/path/to/llama.cpp/build/bin/llama-server"
+
+# =============================================================================
+# SETTINGS
+# =============================================================================
+
+# Enable tools for LLM function calling
+TOOLS_ENABLED: true
+
+# Default interaction mode (edit, plan, or learn)
+DEFAULT_MODE: edit
+
+# =============================================================================
+# MODEL PRICING (Optional)
+# =============================================================================
+# Override default pricing for specific models (cost per 1M tokens)
+# Format: MODEL_PRICES:
+#   model_name:
+#     cost_in: 0.50
+#     cost_out: 1.50
+
+MODEL_PRICES: {}
+
+# =============================================================================
+# NOTES
+# =============================================================================
+# - Keep this file private! Never commit it to version control
+# - Set file permissions: chmod 600 config.yaml
+# - Environment variables override values in this file
+# - Run 'vmcode /help' for command reference

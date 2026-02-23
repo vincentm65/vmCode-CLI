@@ -1,0 +1,7 @@
+requests
+rich
+pathspec
+prompt-toolkit>=3.0.0
+ddgs
+pyyaml
+pygments

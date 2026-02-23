@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+env/
+
+# Configuration (keep .example)
+config.yaml
+config_restored.yaml
+
+# Local models
+llama.cpp/
+*.gguf
+
+# Logs and conversations
+conversations/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Development files
+tests/
+plan.md
+citation-validation-plan.md
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+agents.md
+notes.md
+nul
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Other
+pyproject.toml
+install.sh
+install.bat
