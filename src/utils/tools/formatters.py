@@ -10,7 +10,6 @@ from pygments.lexers import get_lexer_by_name, get_lexer_for_filename
 from pygments.formatters.terminal256 import Terminal256Formatter
 from pygments.util import ClassNotFound
 from rich.text import Text
-from utils.settings import MAX_TOOL_OUTPUT_CHARS
 
 # Module-level lexer cache for syntax highlighting
 _lexer_cache = {}
@@ -35,6 +34,20 @@ def _get_lexer_for_file(file_path):
         except ClassNotFound:
             _lexer_cache[ext] = get_lexer_by_name('text')
     return _lexer_cache[ext]
+
+
+def strip_ansi_codes(text: str) -> str:
+    """Remove ANSI escape codes from text.
+
+    Args:
+        text: Text that may contain ANSI escape codes
+
+    Returns:
+        Text with ANSI codes removed
+    """
+    # ANSI escape sequences pattern
+    ansi_pattern = re.compile(r'\x1b\[[0-9;]*m')
+    return ansi_pattern.sub('', text)
 
 
 def _detect_newline(text):
@@ -436,3 +449,6 @@ def format_file_result(exit_code, content=None, error=None, path=None,
         return f"{metadata}\n{content}\n\n"
 
     return f"{metadata}\n\n"
+
+
+# format_file_preview removed - now using Rich Syntax directly in agentic.py

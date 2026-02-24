@@ -32,13 +32,11 @@ class ServerSettings:
 class ToolSettings:
     """Tool execution limits and defaults."""
     max_tool_calls: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_tool_calls", 100))
-    max_output_chars: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_output_chars", 8000))
     command_timeout_sec: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("command_timeout_sec", 30))
-    preview_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("preview_lines", 50))
-    max_recent_reads: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_recent_reads", 20))
     enable_parallel_execution: bool = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("enable_parallel_execution", True))
     max_parallel_workers: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_parallel_workers", 10))
     max_command_output_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_command_output_lines", 100))
+    max_file_preview_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_file_preview_lines", 200))
 
 
 @dataclass
@@ -60,9 +58,17 @@ class FileSettings:
 @dataclass
 class ToolCompactionSettings:
     """Per-message tool result compaction settings."""
-    enable_per_message_compaction: bool = field(default_factory=lambda: _CONFIG.get("TOOL_COMPACTION_SETTINGS", {}).get("enable_per_message_compaction", True))
-    keep_recent_tool_blocks: int = field(default_factory=lambda: _CONFIG.get("TOOL_COMPACTION_SETTINGS", {}).get("keep_recent_tool_blocks", 3))
-    compact_failed_tools: bool = field(default_factory=lambda: _CONFIG.get("TOOL_COMPACTION_SETTINGS", {}).get("compact_failed_tools", True))
+    enable_per_message_compaction: bool = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("tool_compaction", {}).get("enable_per_message_compaction", True))
+    keep_recent_tool_blocks: int = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("tool_compaction", {}).get("keep_recent_tool_blocks", 3))
+    compact_failed_tools: bool = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("tool_compaction", {}).get("compact_failed_tools", True))
+
+
+@dataclass
+class SubAgentSettings:
+    """Sub-agent token limits and behavior configuration."""
+    soft_limit_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("soft_limit_tokens", 75_000))
+    hard_limit_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("hard_limit_tokens", 300_000))
+    enable_compaction: bool = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("enable_compaction", False))
 
 
 # Context compaction settings
@@ -74,25 +80,15 @@ class ContextSettings:
     conversations_dir: str = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("conversations_dir", "conversations"))
     tool_compaction: ToolCompactionSettings = field(default_factory=ToolCompactionSettings)
 
-    def get_compact_trigger_for_provider(self, provider: str) -> int:
-        """Get provider-specific compaction threshold.
-
-        Args:
-            provider: Provider name (unused - same threshold for all)
-
-        Returns:
-            int: Token threshold for auto-compaction (100k for all providers)
-        """
-        return self.compact_trigger_tokens  # Universal threshold for all providers
-
 
 # Global instances
 server_settings = ServerSettings()
 tool_settings = ToolSettings()
 file_settings = FileSettings()
 context_settings = ContextSettings()
+sub_agent_settings = SubAgentSettings()
 
 # Tool execution constants
-MAX_TOOL_OUTPUT_CHARS = tool_settings.max_output_chars
 MAX_TOOL_CALLS = tool_settings.max_tool_calls
 MAX_COMMAND_OUTPUT_LINES = tool_settings.max_command_output_lines
+MAX_FILE_PREVIEW_LINES = tool_settings.max_file_preview_lines

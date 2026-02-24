@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Optional, Tuple
 
+from utils.settings import MAX_FILE_PREVIEW_LINES
 from .file_helpers import (
     _is_fast_ignored,
     _is_ignored_cached,
@@ -90,7 +91,7 @@ def create_file(
         gitignore_spec: Optional PathSpec for .gitignore filtering
 
     Returns:
-        str: Formatted result with exit_code and status
+        str: Formatted result with exit_code and status, including preview
     """
     try:
         # Validate path
@@ -115,13 +116,31 @@ def create_file(
         if content is not None:
             resolved.write_text(content, encoding="utf-8", newline="")
         else:
+            content = ""
             resolved.touch()
 
-        return format_file_result(
-            exit_code=0,
-            path=str(resolved.relative_to(repo_root)),
-            content="File created successfully"
-        )
+        # Build result with content for display (truncate preview if needed)
+        result_lines = []
+        result_lines.append(f"exit_code=0")
+        result_lines.append(f"path={resolved.relative_to(repo_root)}")
+        result_lines.append(f"content=File created successfully")
+        result_lines.append("")
+        result_lines.append(f"=== FILE_CONTENT ===")
+
+        # Truncate content for preview if it exceeds max lines
+        if content:
+            content_lines = content.splitlines(keepends=True)
+            if len(content_lines) > MAX_FILE_PREVIEW_LINES:
+                truncated_content = "".join(content_lines[:MAX_FILE_PREVIEW_LINES])
+                omitted = len(content_lines) - MAX_FILE_PREVIEW_LINES
+                result_lines.append(truncated_content)
+                result_lines.append(f"\n... ({omitted} more lines omitted from preview)")
+            else:
+                result_lines.append(content)
+
+        result_lines.append("=== END_FILE_CONTENT ===")
+
+        return "\n".join(result_lines) + "\n\n"
 
     except PermissionError:
         return format_file_result(exit_code=1, error="Permission denied", path=path_str)

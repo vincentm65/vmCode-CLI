@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.syntax import Syntax
 from rich.text import Text
 from rich.live import Live
 from utils.markdown import left_align_headings
@@ -36,31 +37,6 @@ from exceptions import (
     CommandExecutionError,
     FileEditError,
 )
-
-
-def _resolve_history_path(path_str, repo_root):
-    raw_path = Path(path_str)
-    if not raw_path.is_absolute():
-        raw_path = repo_root / raw_path
-    resolved = raw_path.resolve()
-    if resolved != repo_root and not resolved.is_relative_to(repo_root):
-        return None
-    return str(resolved)
-
-
-def _record_read_path(chat_manager, path_str, repo_root, mode):
-    resolved = _resolve_history_path(path_str, repo_root)
-    if not resolved:
-        return
-
-    if resolved in chat_manager.recent_reads:
-        chat_manager.recent_reads.remove(resolved)
-    chat_manager.recent_reads.append(resolved)
-    chat_manager.recent_read_modes[resolved] = mode
-
-    if len(chat_manager.recent_reads) > tool_settings.max_recent_reads:
-        evicted = chat_manager.recent_reads.pop(0)
-        chat_manager.recent_read_modes.pop(evicted, None)
 
 
 def _get_exit_code(tool_result):
@@ -357,6 +333,94 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
                 panel_updater.append(output)
             else:
                 console.print(output)
+        if not panel_updater:
+            console.print()
+        return
+
+    # For create_file: display preview of created file
+    if command.startswith("create_file"):
+        lines = tool_result.split('\n')
+        # Extract path from metadata
+        path_match = re.search(r'path=([^\s]+)', tool_result)
+        path_str = path_match.group(1) if path_match else "file"
+
+        # Find file content section
+        content_start = None
+        content_end = None
+        for i, line in enumerate(lines):
+            if line.startswith("=== FILE_CONTENT ==="):
+                content_start = i + 1
+            elif line.startswith("=== END_FILE_CONTENT ===") and content_start is not None:
+                content_end = i
+                break
+
+        # Display summary and syntax-highlighted content
+        if content_start is not None and content_end is not None:
+            content_lines = lines[content_start:content_end]
+            content = "\n".join(content_lines)
+
+            # Get file extension for syntax highlighting
+            file_ext = Path(path_str).suffix[1:] if Path(path_str).suffix else "text"
+            # Map common extensions to lexer names
+            lexer_map = {
+                'py': 'python',
+                'js': 'javascript',
+                'ts': 'typescript',
+                'tsx': 'typescript',
+                'jsx': 'javascript',
+                'go': 'go',
+                'rs': 'rust',
+                'java': 'java',
+                'c': 'c',
+                'cpp': 'cpp',
+                'h': 'c',
+                'hpp': 'cpp',
+                'sh': 'bash',
+                'bash': 'bash',
+                'zsh': 'bash',
+                'yaml': 'yaml',
+                'yml': 'yaml',
+                'json': 'json',
+                'toml': 'toml',
+                'md': 'markdown',
+                'html': 'html',
+                'css': 'css',
+                'sql': 'sql',
+                'php': 'php',
+                'rb': 'ruby',
+                'swift': 'swift',
+                'kt': 'kotlin',
+                'scala': 'scala',
+                'lua': 'lua',
+                'r': 'r',
+            }
+            lexer_name = lexer_map.get(file_ext.lower(), 'text')
+
+            # Create syntax object
+            syntax = Syntax(
+                content,
+                lexer_name,
+                theme=MonokaiDarkBGStyle,
+                line_numbers=True,
+                word_wrap=False
+            )
+
+            # Show with prefix for console
+            if panel_updater:
+                panel_updater.append(f"Created: {path_str}")
+                panel_updater.append(str(syntax))
+            else:
+                console.print(f"Created: {path_str}", markup=False)
+                console.print(syntax)
+        else:
+            # Fallback: just show path
+            prefix = "╰─ " if not panel_updater else ""
+            message = f"{prefix}Created: {path_str}"
+            if panel_updater:
+                panel_updater.append(message)
+            else:
+                console.print(message)
+
         if not panel_updater:
             console.print()
         return
@@ -1342,6 +1406,15 @@ class AgenticOrchestrator:
             cmd_name not in ALLOWED_COMMANDS
         )
 
+        # Special case: git status, diff, log, show, blame are auto-approved
+        # branch is allowed for listing, but not deleting
+        if cmd_name == "git" and requires_approval:
+            git_subcommand = tokens[1].lower() if len(tokens) > 1 else ""
+            if git_subcommand in ("status", "diff", "log", "show", "blame"):
+                requires_approval = False
+            elif git_subcommand == "branch" and not any(arg in tokens for arg in ("-d", "-D", "--delete")):
+                requires_approval = False
+
         if requires_approval:
             # Require approval for all commands not in the allowed whitelist
             return self._handle_command_confirmation(command, None, thinking_indicator, requires_approval)
@@ -1477,14 +1550,6 @@ class AgenticOrchestrator:
                 console.print(f"[dim]→ AI receives:\n\n{tool_result}\n\n[/dim]")
 
         exit_code = _get_exit_code(tool_result)
-        if exit_code == 0:
-            read_mode = "partial" if _is_truncated_result(tool_result) else "full"
-            _record_read_path(
-                self.chat_manager,
-                path,
-                self.repo_root,
-                read_mode,
-            )
         return False, tool_result
 
     def _handle_list_directory(self, tool_id, arguments, thinking_indicator):
@@ -1698,11 +1763,7 @@ class AgenticOrchestrator:
         if any(char in path for char in invalid_chars):
             return False, f"exit_code=1\nedit_file 'path' contains invalid characters. Got: {path}"
         
-        resolved_path = _resolve_history_path(path, self.repo_root)
 
-        # Verify file was recently read in full (safety check)
-        if not resolved_path or self.chat_manager.recent_read_modes.get(resolved_path) != "full":
-            return False, "exit_code=1\nedit_file requires reading the file in full first with read_file."
 
         # Preview edit
         try:
@@ -1876,6 +1937,18 @@ class AgenticOrchestrator:
             # OpenAI API requires a tool response for every tool_call_id
             return False, f"User provided guidance: {user_input}"
 
+    def _calculate_line_range(self, start_line: int, end_line: int) -> int:
+        """Calculate max_lines from start and end line numbers.
+        
+        Args:
+            start_line: Starting line number (1-based, inclusive)
+            end_line: Ending line number (1-based, inclusive)
+            
+        Returns:
+            Number of lines in the range
+        """
+        return end_line - start_line + 1
+
     def _handle_sub_agent(self, tool_id, arguments, thinking_indicator):
         """Handle sub_agent tool call.
 
@@ -1970,7 +2043,7 @@ class AgenticOrchestrator:
                                 # It's a range N-M
                                 start_line = int(match.group(2))
                                 end_line = int(match.group(3))
-                                max_lines = end_line - start_line + 1
+                                max_lines = self._calculate_line_range(start_line, end_line)
                             else:
                                 # It's "full"
                                 start_line = 1
@@ -1980,13 +2053,13 @@ class AgenticOrchestrator:
                             start_line = int(match.group(4))
                             end_line = int(match.group(5))
                             rel_path = match.group(6).strip()
-                            max_lines = end_line - start_line + 1
+                            max_lines = self._calculate_line_range(start_line, end_line)
                         elif match.group(7) and match.group(8) and match.group(9):
                             # Pattern 3: [file]:N-M
                             rel_path = match.group(7).strip()
                             start_line = int(match.group(8))
                             end_line = int(match.group(9))
-                            max_lines = end_line - start_line + 1
+                            max_lines = self._calculate_line_range(start_line, end_line)
                         elif match.group(10) and match.group(11):
                             # Pattern 4: [file]:N (single line)
                             rel_path = match.group(10).strip()
@@ -2002,7 +2075,7 @@ class AgenticOrchestrator:
                             rel_path = match.group(13).strip()
                             start_line = int(match.group(14))
                             end_line = int(match.group(15))
-                            max_lines = end_line - start_line + 1
+                            max_lines = self._calculate_line_range(start_line, end_line)
                         elif match.group(16) and match.group(17):
                             # Pattern 7: file:N (single line, alternative)
                             rel_path = match.group(16).strip()

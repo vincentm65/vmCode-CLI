@@ -35,8 +35,6 @@ class ChatManager:
         self.plan_type = "feature"  # Default plan type (for plan interaction mode)
         self.token_tracker = TokenTracker()
         self.context_token_estimate = 0
-        self.recent_reads = []
-        self.recent_read_modes = {}
         # In-session, memory-only task list (used in EDIT workflows)
         self.task_list = []
         self.task_list_title = None
@@ -695,7 +693,6 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
                 new_messages.append(msg)
 
         self.messages = new_messages
-        self.recent_reads.clear()  # Clear recent reads after compaction
         self._update_context_tokens()
 
         # Track token counts after
@@ -1130,8 +1127,6 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
 
         self._init_messages(reset_totals=False)
         self.command_history.clear()
-        self.recent_reads.clear()
-        self.recent_read_modes.clear()
         self.task_list.clear()
         self.task_list_title = None
 

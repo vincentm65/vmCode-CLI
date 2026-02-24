@@ -73,11 +73,68 @@ LOCAL_SERVER_PATH: "/path/to/llama.cpp/build/bin/llama-server"
 # SETTINGS
 # =============================================================================
 
-# Enable tools for LLM function calling
-TOOLS_ENABLED: true
+# =============================================================================
+# TOOL SETTINGS
+# =============================================================================
 
-# Default interaction mode (edit, plan, or learn)
-DEFAULT_MODE: edit
+# Tool execution limits and defaults
+TOOL_SETTINGS:
+  max_tool_calls: 100           # Maximum number of tool calls per interaction
+  command_timeout_sec: 30       # Timeout for shell commands in seconds
+  enable_parallel_execution: true  # Enable parallel tool execution
+  max_parallel_workers: 10      # Maximum number of parallel tool workers
+  max_command_output_lines: 100 # Maximum lines to show from command output
+  max_file_preview_lines: 200   # Maximum lines to show in file creation previews
+
+# =============================================================================
+# FILE SETTINGS
+# =============================================================================
+
+# File scanning and reading limits
+FILE_SETTINGS:
+  max_file_bytes: 200000        # Maximum bytes to read from a single file (~200KB)
+  max_total_bytes: 1500000     # Maximum total bytes across all file reads (~1.5MB)
+  exclude_dirs:                # Directories to exclude from file operations
+    - .git
+    - .venv
+    - __pycache__
+    - node_modules
+    - venv
+    - env
+
+# =============================================================================
+# SERVER SETTINGS (Optional)
+# =============================================================================
+# Local llama-server configuration (only used for local models)
+SERVER_SETTINGS:
+  ngl_layers: 30                  # Number of GPU layers for llama.cpp
+  ctx_size: 8192                  # Context size for local model
+  n_predict: 8192                 # Maximum tokens to predict
+  rope_scale: 1.0                 # RoPE scaling factor
+  health_check_timeout_sec: 120   # Timeout for server health check
+  health_check_interval_sec: 1.0  # Interval between health checks
+
+# =============================================================================
+# CONTEXT SETTINGS
+# =============================================================================
+# Context compaction thresholds and defaults
+CONTEXT_SETTINGS:
+  compact_trigger_tokens: 100000 # Tokens threshold for auto-compaction
+  log_conversations: false       # Whether to log conversations to disk
+  conversations_dir: conversations # Directory for conversation logs
+  tool_compaction:
+    enable_per_message_compaction: true  # Enable per-message tool result compaction
+    keep_recent_tool_blocks: 3            # Number of recent tool blocks to keep
+    compact_failed_tools: true            # Whether to compact failed tool results
+
+# =============================================================================
+# SUB AGENT SETTINGS
+# =============================================================================
+# Configuration for sub-agent token limits and behavior
+SUB_AGENT_SETTINGS:
+  soft_limit_tokens: 75000      # Budget shown to agent in prompt (advisory)
+  hard_limit_tokens: 300000     # Hard stop - fail fast when exceeded (mandatory)
+  enable_compaction: false      # Disable auto-compaction for sub-agent sessions
 
 # =============================================================================
 # MODEL PRICING (Optional)

@@ -398,10 +398,6 @@ ALLOWED_COMMANDS = [
     # Package query (read-only only - install/upgrade requires approval)
     "pacman", "dpkg", "apt-cache", "rpm", "dnf", "yum",
     
-    # Git read-only commands
-    "git",  # git status, log, diff, branch, show, etc. are read-only
-            # git clone, push, commit, merge require approval (handled by confirmation prompt)
-    
     # Text utilities (read-only operations)
     "grep", "egrep", "fgrep", "sed", "awk",
     "cut", "sort", "head", "tail", "wc", "tr", "uniq",

@@ -260,41 +260,6 @@ def _read_file_content(
     return _read_partial_file(file_path, start_line, max_lines)
 
 
-def read_file_contents(
-    path_str: str,
-    start_line: int = 1,
-    max_lines: Optional[int] = None
-) -> str:
-    """Read raw file contents with specific line range.
-
-    Args:
-        path_str: Absolute path or path string
-        start_line: 1-based start line
-        max_lines: Number of lines to read (None for all)
-
-    Returns:
-        str: File content
-    """
-    path = Path(path_str)
-    # Use newline=None to let Python handle universal newlines
-    with path.open('r', encoding='utf-8', errors='replace', newline=None) as f:
-        # Skip to start
-        for _ in range(start_line - 1):
-            next(f, None)
-
-        if max_lines is None:
-            return f.read()
-        else:
-            lines = []
-            for _ in range(max_lines):
-                try:
-                    line = next(f)
-                    lines.append(line)
-                except StopIteration:
-                    break
-            return "".join(lines)
-
-
 def read_file(
     path_str: str,
     repo_root: Path,

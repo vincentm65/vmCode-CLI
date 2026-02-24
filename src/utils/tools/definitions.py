@@ -79,22 +79,21 @@ TOOLS = [
             }
         }
     },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_file",
-            "description": "Create a new file with optional initial content. File must not exist. For small files, include content directly.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Path to create (relative to repo root)"},
-                    "content": {"type": "string", "description": "Initial content (omit for empty file)"}
-                },
-                "required": ["path"]
+        {
+            "type": "function",
+            "function": {
+                "name": "create_file",
+                "description": "Create a new file with optional initial content. File must not exist. For small files, include content directly. Creates a preview of the written content (up to 200 lines) with syntax highlighting.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string", "description": "Path to create (relative to repo root)"},
+                        "content": {"type": "string", "description": "Initial content (omit for empty file)"}
+                    },
+                    "required": ["path"]
+                }
             }
-        }
-    },
-    {
+        },    {
         "type": "function",
         "function": {
             "name": "edit_file",

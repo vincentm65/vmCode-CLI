@@ -65,7 +65,7 @@ def confirm_tool(command, console, reason=None, requires_approval=True, prompt_s
         console.print(f"Details: {reason}")
     else:
         console.print(f"Tool request: {command}")
-    console.print("[bold white]Type 'y' to approve, 'n' to cancel:[/]")
+    console.print("[bold white]Approve tool? (y/n/guidance):[/]")
 
     try:
         # Use prompt_session.prompt() if available (for Linux compatibility)

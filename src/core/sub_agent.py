@@ -10,6 +10,7 @@ from typing import Optional
 from core.agentic import AgenticOrchestrator
 from core.chat_manager import ChatManager
 from llm.prompts import build_sub_agent_prompt
+from utils.settings import sub_agent_settings
 
 
 # Read-only tools allowed for sub-agent
@@ -22,12 +23,19 @@ def _create_chat_manager():
     Returns:
         ChatManager: A new ChatManager instance with pre-configured system prompt
     """
-    # Subagent uses 75k soft limit (vs 100k for main agent)
-    chat_manager = ChatManager(compact_trigger_tokens=75_000)
+    # Subagent uses configurable compaction setting (disabled by default)
+    if sub_agent_settings.enable_compaction:
+        # Use default compaction trigger from context_settings if enabled
+        chat_manager = ChatManager()
+    else:
+        # Disable compaction by passing None (no auto-compaction)
+        chat_manager = ChatManager(compact_trigger_tokens=None)
 
-    # Build sub-agent prompt with token awareness
+    # Build sub-agent prompt with token awareness (use configurable soft limit)
     base_prompt = build_sub_agent_prompt()
-    token_usage = chat_manager.token_tracker.get_usage_for_prompt(context_limit=200_000)
+    token_usage = chat_manager.token_tracker.get_usage_for_prompt(
+        context_limit=sub_agent_settings.soft_limit_tokens
+    )
 
     # Inject token usage into sub-agent system prompt
     chat_manager.messages = [{"role": "system", "content": f"{base_prompt}\n\n{token_usage}"}]
@@ -101,6 +109,40 @@ def run_sub_agent(
     )
 
     try:
+        # Check hard limit before starting
+        initial_tokens = temp_chat_manager.token_tracker.total_tokens
+        max_iterations = 2  # Limit to 2 LLM rounds to prevent runaway loops
+
+        # Wrap orchestrator.run to check hard limit before each LLM call
+        original_get_llm_response = orchestrator._get_llm_response
+        iteration_count = 0
+
+        def _get_llm_response_with_hard_limit(allowed_tools=None):
+            """Wrapper to check hard limit before each LLM call."""
+            nonlocal iteration_count
+            iteration_count += 1
+
+            # Check iteration limit
+            if iteration_count > max_iterations:
+                raise Exception(
+                    f"Sub-agent iteration limit exceeded ({max_iterations} rounds). "
+                    "Please refine your query or use more targeted searches."
+                )
+
+            # Check hard token limit before making LLM call
+            current_total = temp_chat_manager.token_tracker.total_tokens
+            if current_total >= sub_agent_settings.hard_limit_tokens:
+                raise Exception(
+                    f"Sub-agent hard token limit exceeded: "
+                    f"{current_total:,} / {sub_agent_settings.hard_limit_tokens:,} tokens. "
+                    "Please refine your query or use more targeted searches."
+                )
+
+            return original_get_llm_response(allowed_tools=allowed_tools)
+
+        # Replace the method with our wrapper
+        orchestrator._get_llm_response = _get_llm_response_with_hard_limit
+
         # Run sub-agent task
         orchestrator.run(
             task_query,

@@ -131,11 +131,12 @@ Bad: rg → read → rg → read → rg → read (chaining sequential searches)"
     "editing_pattern": """## Editing
 
 For EVERY edit:
-1. **Read first** with `read_file`
-2. **Find exact text** to change (including whitespace/quotes)
-3. **Copy exactly** for the `search` parameter
-4. **Include context** to make search unique
-5. **Never guess** - always read and copy
+1. **Find exact text** to change (including whitespace/quotes)
+2. **Copy exactly** for the `search` parameter
+3. **Include context** to make search unique
+4. **Never guess** - always verify search text matches
+
+Tip: Read the file first to understand the context and find the exact text to edit.
 
 If search appears multiple times, add more context. Copy character-for-character without reformatting.""",
 
@@ -216,6 +217,17 @@ Don't use for: simple single-file questions, quick lookups, tasks with sufficien
 4. Answer early (2-3 searches + 3-5 reads is usually enough)
 5. Read before editing (never edit unread files)
 6. No temp files (use edit_file; create .md only if requested)""",
+
+    "temp_folder": """## Temp Folder
+
+**Use the `.temp` folder** (at app root) for all test files, plan documents, and temporary work.
+
+**Examples:**
+- `.temp/test_preview.md` - test files
+- `.temp/plan_feature_x.md` - plan documents
+- `.temp/demo_data.json` - temporary data
+
+Keeps test files separate from production code and easy to clean up.""",
 
     "token_awareness": """## Token Usage Awareness
 
@@ -493,6 +505,7 @@ def build_system_prompt(mode: str, learn_submode: str = None, plan_type: str = N
         BASE_SECTIONS["when_to_use_sub_agent"],
         BASE_SECTIONS["error_handling"],
         BASE_SECTIONS["best_practices"],
+        BASE_SECTIONS["temp_folder"],
         MODE_SECTIONS[mode],
     ]
     
@@ -534,16 +547,12 @@ def build_sub_agent_prompt() -> str:
         BASE_SECTIONS["targeted_searching"],
         BASE_SECTIONS["casual_interactions"],
         BASE_SECTIONS["best_practices"],
+        BASE_SECTIONS["temp_folder"],
         BASE_SECTIONS["token_awareness"],
         SUB_AGENT_SECTIONS["mode"],
     ]
     return "\n\n".join(sections)
 
-
-# Backward compatibility alias
-def build_main_agent_prompt(mode: str) -> str:
-    """Deprecated: Use build_system_prompt instead."""
-    return build_system_prompt(mode)
 
 
 
