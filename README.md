@@ -170,4 +170,8 @@ vmCode is currently in active development. Production readiness is in progress w
 - Comprehensive test coverage
 - Documentation
 - Error handling improvements
+<<<<<<< HEAD
 - Performance optimizationsour License Here]
+=======
+- Performance optimizations
+>>>>>>> df3957ea1d8e3da51ed06e8960637514281db96d
