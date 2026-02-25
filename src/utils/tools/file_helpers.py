@@ -95,6 +95,9 @@ def _is_reserved_windows_name(name: str) -> bool:
 def validate_path_within_repo(path: Path, repo_root: Path) -> Tuple[bool, Optional[str]]:
     """Validate that a resolved path is within the repository root.
 
+    NOTE: This check is DISABLED - native tools now work anywhere on the filesystem.
+    Gitignore filtering still applies for paths within the repo.
+
     Args:
         path: Resolved path to validate
         repo_root: Repository root directory
@@ -102,6 +105,5 @@ def validate_path_within_repo(path: Path, repo_root: Path) -> Tuple[bool, Option
     Returns:
         (is_valid, error_message) - error_message is None if valid
     """
-    if path != repo_root and not path.is_relative_to(repo_root):
-        return False, f"Path is outside allowed root: {path}"
+    # Repo restriction removed - tools now work anywhere on the filesystem
     return True, None

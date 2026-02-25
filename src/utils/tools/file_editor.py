@@ -131,7 +131,7 @@ def _find_unique_span_with_fallbacks(content, search_text):
 
 
 def _resolve_repo_path(path_str, repo_root, gitignore_spec=None):
-    """Resolve and validate a path within the repo.
+    """Resolve and validate a path for editing.
 
     Args:
         path_str: Path string to resolve
@@ -142,19 +142,14 @@ def _resolve_repo_path(path_str, repo_root, gitignore_spec=None):
         Resolved Path object
 
     Raises:
-        PathValidationError: If path is invalid, outside repo, or blocked by .gitignore
+        PathValidationError: If path is invalid or blocked by .gitignore
     """
     raw_path = Path(path_str)
     if not raw_path.is_absolute():
         raw_path = repo_root / raw_path
     resolved = raw_path.resolve()
-    if resolved != repo_root and not resolved.is_relative_to(repo_root):
-        raise PathValidationError(
-            "Path is outside allowed root",
-            details={"path": str(resolved), "repo_root": str(repo_root)}
-        )
 
-    # Check .gitignore (if spec provided)
+    # Check .gitignore (only applies to paths within repo)
     if gitignore_spec is not None:
         from utils.gitignore_filter import is_path_ignored, format_gitignore_error
 

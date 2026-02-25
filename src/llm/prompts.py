@@ -185,16 +185,14 @@ Not every question needs code exploration.""",
 - Listing directories: use `list_directory` tool
 - Creating files: use `create_file` tool
 - Editing files: use `edit_file` tool
-- python/python3 commands to edit/modify files (use native tools: create_file, edit_file)
-
-**Note:** For system-wide file operations outside the codebase, `execute_command` with `cat`, `ls`, etc. IS allowed (e.g., `cat /etc/hosts`, `ls -la /tmp`)""",
+- python/python3 commands to edit/modify files (use native tools: create_file, edit_file)""",
 
     "computer_agent_capabilities": """## Computer Agent Capabilities
 
 ### Working Directory & Navigation
 - All commands execute from **repository root** (check with `pwd`)
 - Use `cd` to navigate: `cd /var/log && tail -f syslog`
-- Absolute paths allowed for system-wide debugging
+- Absolute paths allowed for system debugging
 
 ### Debugging Tools (execute_command)
 **Process:** `ps aux`, `pgrep -f process_name`, `lsof -i :port`, `lsof -p PID`

@@ -133,7 +133,6 @@ def _validate_directory_path(
 
     Checks:
     - Path resolution
-    - Path within repo bounds
     - Path exists
     - Path is a directory (not a file)
     """
@@ -143,10 +142,6 @@ def _validate_directory_path(
         if not raw_path.is_absolute():
             raw_path = repo_root / raw_path
         resolved = raw_path.resolve()
-
-        # Validate path is within repo
-        if resolved != repo_root and not resolved.is_relative_to(repo_root):
-            return None, "Path is outside allowed root"
 
         # Check if it exists
         if not resolved.exists():
@@ -337,9 +332,9 @@ def list_directory(
         lines = []
         for kind, rel_path, size, _, line_count in truncated_items:
             if kind == "FILE":
-                lines.append(f"{kind}  {size} bytes  {line_count:6} lines  {rel_path}")
+                lines.append(f"{kind}  {rel_path}  {line_count:6} lines  {size} bytes")
             else:
-                lines.append(f"{kind}              {line_count:6} lines  {rel_path}")
+                lines.append(f"{kind}  {rel_path}  {line_count:6} lines")
 
         # Add truncation message at end
         if truncation_info:

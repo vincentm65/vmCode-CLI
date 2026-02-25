@@ -8,8 +8,7 @@ from .file_helpers import (
     _is_fast_ignored,
     _is_ignored_cached,
     _register_gitignore_spec,
-    _is_reserved_windows_name,
-    validate_path_within_repo
+    _is_reserved_windows_name
 )
 from .formatters import format_file_result
 
@@ -32,8 +31,7 @@ def _validate_read_path(
     Checks:
     - Windows filename validation (invalid chars, reserved names)
     - Path resolution (absolute vs relative)
-    - Path within repo bounds
-    - Gitignore filtering
+    - Gitignore filtering (only within repo)
     - Path exists and is a file (not directory)
     """
     try:
@@ -55,12 +53,7 @@ def _validate_read_path(
             raw_path = repo_root / raw_path
         resolved = raw_path.resolve()
 
-        # Validate path is within repo
-        is_valid, error = validate_path_within_repo(resolved, repo_root)
-        if not is_valid:
-            return None, error
-
-        # Check .gitignore
+        # Check .gitignore (only applies to paths within repo)
         if gitignore_spec is not None:
             # Fast-path check first
             if _is_fast_ignored(resolved):

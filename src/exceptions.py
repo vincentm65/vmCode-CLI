@@ -66,7 +66,7 @@ class ValidationError(VmCodeError):
 
 
 class PathValidationError(ValidationError):
-    """Raised when path validation fails (outside repo, blocked by gitignore, etc.)."""
+    """Raised when path validation fails (blocked by gitignore, etc.)."""
     pass
 
 

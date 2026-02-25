@@ -58,11 +58,11 @@ def is_path_ignored(
     if path.name in ALWAYS_ALLOWED_FILES:
         return False, None
 
-    # Get relative path from repo root
+    # Get relative path from repo root (gitignore only applies within repo)
     try:
         rel_path = path.relative_to(repo_root)
     except ValueError:
-        # Path is outside repo - let other validation handle this
+        # Path is outside repo - gitignore doesn't apply
         return False, None
 
     # Convert to forward slashes (git convention)

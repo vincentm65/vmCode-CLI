@@ -10,12 +10,12 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "rg",
-            "description": "A powerful search tool built on ripgrep\n\n**Usage:**\n- ALWAYS use rg for search tasks. NEVER invoke `grep` or `rg` as a shell command. The rg tool has been optimized for correct permissions and access.\n- Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n- Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\")\n- Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts\n- Use sub_agent tool for open-ended searches requiring multiple rounds\n- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n- Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`",
+            "description": "A powerful search tool built on ripgrep. Works on any directory in the filesystem.\n\n**Usage:**\n- ALWAYS use rg for search tasks. NEVER invoke `grep` or `rg` as a shell command. The rg tool has been optimized for correct permissions and access.\n- Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n- Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\")\n- Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts\n- Use sub_agent tool for open-ended searches requiring multiple rounds\n- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n- Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "pattern": {"type": "string", "description": "The regular expression pattern to search for in file contents"},
-                    "path": {"type": "string", "description": "File or directory to search in (rg PATH). Defaults to current working directory."},
+                    "path": {"type": "string", "description": "File or directory to search in (rg PATH). Defaults to current working directory. Works anywhere on the filesystem."},
                     "glob": {"type": "string", "description": "Glob pattern to filter files (e.g. \"*.js\", \"*.{ts,tsx}\") - maps to rg --glob"},
                     "output_mode": {"type": "string", "enum": ["content", "files_with_matches", "count"], "description": "Output mode: \"content\" shows matching lines (supports -B/-A/-C context, -n line numbers), \"files_with_matches\" shows file paths, \"count\" shows match counts. Defaults to \"files_with_matches\"."},
                     "-B": {"type": "number", "description": "Number of lines to show before each match (rg -B). Requires output_mode: \"content\", ignored otherwise."},
@@ -34,7 +34,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "execute_command",
-            "description": "Execute shell commands for git, system tasks, debugging, and file operations.\n\n**Use for:**\n- Git operations: git clone, pull, push, status, etc.\n- System debugging: ps, lsof, netstat, journalctl, systemctl\n- File operations: rm, mv, cp, mkdir (system-wide)\n- Network tools: ping, curl, wget, ssh\n- Package management: pacman, pip, npm, apt\n- Path navigation: cd /path && command (use && for chaining)\n\n**Important:**\n- All commands execute from repository root\n- Use && for conditional chaining (stops on error)\n- Absolute paths allowed for system debugging\n- Commands outside repo show warnings but execute\n\n**Do NOT use for:**\n- Code search (use rg tool)\n- Reading codebase files (use read_file)\n- Listing codebase directories (use list_directory)\n- Creating/editing codebase files (use create_file/edit_file)\n- NO chaining with ;, |, >, <, ` (only && allowed)",
+            "description": "Execute shell commands for git, system tasks, debugging, and file operations.\n\n**Use for:**\n- Git operations: git clone, pull, push, status, etc.\n- System debugging: ps, lsof, netstat, journalctl, systemctl\n- File operations: rm, mv, cp, mkdir (system-wide)\n- Network tools: ping, curl, wget, ssh\n- Package management: pacman, pip, npm, apt\n- Path navigation: cd /path && command (use && for chaining)\n\n**Important:**\n- All commands execute from repository root\n- Use && for conditional chaining (stops on error)\n- Absolute paths allowed for system debugging\n\n**Do NOT use for:**\n- Code search (use rg tool)\n- Reading files (use read_file)\n- Listing directories (use list_directory)\n- Creating/editing files (use create_file/edit_file)\n- NO chaining with ;, |, >, <, ` (only && allowed)",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -48,11 +48,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "read_file",
-            "description": "Read file contents using Python file reader. Use this to view a file (or a specific line range). Prefer this over rg when you already know the file path.",
+            "description": "Read file contents using Python file reader. Use this to view a file (or a specific line range). Prefer this over rg when you already know the file path. Works on any file in the filesystem.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to read (relative to repo root)"},
+                    "path": {"type": "string", "description": "Path to read (works anywhere on filesystem)"},
                     "max_lines": {"type": "integer", "description": "Max lines to read (omit for full file)"},
                     "start_line": {"type": "integer", "description": "1-based starting line number (default: 1). Use with max_lines to read a specific excerpt."}
                 },
@@ -64,11 +64,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "list_directory",
-            "description": "List directory contents using Python file lister (preferred over PowerShell).",
+            "description": "List directory contents using Python file lister (preferred over PowerShell). Works on any directory in the filesystem.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to list (relative to repo root, default: '.')"},
+                    "path": {"type": "string", "description": "Path to list (default: '.', works anywhere on filesystem)"},
                     "recursive": {"type": "boolean", "description": "List recursively (default: false)"},
                     "show_files": {"type": "boolean", "description": "Include files (default: true)"},
                     "show_dirs": {"type": "boolean", "description": "Include directories (default: true)"},
@@ -81,13 +81,12 @@ TOOLS = [
         {
             "type": "function",
             "function": {
-                "name": "create_file",
-                "description": "Create a new file with optional initial content. File must not exist. For small files, include content directly. Creates a preview of the written content (up to 200 lines) with syntax highlighting.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Path to create (relative to repo root)"},
-                        "content": {"type": "string", "description": "Initial content (omit for empty file)"}
+            "name": "create_file",
+            "description": "Create a new file with optional initial content. File must not exist. For small files, include content directly. Creates a preview of the written content (up to 200 lines) with syntax highlighting. Works on any path in the filesystem.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path to create (works anywhere on filesystem)"},                        "content": {"type": "string", "description": "Initial content (omit for empty file)"}
                     },
                     "required": ["path"]
                 }
@@ -96,11 +95,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Apply search/replace edit to file. Search text must appear exactly once.",
+            "description": "Apply search/replace edit to file. Search text must appear exactly once. Works on any file in the filesystem.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "path": {"type": "string", "description": "Path to edit (relative to repo root)"},
+                    "path": {"type": "string", "description": "Path to edit (works anywhere on filesystem)"},
                     "search": {"type": "string", "description": "Exact text to find. Must be unique. Include context. Multi-line supported."},
                     "replace": {"type": "string", "description": "Replacement text. Multi-line supported."},
                     "context_lines": {"type": "integer", "description": "Context lines in diff (default: 3)"},
