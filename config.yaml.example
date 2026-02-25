@@ -20,7 +20,7 @@
 # =============================================================================
 
 # Last selected provider (saved automatically)
-LAST_PROVIDER: openai
+LAST_PROVIDER: vmcode_free
 
 # =============================================================================
 # API KEYS
@@ -60,6 +60,9 @@ KIMI_API_BASE: "https://api.moonshot.cn/v1"
 MINIMAX_API_KEY: "your-minimax-key-here"
 MINIMAX_MODEL: "abab6.5s-chat"
 MINIMAX_API_BASE: "https://api.minimax.chat/v1"
+
+# vmCode Free Tier (no API key needed - managed by vmCode proxy)
+VMCODE_FREE_API_BASE: "https://vmcode-five.vercel.app"
 
 # =============================================================================
 # LOCAL MODEL SETTINGS (Optional)

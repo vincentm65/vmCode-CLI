@@ -244,7 +244,7 @@ class ChatManager:
         if msg.get('role') == 'tool' and msg.get('tool_call_id'):
             parts.append(msg['tool_call_id'])
 
-        return ''.join(parts)
+        return ''.join(p or '' for p in parts)
 
     def _count_tokens(self, messages) -> int:
         """Count tokens accurately using tiktoken for OpenAI, character-based for Anthropic.

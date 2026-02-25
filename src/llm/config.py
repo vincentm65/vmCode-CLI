@@ -259,6 +259,23 @@ def _get_provider_registry():
             "cost_out": get_model_cost("kimi", _CONFIG.get("KIMI_MODEL", ""),
                                       "", "", 0.0, 0.0)[1]
         },
+        "vmcode_free": {
+            "type": "api",
+            "api_key": "",
+            "model": "z-ai/glm-4.5-air:free",
+            "api_base": _CONFIG.get("VMCODE_FREE_API_BASE", "https://vmcode-five.vercel.app"),
+            "endpoint": "/chat",
+            "error_prefix": "vmCode Free",
+            "config_keys": {
+                "VMCODE_FREE_API_BASE": "https://vmcode-five.vercel.app",
+            },
+            "default_temperature": 0.7,
+            "default_top_p": 0.9,
+            "allow_top_p": True,
+            "allow_temperature": True,
+            "cost_in": 0.0,
+            "cost_out": 0.0
+        },
     }
     return _provider_registry_cache
 

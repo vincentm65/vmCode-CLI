@@ -1,4 +1,4 @@
-Y# vmCode
+## vmCode
 
 A CLI-based AI coding assistant capable of codebase search, file editing, computer use, and web search.
 
@@ -12,6 +12,28 @@ A CLI-based AI coding assistant capable of codebase search, file editing, comput
 - **Parallel Execution**: Run multiple tools concurrently for efficiency
 - **Conversation History**: Markdown logging with context compaction
 - **Approval Workflows**: Safety checks for dangerous commands
+
+## vmCode Free Tier
+
+The `vmcode_free` provider is included as a convenient default option for new users. It uses free LLM models with **no API key required**.
+
+### How It Works
+
+When using `vmcode_free`, your conversations are routed through vmCode's proxy server to access free LLM models:
+
+- All chat messages, code snippets, and file content are sent to the proxy
+- The proxy forwards requests to the underlying LLM provider
+- This enables free access without requiring individual API keys
+
+### Use Cases
+
+- **Quick testing** - Try vmCode immediately without configuration
+- **Evaluation** - Test the tool before committing to a paid provider
+- **Development** - Non-sensitive work where convenience is preferred
+
+### Recommended Setup
+
+For production work or sensitive code, we recommend using other providers. Type `/provider` to see all options
 
 ## Installation
 

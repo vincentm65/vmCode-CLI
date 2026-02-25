@@ -1379,8 +1379,11 @@ class AgenticOrchestrator:
 
         # Parse arguments
         try:
-            arguments = json.loads(tool_call["function"]["arguments"])
-        except json.JSONDecodeError:
+            args_str = tool_call["function"]["arguments"]
+            if args_str is None:
+                return False, "Error: Tool arguments are missing."
+            arguments = json.loads(args_str)
+        except (json.JSONDecodeError, TypeError):
             return False, "Error: Invalid JSON arguments."
 
         # Route to appropriate handler
