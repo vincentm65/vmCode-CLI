@@ -9,12 +9,10 @@
   "files": [
     "src/",
     "bin/",
-    "scripts/",
     "requirements.txt",
     "config.yaml.example"
   ],
   "scripts": {
-    "install": "node scripts/install.js",
     "postinstall": "echo 'vmcode installed! Run with: vmcode'",
     "start": "node bin/npm-wrapper.js"
   },
