@@ -59,3 +59,8 @@ build/
 pyproject.toml
 install.sh
 install.bat
+
+# Proxy/experimental
+proxy/
+vercel/
+vmcode-proxy/

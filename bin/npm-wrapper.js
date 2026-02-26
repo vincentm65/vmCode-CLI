@@ -8,8 +8,17 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Get the package directory (npm installs the wrapper in bin/, so go up one level)
-const packageDir = path.resolve(__dirname, '..');
+// Get the package directory - handle both local and global npm installs
+// For global installs, the wrapper is in a bin/ directory, package is in node_modules/
+let packageDir = __dirname;
+while (packageDir !== path.dirname(packageDir)) {
+  const pkgJson = path.join(packageDir, 'package.json');
+  if (fs.existsSync(pkgJson)) {
+    break;
+  }
+  packageDir = path.dirname(packageDir);
+}
+
 const pythonScript = path.join(packageDir, 'src', 'ui', 'main.py');
 
 function findPython() {
