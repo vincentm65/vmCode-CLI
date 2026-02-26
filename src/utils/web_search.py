@@ -21,7 +21,7 @@ def run_web_search(arguments, console):
         LLMConnectionError: If network search fails
     """
     query = arguments.get("query")
-    num_results = arguments.get("num_results", 1)
+    num_results = arguments.get("num_results", 5)
 
     if not query:
         raise LLMConnectionError(
@@ -29,13 +29,9 @@ def run_web_search(arguments, console):
             details={"arguments": arguments}
         )
 
-    # Validate num_results
+    # Validate and clamp num_results between 1 and 10
     try:
-        num_results = int(num_results)
-        if num_results < 1:
-            num_results = 5
-        elif num_results > 10:
-            num_results = 10
+        num_results = max(1, min(10, int(num_results)))
     except (ValueError, TypeError):
         num_results = 5
 

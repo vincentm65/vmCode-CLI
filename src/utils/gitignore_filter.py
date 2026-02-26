@@ -1,10 +1,20 @@
 """Centralized .gitignore filtering using pathspec library."""
 
+import logging
 from pathlib import Path
 from typing import Optional, Tuple
 
+logger = logging.getLogger(__name__)
+
 # Always allow .gitignore itself to be read/edited
 ALWAYS_ALLOWED_FILES = {".gitignore"}
+
+# Try to import pathspec at module level
+try:
+    import pathspec
+except ImportError:
+    pathspec = None
+    logger.warning("pathspec library not installed - .gitignore filtering disabled")
 
 
 def load_gitignore_spec(repo_root: Path):
@@ -16,14 +26,16 @@ def load_gitignore_spec(repo_root: Path):
     Returns:
         pathspec.PathSpec or None if .gitignore doesn't exist
     """
+    # Return None early if pathspec is not available
+    if pathspec is None:
+        return None
+
     gitignore_path = repo_root / ".gitignore"
 
     if not gitignore_path.exists():
         return None
 
     try:
-        import pathspec
-
         # Read .gitignore patterns
         patterns = gitignore_path.read_text(encoding="utf-8").splitlines()
 
@@ -32,6 +44,7 @@ def load_gitignore_spec(repo_root: Path):
         return spec
 
     except Exception as e:
+        logger.warning(f"Failed to load .gitignore: {e}")
         return None
 
 
@@ -134,28 +147,3 @@ def format_gitignore_error(
     error_msg += "2. Use git commands directly (git show, git diff)\n"
 
     return error_msg
-
-
-def filter_paths_list(paths: list, repo_root: Path, gitignore_spec) -> list:
-    """Filter a list of paths, removing ignored ones.
-
-    Used for file scanning operations.
-
-    Args:
-        paths: List of Path objects
-        repo_root: Repository root
-        gitignore_spec: pathspec.PathSpec object (or None)
-
-    Returns:
-        Filtered list of Path objects
-    """
-    if gitignore_spec is None:
-        return paths
-
-    filtered = []
-    for path in paths:
-        is_ignored, _ = is_path_ignored(path, repo_root, gitignore_spec)
-        if not is_ignored:
-            filtered.append(path)
-
-    return filtered

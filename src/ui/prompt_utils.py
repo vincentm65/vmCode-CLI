@@ -5,7 +5,6 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style
 from prompt_toolkit.formatted_text import HTML
 from llm.config import get_provider_config, APPROVE_MODE_LABELS, LEARNING_MODE_LABELS, PLAN_TYPE_LABELS
-from core.config_manager import ConfigManager
 
 
 def get_bottom_toolbar_text(chat_manager):

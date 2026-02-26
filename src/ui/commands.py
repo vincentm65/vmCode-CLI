@@ -5,12 +5,12 @@ from dataclasses import dataclass
 from typing import Optional
 from llm import config
 from core.init import run_init
-from core.config_manager import ConfigManager
+from core.config_manager import ConfigManager as ConfigManagerClass
 from ui.displays import show_help_table, show_provider_table, show_config_overview
 from ui.banner import display_startup_banner
 
-# Initialize ConfigManager for centralized config operations
-config_manager = ConfigManager()
+# Global ConfigManager instance
+config_manager = ConfigManagerClass()
 
 
 @dataclass
@@ -144,8 +144,6 @@ def _handle_config(chat_manager, console, debug_mode_container, args):
 def _handle_clear(chat_manager, console, debug_mode_container, args):
     """Handle clear/reset command."""
     # Display conversation cost for the previous chat
-    from core.config_manager import ConfigManager
-    config_manager = ConfigManager()
     costs = config_manager.get_usage_costs()
 
     # Display token summary for the previous chat
@@ -373,11 +371,8 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
             return CommandResult(status="handled")
 
         # Set appropriate cost for current model
-        from core.config_manager import ConfigManager
-        cfg_mgr = ConfigManager()
-        
         # Get existing prices for the model
-        existing_prices = cfg_mgr.get_model_price(current_model)
+        existing_prices = config_manager.get_model_price(current_model)
         cost_in = existing_prices['in']
         cost_out = existing_prices['out']
         
@@ -386,7 +381,7 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
         elif direction == 'out':
             cost_out = cost
         
-        backup_path = cfg_mgr.set_model_price(current_model, cost_in, cost_out)
+        backup_path = config_manager.set_model_price(current_model, cost_in, cost_out)
         
         if direction == 'in':
             console.print(f"[green]Model '{current_model}' input token cost set to ${cost:.6f} per 1M tokens[/green]")
@@ -400,9 +395,7 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
         return CommandResult(status="handled")
 
     # No args - show current usage stats
-    from core.config_manager import ConfigManager
-    cfg_mgr = ConfigManager()
-    costs = cfg_mgr.get_model_price(current_model)
+    costs = config_manager.get_model_price(current_model)
     tracker = chat_manager.token_tracker
 
     # Display token counts
@@ -487,14 +480,7 @@ def process_command(chat_manager, user_input, console, debug_mode_container):
     handler = _COMMAND_HANDLERS.get(cmd)
     if handler:
         result = handler(chat_manager, console, debug_mode_container, args)
-        # Convert CommandResult to tuple for backward compatibility
-        if isinstance(result, CommandResult):
-            return (result.status, result.replacement_input)
-        # Fallback for any legacy handlers (shouldn't happen after refactor)
-        elif isinstance(result, tuple):
-            return result
-        else:
-            return (result, None)
+        return (result.status, result.replacement_input)
     elif cmd.startswith('/'):
         console.print(f"[red]Unknown command: {user_input}[/red]")
         console.print("[dim]Type /help for available commands[/dim]")

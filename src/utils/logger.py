@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 class MarkdownConversationLogger:
     """Logs conversations to Markdown format with tool call details."""
 
+    MAX_CONTENT_LENGTH = 2000
+
     def __init__(self, conversations_dir: str = "conversations"):
         """Initialize markdown conversation logger.
 
@@ -46,23 +48,31 @@ class MarkdownConversationLogger:
         fn = tool_call.get("function", {})
         name = fn.get("name", "unknown")
         arguments = fn.get("arguments", "{}")
-
-        # Parse arguments for better formatting
-        try:
-            if isinstance(arguments, str):
-                args_dict = json.loads(arguments)
-            else:
-                args_dict = arguments
-            # Format args as compact JSON
-            args_str = json.dumps(args_dict, indent=2, ensure_ascii=False)
-        except (json.JSONDecodeError, TypeError):
-            args_str = str(arguments)
+        args_str = self._format_json_value(arguments)
 
         return f"""### {name}
 
 ```json
 {args_str}
 ```"""
+
+    def _format_json_value(self, value: Any) -> str:
+        """Format a value as JSON for markdown display.
+
+        Args:
+            value: Value to format (string, dict, or other)
+
+        Returns:
+            Formatted JSON string, or string representation if not JSON-serializable
+        """
+        try:
+            if isinstance(value, str):
+                parsed = json.loads(value)
+            else:
+                parsed = value
+            return json.dumps(parsed, indent=2, ensure_ascii=False)
+        except (json.JSONDecodeError, TypeError):
+            return str(value)
 
     def _format_tool_call_inline(self, arguments: Any) -> str:
         """Format tool call arguments as JSON for inline display.
@@ -73,15 +83,7 @@ class MarkdownConversationLogger:
         Returns:
             Formatted JSON string
         """
-        try:
-            if isinstance(arguments, str):
-                args_dict = json.loads(arguments)
-            else:
-                args_dict = arguments
-            args_str = json.dumps(args_dict, indent=2, ensure_ascii=False)
-        except (json.JSONDecodeError, TypeError):
-            args_str = str(arguments)
-
+        args_str = self._format_json_value(arguments)
         return f"```json\n{args_str}\n```"
 
     def _format_tool_result(self, message: Dict[str, Any]) -> str:
@@ -96,8 +98,8 @@ class MarkdownConversationLogger:
         content = message.get("content", "")
 
         # Truncate very long outputs
-        if len(content) > 2000:
-            content = content[:2000] + "\n\n... (truncated)"
+        if len(content) > self.MAX_CONTENT_LENGTH:
+            content = content[:self.MAX_CONTENT_LENGTH] + "\n\n... (truncated)"
 
         # Try to format as code if it looks like structured output
         if content and (content.startswith("{") or content.startswith("[")):
@@ -174,10 +176,6 @@ class MarkdownConversationLogger:
         if formatted:
             with open(self.current_file, 'a', encoding='utf-8') as f:
                 f.write(formatted)
-
-    def sync_log(self):
-        """No-op for append-only logging. Kept for API compatibility."""
-        pass
 
     def rewrite_log(self, messages: List[Dict[str, Any]]):
         """Rewrite the current markdown log to match the provided messages.

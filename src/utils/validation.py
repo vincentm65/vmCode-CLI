@@ -63,12 +63,11 @@ def _tokenize_segment(segment):
         return segment.split()
 
 
-def check_command(command, approve_level="safe"):
+def check_command(command):
     """Validate command against safety checks.
 
     Args:
         command: Command string to validate
-        approve_level: "safe", "accept_edits", or a legacy bool
 
     Returns:
         tuple: (is_safe, reason) - is_safe is True if command is allowed

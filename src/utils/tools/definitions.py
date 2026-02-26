@@ -118,7 +118,7 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Search query to execute"},
-                    "num_results": {"type": "integer", "description": "Results to return (default: 1, max: 5)"}
+                    "num_results": {"type": "integer", "description": "Results to return (default: 5, max: 10)"}
                 },
                 "required": ["query"]
             }

@@ -3,7 +3,6 @@
 import os
 import sys
 import time
-import inspect
 from pathlib import Path
 
 # Add src directory to Python path so we can import llm, core, utils modules
@@ -14,16 +13,14 @@ if str(src_dir) not in sys.path:
 from rich.console import Console
 from rich.theme import Theme
 from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.text import Text
-from rich.table import Table
 from prompt_toolkit import PromptSession
 from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.formatted_text import ANSI, HTML
+from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.styles import Style
 
 from llm import config
-from llm.config import PROVIDER_REGISTRY, TOOLS_ENABLED
+from llm.config import TOOLS_ENABLED
 from core.chat_manager import ChatManager
 from ui.commands import process_command
 from ui.banner import display_startup_banner
@@ -147,10 +144,8 @@ def main():
     thinking_indicator = ThinkingIndicator(console)
     # Start server if needed
     console.print("[yellow]Initializing...[/yellow]")
-    server = chat_manager.start_server_if_needed()
-    if server:
-        chat_manager.server_process = server
-    elif chat_manager.client.provider == "local":
+    chat_manager.server_process = chat_manager.start_server_if_needed()
+    if not chat_manager.server_process and chat_manager.client.provider == "local":
         console.print("[red]Failed to start local server![/red]")
         return
 
@@ -179,10 +174,6 @@ def main():
         with console.capture() as capture:
             console.print(prompt_text, end="")
         return ANSI(capture.get())
-
-    def get_rprompt(chat_manager):
-        """Return empty string (tokens now in bottom toolbar)."""
-        return ""
 
     @bindings.add('tab')
     def toggle_mode(event):

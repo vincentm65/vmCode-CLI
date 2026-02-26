@@ -5,7 +5,7 @@ import json
 import subprocess
 import time
 import requests
-from typing import Optional
+from typing import Optional, IO
 
 from llm.client import LLMClient
 from llm.config import get_providers, get_provider_config, reload_config
@@ -28,6 +28,7 @@ class ChatManager:
         self.client = LLMClient()
         self.messages = []
         self.server_process: Optional[subprocess.Popen] = None
+        self._log_file: Optional[IO] = None  # Track llama_server log file handle
         self.command_history = []  # Track executed commands to prevent repeats
         self.approve_mode = "safe"
         self.interaction_mode = "edit"  # Default to edit mode
@@ -1016,12 +1017,12 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
 
         # Log stderr to file for debugging
         log_path = Path(__file__).resolve().parents[2] / "llama_server.log"
-        log_file = open(log_path, "w")
+        self._log_file = open(log_path, "w")
 
         process = subprocess.Popen(
             args,
             stdout=subprocess.DEVNULL,
-            stderr=log_file,
+            stderr=self._log_file,
             env=env,
         )
 
@@ -1033,12 +1034,17 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
                     data = r.json()
                     if data.get("status") == "ok":
                         return process
-            except Exception as exc:
+            except Exception:
                 pass
             time.sleep(server_settings.health_check_interval_sec)
 
+        # Server failed health check - clean up resources
         if process:
             process.terminate()
+            process.wait()
+        if self._log_file:
+            self._log_file.close()
+            self._log_file = None
         return None
 
     def cycle_approve_mode(self) -> str:
@@ -1188,3 +1194,8 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         if self.server_process:
             self.server_process.terminate()
             self.server_process.wait()
+
+        # Close log file handle if open
+        if self._log_file:
+            self._log_file.close()
+            self._log_file = None

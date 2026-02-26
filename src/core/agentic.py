@@ -14,7 +14,7 @@ from rich.text import Text
 from rich.live import Live
 from utils.markdown import left_align_headings
 from llm.config import TOOLS_REQUIRE_CONFIRMATION, WEB_SEARCH_REQUIRE_CONFIRMATION
-from utils.settings import MAX_TOOL_CALLS, MonokaiDarkBGStyle
+from utils.settings import MAX_TOOL_CALLS, MAX_COMMAND_OUTPUT_LINES, MonokaiDarkBGStyle
 from utils.validation import check_for_duplicate, check_command
 from utils.tools import (
     run_shell_command,
@@ -80,8 +80,57 @@ def _coerce_bool(value, default=None):
     return default
 
 
+def _print_or_append(text, console, panel_updater, markup=True):
+    """Print text to console or append to panel_updater.
+
+    Args:
+        text: Text to display
+        console: Rich console
+        panel_updater: Optional SubAgentPanel for live updates
+        markup: If True, parse Rich markup (only used for console)
+    """
+    if panel_updater:
+        panel_updater.append(text)
+    else:
+        console.print(text, markup=markup)
+
+
 MAX_TASKS = 50
 MAX_TASK_LEN = 200
+
+# File extension to Pygments lexer name mapping for syntax highlighting
+_LEXER_MAP = {
+    'py': 'python',
+    'js': 'javascript',
+    'ts': 'typescript',
+    'tsx': 'typescript',
+    'jsx': 'javascript',
+    'go': 'go',
+    'rs': 'rust',
+    'java': 'java',
+    'c': 'c',
+    'cpp': 'cpp',
+    'h': 'c',
+    'hpp': 'cpp',
+    'sh': 'bash',
+    'bash': 'bash',
+    'zsh': 'bash',
+    'yaml': 'yaml',
+    'yml': 'yaml',
+    'json': 'json',
+    'toml': 'toml',
+    'md': 'markdown',
+    'html': 'html',
+    'css': 'css',
+    'sql': 'sql',
+    'php': 'php',
+    'rb': 'ruby',
+    'swift': 'swift',
+    'kt': 'kotlin',
+    'scala': 'scala',
+    'lua': 'lua',
+    'r': 'r',
+}
 MAX_TASK_TITLE_LEN = 80
 
 
@@ -170,6 +219,187 @@ def _build_read_file_label(path, start_line=None, max_lines=None, with_colon=Fal
     return label
 
 
+def _handle_create_file_feedback(tool_result, console, panel_updater):
+    """Handle feedback for create_file tool.
+
+    Display syntax-highlighted file preview.
+    """
+    lines = tool_result.split('\n')
+    # Extract path from metadata
+    path_match = re.search(r'path=([^\s]+)', tool_result)
+    path_str = path_match.group(1) if path_match else "file"
+
+    # Find file content section
+    content_start = None
+    content_end = None
+    for i, line in enumerate(lines):
+        if line.startswith("=== FILE_CONTENT ==="):
+            content_start = i + 1
+        elif line.startswith("=== END_FILE_CONTENT ===") and content_start is not None:
+            content_end = i
+            break
+
+    # Display summary and syntax-highlighted content
+    if content_start is not None and content_end is not None:
+        content_lines = lines[content_start:content_end]
+        content = "\n".join(content_lines)
+
+        # Get file extension for syntax highlighting
+        file_ext = Path(path_str).suffix[1:] if Path(path_str).suffix else "text"
+        lexer_name = _LEXER_MAP.get(file_ext.lower(), 'text')
+
+        # Create syntax object
+        syntax = Syntax(
+            content,
+            lexer_name,
+            theme=MonokaiDarkBGStyle,
+            line_numbers=True,
+            word_wrap=False
+        )
+
+        # Show with prefix for console
+        if panel_updater:
+            panel_updater.append(f"Created: {path_str}")
+            panel_updater.append(str(syntax))
+        else:
+            console.print(f"Created: {path_str}", markup=False)
+            console.print(syntax)
+    else:
+        # Fallback: just show path
+        prefix = "╰─ " if not panel_updater else ""
+        message = f"{prefix}Created: {path_str}"
+        _print_or_append(message, console, panel_updater)
+
+    if not panel_updater:
+        console.print()
+
+
+def _handle_list_directory_feedback(tool_result, console, panel_updater):
+    """Handle feedback for list_directory tool.
+
+    Display formatted directory tree with files and directories.
+    """
+    lines = tool_result.split('\n')
+    # Extract items_count from metadata
+    items_count = 0
+    for line in lines:
+        match = re.search(r'items_count=(\d+)', line)
+        if match:
+            items_count = int(match.group(1))
+            break
+
+    # Parse content lines (skip metadata lines)
+    content_start = None
+    for i, line in enumerate(lines):
+        if line.startswith("FILE") or line.startswith("DIR"):
+            content_start = i
+            break
+
+    if content_start is not None and items_count > 0:
+        content_lines = lines[content_start:]
+
+        # Parse entries: kind, size, name
+        entries = []
+        for line in content_lines:
+            parts = line.split()
+            if len(parts) >= 3:
+                kind = parts[0]
+                if kind == "FILE":
+                    # FILE  12345 bytes  path/to/file.py
+                    size = parts[1]
+                    name = ' '.join(parts[3:])  # everything after "bytes"
+                    entries.append(("FILE", name, size))
+                elif kind == "DIR":
+                    # DIR              path/to/dir/
+                    name = ' '.join(parts[1:])
+                    entries.append(("DIR", name))
+
+        # Sort: directories first, then alphabetically
+        entries.sort(key=lambda x: (0 if x[0] == "DIR" else 1, x[1]))
+
+        # Build tree with truncation (max 10 items)
+        max_display = 10
+        display_entries = entries[:max_display]
+        remaining = max(0, items_count - max_display)
+
+        # Format tree lines
+        tree_lines = []
+        for i, entry in enumerate(display_entries):
+            is_last = (i == len(display_entries) - 1) and (remaining == 0)
+            # Use closing pipe (└─) for last item, otherwise middle pipe (├─)
+            connector = "└─" if is_last else "├─"
+            if entry[0] == "DIR":
+                tree_lines.append(f"   {connector} {entry[1]}")
+            else:  # FILE
+                size_str = f"{int(entry[2]):,}" if entry[2].isdigit() else entry[2]
+                tree_lines.append(f"   {connector} {entry[1]} ({size_str} bytes)")
+
+        # Add overflow indicator if needed (always use closing pipe)
+        if remaining > 0:
+            tree_lines.append(f"   └─ ... and {remaining} more")
+
+        # Build output with header
+        path_match = re.search(r'path=([^\s]+)', tool_result)
+        path_str = path_match.group(1) if path_match else "directory"
+        header = f"{path_str}/ ({items_count} item{'s' if items_count != 1 else ''})"
+
+        # Display with prefix
+        prefix = "╰─ " if not panel_updater else ""
+        output = f"{prefix}{header}\n"
+        output += "\n".join(tree_lines)
+
+        _print_or_append(output, console, panel_updater)
+
+    if not panel_updater:
+        console.print()
+
+
+def _handle_execute_command_feedback(tool_result, console, panel_updater):
+    """Handle feedback for execute_command tool.
+
+    Display command output with line truncation and exit code.
+    """
+    lines = tool_result.split('\n')
+    if lines:
+        # Extract exit code from first line
+        exit_code_match = re.search(r'exit_code=(\d+)', lines[0])
+        exit_code = int(exit_code_match.group(1)) if exit_code_match else None
+
+        # Get output (all lines after the exit_code line)
+        output_lines = lines[1:] if exit_code_match else lines
+        output_lines = [line for line in output_lines if line.strip()]
+
+        # Truncate if too many lines
+        truncation_message = None
+        if len(output_lines) > MAX_COMMAND_OUTPUT_LINES:
+            displayed_lines = output_lines[:MAX_COMMAND_OUTPUT_LINES]
+            omitted = len(output_lines) - MAX_COMMAND_OUTPUT_LINES
+            output = '\n'.join(displayed_lines)
+            truncation_message = f"[dim]... ({omitted} more lines truncated)[/dim]"
+        else:
+            output = '\n'.join(output_lines)
+
+        # Build prefix
+        prefix = "╰─ " if not panel_updater else ""
+
+        # Show output
+        if output:
+            display_text = f"{prefix}{output}"
+            _print_or_append(display_text, console, panel_updater, markup=False)
+
+        # Show truncation message separately to preserve markup
+        if truncation_message:
+            _print_or_append(truncation_message, console, panel_updater)
+
+        # Show exit code if non-zero
+        if exit_code is not None and exit_code != 0:
+            exit_text = f"[dim](exit code: {exit_code})[/dim]"
+            _print_or_append(exit_text, console, panel_updater)
+
+    if not panel_updater:
+        console.print()
+
+
 def _display_tool_feedback(command, tool_result, console, indent=False, panel_updater=None):
     """Display user summary for read_file, rg, and list_directory.
 
@@ -182,7 +412,6 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
     """
     if not tool_result:
         return
-    import re
 
     # For sub-agent panel: add tool call with formatted message
     if panel_updater:
@@ -213,18 +442,16 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
             rendered = tool_result
             if rendered.startswith("exit_code="):
                 rendered = "\n".join(rendered.splitlines()[1:])
-            if not panel_updater:
-                console.print(rendered.strip(), markup=False)
+            _print_or_append(rendered.strip(), console, panel_updater, markup=False)
         else:
             # Show single-line error if present
             first_two = "\n".join(tool_result.splitlines()[:2]).strip()
-            if not panel_updater:
-                console.print(first_two or tool_result.strip(), markup=False)
+            _print_or_append(first_two or tool_result.strip(), console, panel_updater, markup=False)
         if not panel_updater:
             console.print()
         return
 
-        # For read_file: parse lines_read and start_line from first line
+    # For read_file: parse lines_read and start_line from first line
     if command.startswith("read_file"):
         first_line = tool_result.split('\n')[0]
         match = re.search(r'lines_read=(\d+)', first_line)
@@ -233,7 +460,7 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
             count = int(match.group(1))
             # Only add prefix for console, not for panel_updater
             prefix = "╰─ " if not panel_updater else ""
-            
+
             # Build message with line range if start_line is present
             if start_match:
                 start_line = int(start_match.group(1))
@@ -244,16 +471,13 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
                     message = f"{prefix}[dim]Read {count} line{'s' if count != 1 else ''}[/dim]"
             else:
                 message = f"{prefix}[dim]Read {count} line{'s' if count != 1 else ''}[/dim]"
-            
-            if panel_updater:
-                panel_updater.append(message)
-            else:
-                console.print(message)
+
+            _print_or_append(message, console, panel_updater)
         if not panel_updater:
             console.print()
         return
 
-        # For rg: parse matches/files from second line
+    # For rg: parse matches/files from second line
     if command.startswith("rg"):
         lines = tool_result.split('\n')
         if len(lines) > 1:
@@ -267,233 +491,24 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
                     message = f"{prefix}[dim]No {label} found[/dim]"
                 else:
                     message = f"{prefix}[dim]Found {count} {label}[/dim]"
-                if panel_updater:
-                    panel_updater.append(message)
-                else:
-                    console.print(message)
+                _print_or_append(message, console, panel_updater)
         if not panel_updater:
             console.print()
         return
 
     # For list_directory: parse and display directory tree
     if command.startswith("list_directory"):
-        lines = tool_result.split('\n')
-        # Extract items_count from metadata
-        items_count = 0
-        for line in lines:
-            match = re.search(r'items_count=(\d+)', line)
-            if match:
-                items_count = int(match.group(1))
-                break
-        
-        # Parse content lines (skip metadata lines)
-        content_start = None
-        for i, line in enumerate(lines):
-            if line.startswith("FILE") or line.startswith("DIR"):
-                content_start = i
-                break
-        
-        if content_start is not None and items_count > 0:
-            content_lines = lines[content_start:]
-            
-            # Parse entries: kind, size, name
-            entries = []
-            for line in content_lines:
-                parts = line.split()
-                if len(parts) >= 3:
-                    kind = parts[0]
-                    if kind == "FILE":
-                        # FILE  12345 bytes  path/to/file.py
-                        size = parts[1]
-                        name = ' '.join(parts[3:])  # everything after "bytes"
-                        entries.append(("FILE", name, size))
-                    elif kind == "DIR":
-                        # DIR              path/to/dir/
-                        name = ' '.join(parts[1:])
-                        entries.append(("DIR", name))
-            
-            # Sort: directories first, then alphabetically
-            entries.sort(key=lambda x: (0 if x[0] == "DIR" else 1, x[1]))
-            
-            # Build tree with truncation (max 10 items)
-            max_display = 10
-            display_entries = entries[:max_display]
-            remaining = max(0, items_count - max_display)
-            
-            # Format tree lines
-            tree_lines = []
-            for i, entry in enumerate(display_entries):
-                is_last = (i == len(display_entries) - 1) and (remaining == 0)
-                # Use closing pipe (└─) for last item, otherwise middle pipe (├─)
-                connector = "└─" if is_last else "├─"
-                if entry[0] == "DIR":
-                    tree_lines.append(f"   {connector} {entry[1]}")
-                else:  # FILE
-                    size_str = f"{int(entry[2]):,}" if entry[2].isdigit() else entry[2]
-                    tree_lines.append(f"   {connector} {entry[1]} ({size_str} bytes)")
-            
-            # Add overflow indicator if needed (always use closing pipe)
-            if remaining > 0:
-                tree_lines.append(f"   └─ ... and {remaining} more")
-            
-            # Build output with header
-            path_match = re.search(r'path=([^\s]+)', tool_result)
-            path_str = path_match.group(1) if path_match else "directory"
-            header = f"{path_str}/ ({items_count} item{'s' if items_count != 1 else ''})"
-            
-            # Display with prefix
-            prefix = "╰─ " if not panel_updater else ""
-            output = f"{prefix}{header}\n"
-            output += "\n".join(tree_lines)
-            
-            if panel_updater:
-                panel_updater.append(output)
-            else:
-                console.print(output)
-        if not panel_updater:
-            console.print()
+        _handle_list_directory_feedback(tool_result, console, panel_updater)
         return
 
     # For create_file: display preview of created file
     if command.startswith("create_file"):
-        lines = tool_result.split('\n')
-        # Extract path from metadata
-        path_match = re.search(r'path=([^\s]+)', tool_result)
-        path_str = path_match.group(1) if path_match else "file"
-
-        # Find file content section
-        content_start = None
-        content_end = None
-        for i, line in enumerate(lines):
-            if line.startswith("=== FILE_CONTENT ==="):
-                content_start = i + 1
-            elif line.startswith("=== END_FILE_CONTENT ===") and content_start is not None:
-                content_end = i
-                break
-
-        # Display summary and syntax-highlighted content
-        if content_start is not None and content_end is not None:
-            content_lines = lines[content_start:content_end]
-            content = "\n".join(content_lines)
-
-            # Get file extension for syntax highlighting
-            file_ext = Path(path_str).suffix[1:] if Path(path_str).suffix else "text"
-            # Map common extensions to lexer names
-            lexer_map = {
-                'py': 'python',
-                'js': 'javascript',
-                'ts': 'typescript',
-                'tsx': 'typescript',
-                'jsx': 'javascript',
-                'go': 'go',
-                'rs': 'rust',
-                'java': 'java',
-                'c': 'c',
-                'cpp': 'cpp',
-                'h': 'c',
-                'hpp': 'cpp',
-                'sh': 'bash',
-                'bash': 'bash',
-                'zsh': 'bash',
-                'yaml': 'yaml',
-                'yml': 'yaml',
-                'json': 'json',
-                'toml': 'toml',
-                'md': 'markdown',
-                'html': 'html',
-                'css': 'css',
-                'sql': 'sql',
-                'php': 'php',
-                'rb': 'ruby',
-                'swift': 'swift',
-                'kt': 'kotlin',
-                'scala': 'scala',
-                'lua': 'lua',
-                'r': 'r',
-            }
-            lexer_name = lexer_map.get(file_ext.lower(), 'text')
-
-            # Create syntax object
-            syntax = Syntax(
-                content,
-                lexer_name,
-                theme=MonokaiDarkBGStyle,
-                line_numbers=True,
-                word_wrap=False
-            )
-
-            # Show with prefix for console
-            if panel_updater:
-                panel_updater.append(f"Created: {path_str}")
-                panel_updater.append(str(syntax))
-            else:
-                console.print(f"Created: {path_str}", markup=False)
-                console.print(syntax)
-        else:
-            # Fallback: just show path
-            prefix = "╰─ " if not panel_updater else ""
-            message = f"{prefix}Created: {path_str}"
-            if panel_updater:
-                panel_updater.append(message)
-            else:
-                console.print(message)
-
-        if not panel_updater:
-            console.print()
+        _handle_create_file_feedback(tool_result, console, panel_updater)
         return
 
     # For execute_command: display command output with line truncation
     if command.startswith("execute_command"):
-        lines = tool_result.split('\n')
-        if lines:
-            # Extract exit code from first line
-            exit_code_match = re.search(r'exit_code=(\d+)', lines[0])
-            exit_code = int(exit_code_match.group(1)) if exit_code_match else None
-            
-            # Get output (all lines after the exit_code line)
-            output_lines = lines[1:] if exit_code_match else lines
-            output_lines = [line for line in output_lines if line.strip()]
-            
-            from utils.settings import MAX_COMMAND_OUTPUT_LINES
-            
-            # Truncate if too many lines
-            truncation_message = None
-            if len(output_lines) > MAX_COMMAND_OUTPUT_LINES:
-                displayed_lines = output_lines[:MAX_COMMAND_OUTPUT_LINES]
-                omitted = len(output_lines) - MAX_COMMAND_OUTPUT_LINES
-                output = '\n'.join(displayed_lines)
-                truncation_message = f"[dim]... ({omitted} more lines truncated)[/dim]"
-            else:
-                output = '\n'.join(output_lines)
-
-            # Build prefix
-            prefix = "╰─ " if not panel_updater else ""
-
-            # Show output
-            if output:
-                display_text = f"{prefix}{output}"
-                if panel_updater:
-                    panel_updater.append(display_text)
-                else:
-                    console.print(display_text, markup=False)
-
-            # Show truncation message separately to preserve markup
-            if truncation_message:
-                if panel_updater:
-                    panel_updater.append(truncation_message)
-                else:
-                    console.print(truncation_message)
-            
-            # Show exit code if non-zero
-            if exit_code is not None and exit_code != 0:
-                exit_text = f"[dim](exit code: {exit_code})[/dim]"
-                if panel_updater:
-                    panel_updater.append(exit_text)
-                else:
-                    console.print(exit_text)
-        
-        if not panel_updater:
-            console.print()
+        _handle_execute_command_feedback(tool_result, console, panel_updater)
         return
 
 
@@ -1526,9 +1541,7 @@ class AgenticOrchestrator:
             return False, redirect_msg
 
         # Validate command (check_command allows git, rg, file operations)
-        is_safe, reason = check_command(
-            command, self.chat_manager.approve_mode
-        )
+        is_safe, reason = check_command(command)
 
         if not is_safe:
             return False, reason

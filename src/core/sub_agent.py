@@ -5,7 +5,6 @@ and read-only tools to execute generic delegated tasks.
 """
 
 from pathlib import Path
-from typing import Optional
 
 from core.agentic import AgenticOrchestrator
 from core.chat_manager import ChatManager
@@ -108,26 +107,26 @@ def run_sub_agent(
         force_parallel_execution=True  # Enable parallel execution for read-only tools
     )
 
+    # Wrap orchestrator.run to check hard limit before each LLM call
+    original_get_llm_response = orchestrator._get_llm_response
+
+    def _get_llm_response_with_hard_limit(allowed_tools=None):
+        """Wrapper to check hard token limit before each LLM call."""
+        # Check hard token limit before making LLM call
+        current_total = temp_chat_manager.token_tracker.total_tokens
+        if current_total >= sub_agent_settings.hard_limit_tokens:
+            raise Exception(
+                f"Sub-agent hard token limit exceeded: "
+                f"{current_total:,} / {sub_agent_settings.hard_limit_tokens:,} tokens. "
+                "Please refine your query or use more targeted searches."
+            )
+
+        return original_get_llm_response(allowed_tools=allowed_tools)
+
+    # Replace the method with our wrapper
+    orchestrator._get_llm_response = _get_llm_response_with_hard_limit
+
     try:
-        # Wrap orchestrator.run to check hard limit before each LLM call
-        original_get_llm_response = orchestrator._get_llm_response
-
-        def _get_llm_response_with_hard_limit(allowed_tools=None):
-            """Wrapper to check hard token limit before each LLM call."""
-            # Check hard token limit before making LLM call
-            current_total = temp_chat_manager.token_tracker.total_tokens
-            if current_total >= sub_agent_settings.hard_limit_tokens:
-                raise Exception(
-                    f"Sub-agent hard token limit exceeded: "
-                    f"{current_total:,} / {sub_agent_settings.hard_limit_tokens:,} tokens. "
-                    "Please refine your query or use more targeted searches."
-                )
-
-            return original_get_llm_response(allowed_tools=allowed_tools)
-
-        # Replace the method with our wrapper
-        orchestrator._get_llm_response = _get_llm_response_with_hard_limit
-
         # Run sub-agent task
         orchestrator.run(
             task_query,
