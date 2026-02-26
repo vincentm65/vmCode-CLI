@@ -14,7 +14,7 @@ Both methods result in a `vmcode` command you can run from anywhere.
 ## Method 1: npm install (Recommended)
 
 ```bash
-npm install -g vmcode
+npm install -g vmcode-cli
 vmcode
 ```
 
@@ -167,7 +167,7 @@ source ~/.bashrc  # or ~/.zshrc
 
 ### npm
 ```bash
-npm uninstall -g vmcode
+npm uninstall -g vmcode-cli
 ```
 
 ### Git Clone

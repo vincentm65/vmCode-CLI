@@ -1,5 +1,5 @@
 {
-  "name": "vmcode",
+  "name": "vmcode-cli",
   "version": "1.0.0",
   "description": "A terminal-based AI coding assistant powered by OpenAI-style function calling",
   "main": "src/ui/main.py",

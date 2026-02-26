@@ -41,7 +41,7 @@ For production work or sensitive code, we recommend using other providers. Type 
 
 ```bash
 # Install globally (requires Python 3.9+)
-npm install -g vmcode
+npm install -g vmcode-cli
 
 # Run vmcode
 vmcode
@@ -50,7 +50,7 @@ vmcode
 Or use npx without installing:
 
 ```bash
-npx vmcode
+npx vmcode-cli
 ```
 
 ### What Gets Installed

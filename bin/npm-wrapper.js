@@ -8,8 +8,8 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Get the package directory
-const packageDir = __dirname;
+// Get the package directory (npm installs the wrapper in bin/, so go up one level)
+const packageDir = path.resolve(__dirname, '..');
 const pythonScript = path.join(packageDir, 'src', 'ui', 'main.py');
 
 function findPython() {
