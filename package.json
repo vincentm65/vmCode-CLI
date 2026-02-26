@@ -13,6 +13,8 @@
     "requirements.txt",
     "config.yaml.example",
     "bin/npm-wrapper.js",
+    "bin/rg",
+    "bin/rg.exe",
     "src/**/*.py"
   ],
   "scripts": {

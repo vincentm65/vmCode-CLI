@@ -72,20 +72,15 @@ If Python is not found, the installer will guide you through installing it.
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd vmcode
+git clone https://github.com/vincentm65/vmCode-CLI.git
+cd vmCode-CLI
 
-# Run setup script
-./setup.sh          # Linux/macOS
-# or
-setup.bat           # Windows
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Run vmcode
+python src/ui/main.py
 ```
-
-The setup script automatically:
-1. Checks for Python 3.9+ on your system
-2. Installs Python dependencies via pip
-3. Creates `config.yaml` from `config.yaml.example` if missing
-4. Sets up the `vmcode` command alias
 
 **Requirements:**
 - Python 3.9+
@@ -160,16 +155,15 @@ vmcode
 ## Project Structure
 
 ```
-vmcode/
+vmCode-CLI/
 ├── bin/
-│   └── npm-wrapper.js  # npm entry point
-├── scripts/
-│   └── install.js      # npm post-install script
+│   ├── npm-wrapper.js  # npm entry point
+│   ├── rg              # ripgrep binary (Linux/macOS)
+│   └── rg.exe          # ripgrep binary (Windows)
 ├── config.yaml         # Your API keys and settings (not in git)
+├── config.yaml.example # Configuration template
 ├── requirements.txt    # Python dependencies
 ├── package.json        # npm package definition
-├── setup.sh            # Git clone setup script (Linux/macOS)
-├── setup.bat           # Git clone setup script (Windows)
 ├── .npmignore          # npm package exclusions
 ├── .gitignore          # git exclusions
 ├── src/
@@ -192,8 +186,4 @@ vmCode is currently in active development. Production readiness is in progress w
 - Comprehensive test coverage
 - Documentation
 - Error handling improvements
-<<<<<<< HEAD
-- Performance optimizationsour License Here]
-=======
 - Performance optimizations
->>>>>>> df3957ea1d8e3da51ed06e8960637514281db96d
