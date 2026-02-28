@@ -140,8 +140,16 @@ def _validate_directory_path(
         # Resolve path
         raw_path = Path(path_str)
         if not raw_path.is_absolute():
-            raw_path = repo_root / raw_path
-        resolved = raw_path.resolve()
+            # If path is "." or "..", resolve relative to repo_root
+            if path_str == ".":
+                resolved = repo_root.resolve()
+            elif path_str == "..":
+                resolved = repo_root.parent.resolve()
+            else:
+                raw_path = repo_root / raw_path
+                resolved = raw_path.resolve()
+        else:
+            resolved = raw_path.resolve()
 
         # Check if it exists
         if not resolved.exists():
