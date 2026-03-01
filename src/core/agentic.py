@@ -1361,10 +1361,39 @@ class AgenticOrchestrator:
                                     action, guidance = confirm_tool(
                                         f"edit_file: {args_dict.get('path', '')}",
                                         self.console,
-                                        reason="Apply file edit with above changes",
+                                        reason=args_dict.get('reason', 'Apply file edit with above changes'),
                                         requires_approval=True,
-                                        prompt_session=prompt_session
+                                        prompt_session=prompt_session,
+                                        approve_mode=self.chat_manager.approve_mode
                                     )
+
+                                    if action == "execute":
+                                        # User approved - call edit_file_execute
+                                        from tools.base import ToolRegistry
+                                        execute_tool = ToolRegistry.get("edit_file_execute")
+                                        if execute_tool:
+                                            # Rebuild context for execution
+                                            execute_context = build_context(
+                                                repo_root=self.repo_root,
+                                                console=self.console,
+                                                gitignore_spec=self.gitignore_spec,
+                                                debug_mode=self.debug_mode,
+                                                interaction_mode=self.chat_manager.interaction_mode,
+                                                chat_manager=self.chat_manager,
+                                                rg_exe_path=self.rg_exe_path,
+                                                panel_updater=self.panel_updater
+                                            )
+                                            final_result = execute_tool.execute(args_dict, execute_context)
+                                            # Replace result with final result
+                                            result.result = final_result
+                                    elif action == "reject":
+                                        result.result = "exit_code=1\nEdit rejected by user."
+                                    elif action == "guide":
+                                        result.result = f"exit_code=1\nEdit not applied. User guidance: {guidance}"
+
+                                    # Restart thinking indicator after user input
+                                    if thinking_indicator:
+                                        thinking_indicator.start()
                             elif result.result.startswith("exit_code=0"):
                                 # Legacy string format - parse and display
                                 lines = result.result.split('\n')
@@ -1390,7 +1419,7 @@ class AgenticOrchestrator:
                                 action, guidance = confirm_tool(
                                     f"edit_file: {args_dict.get('path', '')}",
                                     self.console,
-                                    reason="Apply file edit with above changes",
+                                    reason=args_dict.get('reason', 'Apply file edit with above changes'),
                                     requires_approval=True,
                                     prompt_session=prompt_session
                                 )
@@ -1582,9 +1611,10 @@ class AgenticOrchestrator:
                                     action, guidance = confirm_tool(
                                         f"edit_file: {arguments.get('path', '')}",
                                         console,
-                                        reason="Apply file edit with above changes",
+                                        reason=arguments.get('reason', 'Apply file edit with above changes'),
                                         requires_approval=True,
-                                        prompt_session=prompt_session
+                                        prompt_session=prompt_session,
+                                        approve_mode=self.chat_manager.approve_mode
                                     )
 
                                     if action == "execute":
@@ -1625,9 +1655,10 @@ class AgenticOrchestrator:
                                 action, guidance = confirm_tool(
                                     f"edit_file: {arguments.get('path', '')}",
                                     console,
-                                    reason="Apply file edit with above changes",
+                                    reason=arguments.get('reason', 'Apply file edit with above changes'),
                                     requires_approval=True,
-                                    prompt_session=prompt_session
+                                    prompt_session=prompt_session,
+                                    approve_mode=self.chat_manager.approve_mode
                                 )
 
                                 if action == "execute":
@@ -1672,7 +1703,7 @@ class AgenticOrchestrator:
                             action, guidance = confirm_tool(
                                 f"execute_command: {command[:80]}{'...' if len(command) > 80 else ''}",
                                 console,
-                                reason="Execute shell command",
+                                reason=arguments.get('reason', 'Execute shell command'),
                                 requires_approval=True,
                                 prompt_session=prompt_session
                             )

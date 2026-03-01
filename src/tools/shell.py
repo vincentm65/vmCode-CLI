@@ -42,7 +42,7 @@ def normalize_command(command, rg_exe_path):
     return None, command, True
 
 
-def confirm_tool(command, console, reason=None, requires_approval=True, prompt_session=None):
+def confirm_tool(command, console, reason=None, requires_approval=True, prompt_session=None, approve_mode="safe"):
     """Prompt user for tool execution confirmation.
 
     Args:
@@ -51,6 +51,7 @@ def confirm_tool(command, console, reason=None, requires_approval=True, prompt_s
         reason: Optional reason for requiring confirmation
         requires_approval: Whether this command specifically requires approval (overrides global flag when True)
         prompt_session: PromptSession instance for input (optional, for Linux compatibility)
+        approve_mode: Approval mode setting - "safe" requires confirmation, "accept_edits" auto-approves edits
 
     Returns:
         tuple: (action, guidance_text) where action is "execute", "reject", or "guide"
@@ -58,6 +59,11 @@ def confirm_tool(command, console, reason=None, requires_approval=True, prompt_s
     """
     # Skip confirmation only if: global flag is off AND command doesn't require approval
     if not TOOLS_REQUIRE_CONFIRMATION and not requires_approval:
+        return ("execute", None)
+
+    # Skip confirmation for edit operations in accept_edits mode
+    # This only applies to file edits, not execute_command
+    if approve_mode == "accept_edits" and requires_approval and "edit_file" in command:
         return ("execute", None)
 
     # Handle case where console is None (e.g., parallel execution)
@@ -239,6 +245,10 @@ def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, giti
             "command": {
                 "type": "string",
                 "description": "Command to execute. Examples: 'git status', 'ps aux', 'cd /var/log && tail -f syslog'"
+            },
+            "reason": {
+                "type": "string",
+                "description": "Brief explanation of why this command is needed (shown during confirmation)"
             }
         },
         "required": ["command"]

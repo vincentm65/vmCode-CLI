@@ -357,6 +357,10 @@ def run_edit_file(arguments, repo_root, console, debug_mode, gitignore_spec=None
             "context_lines": {
                 "type": "integer",
                 "description": "Context lines in diff (default: 3)"
+            },
+            "reason": {
+                "type": "string",
+                "description": "Brief explanation of why this edit is needed (shown during confirmation)"
             }
         },
         "required": ["path", "search", "replace"]
