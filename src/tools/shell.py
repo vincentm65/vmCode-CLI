@@ -72,20 +72,19 @@ def confirm_tool(command, console, reason=None, requires_approval=True, prompt_s
         return ("reject", None)
 
     # Simple title line with tool details
-    console.print("[cyan]───[/][bold white] Tool Confirmation [/][cyan]───[/]")
+    console.print("[cyan]───[/] Tool Confirmation [cyan]───[/]")
     if reason:
         console.print(f"Tool request: {command}")
         console.print(f"Details: {reason}")
     else:
         console.print(f"Tool request: {command}")
-    console.print("[bold white]Approve tool? (y/n/guidance):[/]")
 
     try:
         # Use prompt_session.prompt() if available (for Linux compatibility)
         if prompt_session:
-            response = prompt_session.prompt("> ").strip()
+            response = prompt_session.prompt("Approve tool? (y/n/guidance): ").strip()
         else:
-            response = input("> ").strip()
+            response = input("Approve tool? (y/n/guidance): ").strip()
     except (EOFError, OSError):
         # stdin not available - reject command by default
         if console is not None:
@@ -238,7 +237,7 @@ def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, giti
 
 @tool(
     name="execute_command",
-    description="Execute shell commands for git, system tasks, debugging, and file operations.\n\n**Use for:**\n- Git operations: git clone, pull, push, status, etc.\n- System debugging: ps, lsof, netstat, journalctl, systemctl\n- File operations: rm, mv, cp, mkdir (system-wide)\n- Network tools: ping, curl, wget, ssh\n- Package management: pacman, pip, npm, apt\n- Path navigation: cd /path && command (use && for chaining)\n\n**Important:**\n- All commands execute from repository root\n- Use && for conditional chaining (stops on error)\n- Absolute paths allowed for system debugging\n\n**Do NOT use for:**\n- Code search (use rg tool)\n- Reading files (use read_file)\n- Listing directories (use list_directory)\n- Creating/editing files (use create_file/edit_file)\n- NO chaining with ;, |, >, <, ` (only && allowed)",
+    description="Execute shell commands for git, system debugging, file operations, network tools, package management, and path navigation. Commands run from repository root with && chaining only. Use for git, ps, lsof, netstat, journalctl, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Do NOT use for code search (rg), file read/write, or directory listing. NO chaining with ;, |, >, <, ` (only && allowed).",
     parameters={
         "type": "object",
         "properties": {
@@ -263,7 +262,8 @@ def execute_command(
     console,
     chat_manager,
     debug_mode: bool = False,
-    gitignore_spec = None
+    gitignore_spec = None,
+    reason: str = None
 ) -> str:
     """Execute a shell command.
 

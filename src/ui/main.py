@@ -24,7 +24,7 @@ from llm.config import TOOLS_ENABLED
 from core.chat_manager import ChatManager
 from ui.commands import process_command
 from ui.banner import display_startup_banner
-from ui.prompt_utils import get_bottom_toolbar_text
+from ui.prompt_utils import get_bottom_toolbar_text, setup_common_bindings, TOOLBAR_STYLE
 from core.agentic import agentic_answer
 from utils.settings import MonokaiDarkBGStyle
 from utils.markdown import left_align_headings
@@ -158,7 +158,7 @@ def main():
     display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
 
     # Setup prompt_toolkit with Tab key binding
-    bindings = KeyBindings()
+    bindings = setup_common_bindings(chat_manager)
 
     def get_prompt(chat_manager):
         """Return colored prompt based on current mode."""
@@ -187,15 +187,6 @@ def main():
         chat_manager.toggle_interaction_mode()
         event.app.invalidate()
 
-    @bindings.add('s-tab')
-    def toggle_approve_mode(event):
-        """Toggle plan types (Plan), approval modes (Edit), or learning modes (Learn) using Shift+Tab."""
-        if chat_manager.interaction_mode == "learn":
-            chat_manager.cycle_learning_mode()
-        else:
-            chat_manager.cycle_approve_mode()
-        event.app.invalidate()
-
     @bindings.add('escape', 'escape')
     def clear_input(event):
         """Clear the current input line on double ESC press."""
@@ -204,11 +195,7 @@ def main():
             buffer.text = ""
         event.app.invalidate()
 
-    toolbar_style = Style.from_dict({
-        "bottom-toolbar": "bg:default fg:white noreverse",
-        "bottom-toolbar.text": "bg:default fg:white noreverse",
-    })
-    session = PromptSession(key_bindings=bindings, style=toolbar_style)
+    session = PromptSession(key_bindings=bindings, style=TOOLBAR_STYLE)
 
     try:
         while True:

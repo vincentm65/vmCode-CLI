@@ -12,54 +12,42 @@ from .helpers.converters import coerce_bool, coerce_int
 
 @tool(
     name="rg",
-    description="A powerful search tool built on ripgrep. Works on any directory in the filesystem.\n\n**Usage:**\n- ALWAYS use rg for search tasks. NEVER invoke `grep` or `rg` as a shell command. The rg tool has been optimized for correct permissions and access.\n- Supports full regex syntax (e.g., \"log.*Error\", \"function\\s+\\w+\")\n- Filter files with glob parameter (e.g., \"*.js\", \"**/*.tsx\") or type parameter (e.g., \"js\", \"py\", \"rust\")\n- Output modes: \"content\" shows matching lines, \"files_with_matches\" shows only file paths (default), \"count\" shows match counts\n- Use sub_agent tool for open-ended searches requiring multiple rounds\n- Pattern syntax: Uses ripgrep (not grep) - literal braces need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n- Multiline matching: By default patterns match within single lines only. For cross-line patterns like `struct \\{[\\s\\S]*?field`, use `multiline: true`",
+    description="Search files using ripgrep. Use for ALL code searches (never use shell commands). Supports regex, file filtering (glob/type), and multiple output modes: content (matches with context), files_with_matches (paths), or count.",
     parameters={
         "type": "object",
         "properties": {
             "pattern": {
                 "type": "string",
-                "description": "The regular expression pattern to search for in file contents"
+                "description": "Regular expression pattern to search for"
             },
             "path": {
                 "type": "string",
-                "description": "File or directory to search in (rg PATH). Defaults to current working directory. Works anywhere in the filesystem."
+                "description": "File or directory to search (default: current directory)"
             },
             "glob": {
                 "type": "string",
-                "description": "Glob pattern to filter files (e.g. \"*.js\", \"*.{ts,tsx}\") - maps to rg --glob"
+                "description": "Glob pattern to filter files (e.g. \"*.js\", \"**/*.tsx\")"
+            },
+            "type": {
+                "type": "string",
+                "description": "File type to search (e.g. js, py, rust, go, java)"
             },
             "output_mode": {
                 "type": "string",
                 "enum": ["content", "files_with_matches", "count"],
-                "description": "Output mode: \"content\" shows matching lines (supports -B/-A/-C context, -n line numbers), \"files_with_matches\" shows file paths, \"count\" shows match counts. Defaults to \"files_with_matches\"."
+                "description": "Output mode (default: files_with_matches)"
             },
-            "-B": {
-                "type": "number",
-                "description": "Number of lines to show before each match (rg -B). Requires output_mode: \"content\", ignored otherwise."
+            "context_lines": {
+                "type": "integer",
+                "description": "Context lines before/after matches (requires output_mode: content)"
             },
-            "-A": {
-                "type": "number",
-                "description": "Number of lines to show after each match (rg -A). Requires output_mode: \"content\", ignored otherwise."
-            },
-            "-C": {
-                "type": "number",
-                "description": "Number of lines to show before and after each match (rg -C). Requires output_mode: \"content\", ignored otherwise."
-            },
-            "-n": {
+            "case_insensitive": {
                 "type": "boolean",
-                "description": "Show line numbers in output (rg -n). Requires output_mode: \"content\", ignored otherwise."
-            },
-            "-i": {
-                "type": "boolean",
-                "description": "Case insensitive search (rg -i)"
-            },
-            "type": {
-                "type": "string",
-                "description": "File type to search (rg --type). Common types: js, py, rust, go, java, etc. More efficient than include for standard file types."
+                "description": "Case insensitive search"
             },
             "multiline": {
                 "type": "boolean",
-                "description": "Enable multiline mode where . matches newlines and patterns can span lines (rg -U --multiline-dotall). Default: false."
+                "description": "Enable multiline mode (patterns can span lines)"
             }
         },
         "required": ["pattern"]
@@ -93,7 +81,7 @@ def rg(
         path: File or directory to search in (default: current directory)
         glob: Glob pattern to filter files
         output_mode: Output mode (content/files_with_matches/count)
-        **kwargs: Additional keyword arguments (-B, -A, -C, -n, -i, type, multiline)
+        **kwargs: Additional keyword arguments (type, multiline, context_lines, case_insensitive)
 
     Returns:
         Search results with exit code
@@ -115,21 +103,14 @@ def rg(
         cmd_parts.append("--multiline-dotall")
 
     # Add case insensitive flag
-    case_insensitive = coerce_bool(kwargs.get("-i"), default=False)
+    case_insensitive = coerce_bool(kwargs.get("case_insensitive"), default=False)
     if case_insensitive:
         cmd_parts.append("--ignore-case")
 
-    # Add context flags
-    context_lines = coerce_int(kwargs.get("-C"))[0] if kwargs.get("-C") else None
-    before_lines = coerce_int(kwargs.get("-B"))[0] if kwargs.get("-B") else None
-    after_lines = coerce_int(kwargs.get("-A"))[0] if kwargs.get("-A") else None
-
+    # Add context lines flag
+    context_lines = coerce_int(kwargs.get("context_lines"))[0] if kwargs.get("context_lines") else None
     if context_lines:
         cmd_parts.append(f"--context={context_lines}")
-    elif before_lines:
-        cmd_parts.append(f"--before-context={before_lines}")
-    elif after_lines:
-        cmd_parts.append(f"--after-context={after_lines}")
 
     # Add glob pattern
     if glob:

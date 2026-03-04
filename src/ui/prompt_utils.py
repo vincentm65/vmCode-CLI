@@ -27,100 +27,75 @@ def get_bottom_toolbar_text(chat_manager):
     tokens_out = chat_manager.token_tracker.total_completion_tokens
     tokens_total = chat_manager.token_tracker.total_tokens
 
+    # Calculate cost
+    provider_cfg = get_provider_config(provider_name)
+    cost_in = provider_cfg.get("cost_in", 0.0)
+    cost_out = provider_cfg.get("cost_out", 0.0)
+    cost_info = chat_manager.token_tracker.calculate_session_cost(cost_in, cost_out)
+    total_cost = cost_info.get("total_cost", 0.0)
+
     # Format model name (take last part if path)
     if "\\" in model or "/" in model:
         model_display = model.split("\\")[-1].split("/")[-1]
     else:
         model_display = model
     
-    # In Plan mode, show plan types
+    # Determine mode label and color
     if chat_manager.interaction_mode == "plan":
-        plan_type = PLAN_TYPE_LABELS.get(
-            chat_manager.plan_type,
-            chat_manager.plan_type.upper()
-        )
-        # Colorize plan type
-        if chat_manager.plan_type == "feature":
-            plan_type_colored = f'<style fg="cyan">{plan_type}</style>'
-        elif chat_manager.plan_type == "refactor":
-            plan_type_colored = f'<style fg="green">{plan_type}</style>'
-        elif chat_manager.plan_type == "debug":
-            plan_type_colored = f'<style fg="red">{plan_type}</style>'
-        else:  # optimize
-            plan_type_colored = f'<style fg="yellow">{plan_type}</style>'
-
-        return HTML(
-            '<style fg="white">Model: {} | Plan: </style>{}'
-            '<style fg="white"> | </style><style fg="cyan">curr</style><style fg="white">: {:,} | </style>'
-            '<style fg="cyan">in</style><style fg="white">: {:,} | </style>'
-            '<style fg="cyan">out</style><style fg="white">: {:,} | </style>'
-            '<style fg="cyan">total</style><style fg="white">: {:,}</style>'.format(
-                model_display or provider_name,
-                plan_type_colored,
-                tokens_curr,
-                tokens_in,
-                tokens_out,
-                tokens_total
-            )
-        )
-    
-    # In Learn mode, show learning modes instead of approval modes
-    if chat_manager.interaction_mode == "learn":
-        learning_mode = LEARNING_MODE_LABELS.get(
-            chat_manager.learning_mode, 
-            chat_manager.learning_mode.upper()
-        )
-        # Colorize learning mode
-        if chat_manager.learning_mode == "succinct":
-            learning_mode_colored = f'<style fg="cyan">{learning_mode}</style>'
-        elif chat_manager.learning_mode == "balanced":
-            learning_mode_colored = f'<style fg="green">{learning_mode}</style>'
-        else:  # verbose
-            learning_mode_colored = f'<style fg="magenta">{learning_mode}</style>'
-
-        return HTML(
-            '<style fg="white">Model: {} | Learn: </style>{}'
-            '<style fg="white"> | </style><style fg="cyan">curr</style><style fg="white">: {:,} | </style>'
-            '<style fg="cyan">in</style><style fg="white">: {:,} | </style>'
-            '<style fg="cyan">out</style><style fg="white">: {:,} | </style>'
-            '<style fg="cyan">total</style><style fg="white">: {:,}</style>'.format(
-                model_display or provider_name,
-                learning_mode_colored,
-                tokens_curr,
-                tokens_in,
-                tokens_out,
-                tokens_total
-            )
-        )
-    
-    # Show approval modes for Plan/Edit modes
-    approval_mode = APPROVE_MODE_LABELS.get(
-        chat_manager.approve_mode, 
-        chat_manager.approve_mode.upper()
-    )
-    
-    # Colorize approval mode based on type
-    if chat_manager.approve_mode == "safe":
-        approval_mode_colored = f'<style fg="green">{approval_mode}</style>'
-    elif chat_manager.approve_mode == "accept_edits":
-        approval_mode_colored = f'<style fg="yellow">{approval_mode}</style>'
+        mode_label = "Plan"
+        val = PLAN_TYPE_LABELS.get(chat_manager.plan_type, chat_manager.plan_type.upper())
+        colors = {"feature": "cyan", "refactor": "green", "debug": "red", "optimize": "yellow"}
+        mode_val_colored = f'<style fg="{colors.get(chat_manager.plan_type, "white")}">{val}</style>'
+    elif chat_manager.interaction_mode == "learn":
+        mode_label = "Learn"
+        val = LEARNING_MODE_LABELS.get(chat_manager.learning_mode, chat_manager.learning_mode.upper())
+        colors = {"succinct": "cyan", "balanced": "green", "verbose": "magenta"}
+        mode_val_colored = f'<style fg="{colors.get(chat_manager.learning_mode, "white")}">{val}</style>'
     else:
-        approval_mode_colored = approval_mode
-    
+        mode_label = "Approval"
+        val = APPROVE_MODE_LABELS.get(chat_manager.approve_mode, chat_manager.approve_mode.upper())
+        colors = {"safe": "green", "accept_edits": "yellow"}
+        mode_val_colored = f'<style fg="{colors.get(chat_manager.approve_mode, "white")}">{val}</style>'
+
     return HTML(
-        '<style fg="white">Model: {} | Approval: </style>{}'
+        '<style fg="white">Model: {} | {}: </style>{}'
         '<style fg="white"> | </style><style fg="cyan">curr</style><style fg="white">: {:,} | </style>'
         '<style fg="cyan">in</style><style fg="white">: {:,} | </style>'
         '<style fg="cyan">out</style><style fg="white">: {:,} | </style>'
-        '<style fg="cyan">total</style><style fg="white">: {:,}</style>'.format(
+        '<style fg="cyan">total</style><style fg="white">: {:,} | </style>'
+        '<style fg="cyan">cost</style><style fg="white">: ${:.4f}</style>'.format(
             model_display or provider_name,
-            approval_mode_colored,
+            mode_label,
+            mode_val_colored,
             tokens_curr,
             tokens_in,
             tokens_out,
-            tokens_total
+            tokens_total,
+            total_cost
         )
     )
+
+
+TOOLBAR_STYLE = Style.from_dict({
+    "bottom-toolbar": "bg:default fg:white noreverse",
+    "bottom-toolbar.text": "bg:default fg:white noreverse",
+})
+
+
+def setup_common_bindings(chat_manager):
+    """Create KeyBindings with shared logic (e.g., Shift+Tab for mode cycling)."""
+    bindings = KeyBindings()
+
+    @bindings.add('s-tab')
+    def toggle_approve_mode(event):
+        """Toggle between modes using Shift+Tab."""
+        if chat_manager.interaction_mode == "learn":
+            chat_manager.cycle_learning_mode()
+        else:
+            chat_manager.cycle_approve_mode()
+        event.app.invalidate()
+    
+    return bindings
 
 
 def create_confirmation_prompt_session(chat_manager, message_func):
@@ -138,25 +113,11 @@ def create_confirmation_prompt_session(chat_manager, message_func):
     Returns:
         PromptSession configured with bindings and toolbar
     """
-    bindings = KeyBindings()
-    
-    @bindings.add('s-tab')
-    def toggle_approve_mode(event):
-        """Toggle between approval modes using Shift+Tab."""
-        if chat_manager.interaction_mode == "learn":
-            chat_manager.cycle_learning_mode()
-        else:
-            chat_manager.cycle_approve_mode()
-        event.app.invalidate()
-    
-    toolbar_style = Style.from_dict({
-        "bottom-toolbar": "bg:default fg:white noreverse",
-        "bottom-toolbar.text": "bg:default fg:white noreverse",
-    })
+    bindings = setup_common_bindings(chat_manager)
     
     return PromptSession(
         key_bindings=bindings,
-        style=toolbar_style,
+        style=TOOLBAR_STYLE,
         bottom_toolbar=lambda: get_bottom_toolbar_text(chat_manager),
         message=message_func
     )

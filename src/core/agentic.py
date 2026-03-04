@@ -1355,7 +1355,7 @@ class AgenticOrchestrator:
                                     # Create confirmation prompt session with toolbar
                                     prompt_session = create_confirmation_prompt_session(
                                         self.chat_manager,
-                                        lambda: HTML("[bold white]Approve edit? (y/n/guidance):[/]")
+                                        lambda: HTML("<b>Approve edit? (y/n/guidance): </b>")
                                     )
 
                                     action, guidance = confirm_tool(
@@ -1368,24 +1368,19 @@ class AgenticOrchestrator:
                                     )
 
                                     if action == "execute":
-                                        # User approved - call edit_file_execute
-                                        from tools.base import ToolRegistry
-                                        execute_tool = ToolRegistry.get("edit_file_execute")
-                                        if execute_tool:
-                                            # Rebuild context for execution
-                                            execute_context = build_context(
-                                                repo_root=self.repo_root,
-                                                console=self.console,
-                                                gitignore_spec=self.gitignore_spec,
-                                                debug_mode=self.debug_mode,
-                                                interaction_mode=self.chat_manager.interaction_mode,
-                                                chat_manager=self.chat_manager,
-                                                rg_exe_path=self.rg_exe_path,
-                                                panel_updater=self.panel_updater
-                                            )
-                                            final_result = execute_tool.execute(args_dict, execute_context)
-                                            # Replace result with final result
-                                            result.result = final_result
+                                        # User approved - execute the edit
+                                        from tools.edit import _execute_edit_file
+                                        final_result = _execute_edit_file(
+                                            path=args_dict.get('path'),
+                                            search=args_dict.get('search'),
+                                            replace=args_dict.get('replace'),
+                                            repo_root=self.repo_root,
+                                            console=self.console,
+                                            gitignore_spec=self.gitignore_spec,
+                                            context_lines=args_dict.get('context_lines', 3)
+                                        )
+                                        # Replace result with final result
+                                        result.result = final_result
                                     elif action == "reject":
                                         result.result = "exit_code=1\nEdit rejected by user."
                                     elif action == "guide":
@@ -1413,7 +1408,7 @@ class AgenticOrchestrator:
                                 # Create confirmation prompt session with toolbar
                                 prompt_session = create_confirmation_prompt_session(
                                     self.chat_manager,
-                                    lambda: HTML("[bold white]Approve edit? (y/n/guidance):[/]")
+                                    lambda: HTML("<b>Approve edit? (y/n/guidance): </b>")
                                 )
 
                                 action, guidance = confirm_tool(
@@ -1425,24 +1420,19 @@ class AgenticOrchestrator:
                                 )
 
                                 if action == "execute":
-                                    # User approved - call edit_file_execute
-                                    from tools.base import ToolRegistry
-                                    execute_tool = ToolRegistry.get("edit_file_execute")
-                                    if execute_tool:
-                                        # Rebuild context for execution
-                                        execute_context = build_context(
-                                            repo_root=self.repo_root,
-                                            console=self.console,
-                                            gitignore_spec=self.gitignore_spec,
-                                            debug_mode=self.debug_mode,
-                                            interaction_mode=self.chat_manager.interaction_mode,
-                                            chat_manager=self.chat_manager,
-                                            rg_exe_path=self.rg_exe_path,
-                                            panel_updater=self.panel_updater
-                                        )
-                                        final_result = execute_tool.execute(args_dict, execute_context)
-                                        # Replace result with final result
-                                        result.result = final_result
+                                    # User approved - execute the edit
+                                    from tools.edit import _execute_edit_file
+                                    final_result = _execute_edit_file(
+                                        path=args_dict.get('path'),
+                                        search=args_dict.get('search'),
+                                        replace=args_dict.get('replace'),
+                                        repo_root=self.repo_root,
+                                        console=self.console,
+                                        gitignore_spec=self.gitignore_spec,
+                                        context_lines=args_dict.get('context_lines', 3)
+                                    )
+                                    # Replace result with final result
+                                    result.result = final_result
                                 elif action == "reject":
                                     result.result = "exit_code=1\nEdit rejected by user."
                                 elif action == "guide":
@@ -1605,7 +1595,7 @@ class AgenticOrchestrator:
                                     # Create confirmation prompt session with toolbar
                                     prompt_session = create_confirmation_prompt_session(
                                         self.chat_manager,
-                                        lambda: HTML("[bold white]Approve edit? (y/n/guidance):[/]")
+                                        lambda: HTML("<b>Approve edit? (y/n/guidance): </b>")
                                     )
 
                                     action, guidance = confirm_tool(
@@ -1618,10 +1608,17 @@ class AgenticOrchestrator:
                                     )
 
                                     if action == "execute":
-                                        # User approved - call edit_file_execute
-                                        execute_tool = ToolRegistry.get("edit_file_execute")
-                                        if execute_tool:
-                                            result = execute_tool.execute(arguments, context)
+                                        # User approved - execute the edit
+                                        from tools.edit import _execute_edit_file
+                                        result = _execute_edit_file(
+                                            path=arguments.get('path'),
+                                            search=arguments.get('search'),
+                                            replace=arguments.get('replace'),
+                                            repo_root=self.repo_root,
+                                            console=console,
+                                            gitignore_spec=self.gitignore_spec,
+                                            context_lines=arguments.get('context_lines', 3)
+                                        )
                                     elif action == "reject":
                                         result = "exit_code=1\nEdit rejected by user."
                                     elif action == "guide":
@@ -1649,7 +1646,7 @@ class AgenticOrchestrator:
                                 # Create confirmation prompt session with toolbar
                                 prompt_session = create_confirmation_prompt_session(
                                     self.chat_manager,
-                                    lambda: HTML("[bold white]Approve edit? (y/n/guidance):[/]")
+                                    lambda: HTML("<b>Approve edit? (y/n/guidance): </b>")
                                 )
 
                                 action, guidance = confirm_tool(
@@ -1662,10 +1659,17 @@ class AgenticOrchestrator:
                                 )
 
                                 if action == "execute":
-                                    # User approved - call edit_file_execute
-                                    execute_tool = ToolRegistry.get("edit_file_execute")
-                                    if execute_tool:
-                                        result = execute_tool.execute(arguments, context)
+                                    # User approved - execute the edit
+                                    from tools.edit import _execute_edit_file
+                                    result = _execute_edit_file(
+                                        path=arguments.get('path'),
+                                        search=arguments.get('search'),
+                                        replace=arguments.get('replace'),
+                                        repo_root=self.repo_root,
+                                        console=console,
+                                        gitignore_spec=self.gitignore_spec,
+                                        context_lines=arguments.get('context_lines', 3)
+                                    )
                                 elif action == "reject":
                                     result = "exit_code=1\nEdit rejected by user."
                                 elif action == "guide":
@@ -1697,7 +1701,7 @@ class AgenticOrchestrator:
                             # Create confirmation prompt session with toolbar
                             prompt_session = create_confirmation_prompt_session(
                                 self.chat_manager,
-                                lambda: HTML("[bold white]Approve command? (y/n/guidance):[/]")
+                                lambda: HTML("<b>Approve command? (y/n/guidance): </b>")
                             )
 
                             action, guidance = confirm_tool(

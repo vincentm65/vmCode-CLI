@@ -283,7 +283,7 @@ def preview_edit_file(arguments, repo_root, gitignore_spec=None):
     return "exit_code=0", diff_text
 
 
-def run_edit_file(arguments, repo_root, console, debug_mode, gitignore_spec=None):
+def run_edit_file(arguments, repo_root, console, gitignore_spec=None):
     """Apply search/replace edit to a file."""
     try:
         status, payload = _prepare_edit(arguments, repo_root, gitignore_spec)
@@ -430,60 +430,42 @@ def edit_file(
         return f"exit_code=1\nEdit failed: {str(e)}"
 
 
-@tool(
-    name="edit_file_execute",
-    description="Execute a confirmed edit file operation (internal use only).",
-    parameters={
-        "type": "object",
-        "properties": {
-            "path": {"type": "string", "description": "Path to edit"},
-            "search": {"type": "string", "description": "Exact text to find"},
-            "replace": {"type": "string", "description": "Replacement text"},
-            "context_lines": {"type": "integer", "description": "Context lines"}
-        },
-        "required": ["path", "search", "replace"]
-    },
-    allowed_modes=["edit", "plan", "learn"],
-    requires_approval=False
-)
-def edit_file_execute(
-    path: str,
-    search: str,
-    replace: str,
-    repo_root: Path,
-    console,
-    chat_manager,
-    gitignore_spec = None,
-    context_lines: int = 3
+def _execute_edit_file(
+	path: str,
+	search: str,
+	replace: str,
+	repo_root: Path,
+	console,
+	gitignore_spec = None,
+	context_lines: int = 3
 ) -> str:
-    """Execute a confirmed edit operation.
+	"""Execute a confirmed edit operation (internal function).
 
-    This is an internal tool called after user confirmation.
-    The main edit_file tool generates the preview, and this tool
-    executes the actual edit.
+	Called after user confirmation to actually apply the edit.
+	The main edit_file tool generates the preview first.
 
-    Args:
-        path: Path to the file to edit
-        search: Exact text to find (must be unique)
-        replace: Replacement text
-        repo_root: Repository root directory (injected by context)
-        console: Rich console for output (injected by context)
-        gitignore_spec: PathSpec for .gitignore filtering (injected by context)
-        context_lines: Number of context lines in diff
+	Args:
+		path: Path to the file to edit
+		search: Exact text to find (must be unique)
+		replace: Replacement text
+		repo_root: Repository root directory
+		console: Rich console for output
+		gitignore_spec: PathSpec for .gitignore filtering
+		context_lines: Number of context lines in diff
 
-    Returns:
-        Edit result with diff
-    """
-    arguments = {
-        "path": path,
-        "search": search,
-        "replace": replace,
-        "context_lines": context_lines,
-    }
+	Returns:
+		Edit result with diff
+	"""
+	arguments = {
+		"path": path,
+		"search": search,
+		"replace": replace,
+		"context_lines": context_lines,
+	}
 
-    try:
-        return run_edit_file(arguments, repo_root, console, False, gitignore_spec)
-    except FileEditError as e:
-        return f"exit_code=1\n{e}"
-    except Exception as e:
-        return f"exit_code=1\nEdit failed: {str(e)}"
+	try:
+		return run_edit_file(arguments, repo_root, console, gitignore_spec)
+	except FileEditError as e:
+		return f"exit_code=1\n{e}"
+	except Exception as e:
+		return f"exit_code=1\nEdit failed: {str(e)}"
