@@ -1,12 +1,14 @@
 """Interactive selection tool for presenting multiple-choice questions to the user."""
 
-from typing import Optional, List, Dict
+import html
+from typing import Optional, List, Dict, Any, Union
 
 from prompt_toolkit import HTML
 from prompt_toolkit.application import Application
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout import Layout, HSplit, Window
+from prompt_toolkit.layout.dimension import D
 from prompt_toolkit.layout.controls import FormattedTextControl
 
 from .helpers.base import tool
@@ -18,21 +20,28 @@ class SelectionPanel:
     # Cursor indicator
     _CURSOR = "> "
 
-    def __init__(self, question: str, options: List[Dict[str, str]], title: str, console=None, questions=None):
+    @staticmethod
+    def _escape_html(text: str) -> str:
+        """Escape HTML special characters to prevent parsing errors.
+
+        Args:
+            text: Text to escape
+
+        Returns:
+            HTML-escaped text
+        """
+        return html.escape(text, quote=False)
+
+    def __init__(self, question: str, options: List[Dict[str, str]], questions=None):
         """Initialize the selection panel.
 
         Args:
             question: The question to ask the user (for single question mode)
             options: List of option dicts with 'value', 'text', and optional 'description' (for single question mode)
-            title: Title for the panel
-            console: Rich console for display (optional)
             questions: List of question dicts for multi-question mode (overrides question/options)
         """
-        self.console = console
         self.questions = questions
-        self.title = title
         self._user_response = None
-        self._line_count = 0
         self._showing_summary = False
 
         # Single question mode
@@ -41,7 +50,6 @@ class SelectionPanel:
             self.options = options
             self.selected_index = 0
             self.current_question_idx = 0
-            self.selections = None
         # Multi-question mode
         else:
             self.current_question_idx = 0
@@ -59,28 +67,40 @@ class SelectionPanel:
 
         # Single question mode
         if self.questions is None:
-            lines.append(f"<b>{self.question}</b>")
-            lines.append("")
+            # Check if showing summary
+            if self._showing_summary:
+                lines.append("<b>Selection Summary</b>")
+                lines.append("")
 
-            # Render each option
-            for idx, opt in enumerate(self.options):
-                text = opt.get("text", "")
-                description = opt.get("description", "")
+                selected_opt = next((opt for opt in self.options if opt.get("value") == self._user_response), None)
+                selected_text = selected_opt.get("text", self._user_response) if selected_opt else self._user_response
 
-                if idx == self.selected_index:
-                    # Selected option - show cursor and highlight in bold white
-                    lines.append(f'<style fg="white" bold="true">{self._CURSOR}{text}</style>')
-                    if description:
-                        lines.append(f'<style fg="white">   {description}</style>')
-                else:
-                    # Unselected option - dark grey
-                    lines.append(f'<style fg="gray">  {text}</style>')
-                    if description:
-                        lines.append(f'<style fg="gray">   {description}</style>')
+                lines.append(f"<b>Question:</b> {self._escape_html(self.question)}")
+                lines.append(f'<style fg="gray">  Selected: {self._escape_html(str(selected_text))}</style>')
+                lines.append("")
+            else:
+                lines.append(f"<b>{self._escape_html(self.question)}</b>")
+                lines.append("")
 
-            # Add help text
-            lines.append("")
-            lines.append('<style fg="gray">Use ↑↓ to navigate, Enter to confirm, Esc to cancel</style>')
+                # Render each option
+                for idx, opt in enumerate(self.options):
+                    text = opt.get("text", "")
+                    description = opt.get("description", "")
+
+                    if idx == self.selected_index:
+                        # Selected option - show cursor and highlight in bold white
+                        lines.append(f'<style fg="white" bold="true">{self._CURSOR}{self._escape_html(text)}</style>')
+                        if description:
+                            lines.append(f'<style fg="white">   {self._escape_html(description)}</style>')
+                    else:
+                        # Unselected option - dark grey
+                        lines.append(f'<style fg="gray">  {self._escape_html(text)}</style>')
+                        if description:
+                            lines.append(f'<style fg="gray">   {self._escape_html(description)}</style>')
+
+                # Add help text
+                lines.append("")
+                lines.append('<style fg="gray">Use ↑↓ to navigate, Enter to confirm, Esc to cancel</style>')
 
         # Multi-question mode - sequential (one question at a time)
         else:
@@ -98,8 +118,8 @@ class SelectionPanel:
                     selected_opt = next((opt for opt in options if opt.get("value") == selected_value), None)
                     selected_text = selected_opt.get("text", selected_value) if selected_opt else selected_value
 
-                    lines.append(f"<b>Question {q_idx + 1}:</b> {question}")
-                    lines.append(f'<style fg="gray">  Selected: {selected_text}</style>')
+                    lines.append(f"<b>Question {q_idx + 1}:</b> {self._escape_html(question)}")
+                    lines.append(f'<style fg="gray">  Selected: {self._escape_html(str(selected_text))}</style>')
                     lines.append("")
             else:
                 question = self.questions[self.current_question_idx]
@@ -109,7 +129,7 @@ class SelectionPanel:
                 q_total = len(self.questions)
 
                 # Show only current question
-                lines.append(f"<b>Question {q_num}/{q_total}: {question_text}</b>")
+                lines.append(f"<b>Question {q_num}/{q_total}: {self._escape_html(question_text)}</b>")
                 lines.append("")
 
                 # Render options for current question only
@@ -119,27 +139,24 @@ class SelectionPanel:
 
                     if o_idx == self.selected_indices[self.current_question_idx]:
                         # Selected option - show cursor and highlight in bold white
-                        lines.append(f'<style fg="white" bold="true">{self._CURSOR}{text}</style>')
+                        lines.append(f'<style fg="white" bold="true">{self._CURSOR}{self._escape_html(text)}</style>')
                         if description:
-                            lines.append(f'<style fg="white">   {description}</style>')
+                            lines.append(f'<style fg="white">   {self._escape_html(description)}</style>')
                     else:
                         # Unselected option - dark grey
-                        lines.append(f'<style fg="gray">  {text}</style>')
+                        lines.append(f'<style fg="gray">  {self._escape_html(text)}</style>')
                         if description:
-                            lines.append(f'<style fg="gray">   {description}</style>')
+                            lines.append(f'<style fg="gray">   {self._escape_html(description)}</style>')
 
                 # Add help text
                 lines.append("")
                 lines.append('<style fg="gray">Use ↑↓ to navigate options, ←→ for questions, Enter to confirm, Esc to cancel</style>')
 
-        # Store line count for clearing later
-        self._line_count = len(lines)
-
         return HTML("\n".join(lines))
 
 
 
-    def run(self) -> Optional[str]:
+    def run(self) -> Optional[Union[str, List[str]]]:
         """Display the selection panel and wait for user input.
 
         Returns:
@@ -151,6 +168,8 @@ class SelectionPanel:
         @bindings.add(Keys.Up)
         def move_up(event):
             """Move selection up."""
+            if self._showing_summary:
+                return  # Disable navigation when showing summary
             if self.questions is None:
                 # Single question mode
                 if self.selected_index > 0:
@@ -164,6 +183,8 @@ class SelectionPanel:
         @bindings.add(Keys.Down)
         def move_down(event):
             """Move selection down."""
+            if self._showing_summary:
+                return  # Disable navigation when showing summary
             if self.questions is None:
                 # Single question mode
                 if self.selected_index < len(self.options) - 1:
@@ -178,7 +199,9 @@ class SelectionPanel:
         @bindings.add(Keys.Left)
         def prev_question(event):
             """Go to previous question (multi-question mode)."""
-            if self.questions is not None and not self._showing_summary:
+            if self._showing_summary:
+                return  # Disable navigation when showing summary
+            if self.questions is not None:
                 if self.current_question_idx > 0:
                     self.current_question_idx -= 1
                 event.app.invalidate()
@@ -186,7 +209,9 @@ class SelectionPanel:
         @bindings.add(Keys.Right)
         def next_question(event):
             """Go to next question (multi-question mode)."""
-            if self.questions is not None and not self._showing_summary:
+            if self._showing_summary:
+                return  # Disable navigation when showing summary
+            if self.questions is not None:
                 if self.current_question_idx < len(self.questions) - 1:
                     self.current_question_idx += 1
                 event.app.invalidate()
@@ -195,9 +220,16 @@ class SelectionPanel:
         def select(event):
             """Confirm selection or move to next question."""
             if self.questions is None:
-                # Single question mode
-                self._user_response = self.options[self.selected_index].get("value")
-                event.app.exit(result=self._user_response)
+                # Single question mode - show summary then auto-exit
+                if self._showing_summary:
+                    event.app.exit(result=self._user_response)
+                else:
+                    self._user_response = self.options[self.selected_index].get("value")
+                    self._showing_summary = True
+                    event.app.invalidate()
+                    # Auto-exit after 1 second
+                    from threading import Timer
+                    Timer(1.0, lambda: event.app.exit(result=self._user_response)).start()
             else:
                 # Multi-question mode - sequential
                 # Store current selection
@@ -205,16 +237,18 @@ class SelectionPanel:
                 if current_options and self.selected_indices[self.current_question_idx] < len(current_options):
                     self.selections[self.current_question_idx] = current_options[self.selected_indices[self.current_question_idx]].get("value")
 
-                # Move to next question or auto-submit if done
+                # Move to next question or show summary if done
                 if self.current_question_idx < len(self.questions) - 1:
                     # More questions - move to next
                     self.current_question_idx += 1
                     event.app.invalidate()
                 else:
-                    # All questions answered - auto-submit
+                    # All questions answered - show summary then auto-exit
                     self._showing_summary = True
-                    self._user_response = self.selections
-                    event.app.exit(result=self.selections)
+                    event.app.invalidate()
+                    # Auto-exit after 1 second
+                    from threading import Timer
+                    Timer(1.0, lambda: event.app.exit(result=self.selections)).start()
 
         @bindings.add(Keys.Escape)
         def cancel(event):
@@ -241,28 +275,10 @@ class SelectionPanel:
             key_bindings=bindings,
             full_screen=False,
             mouse_support=False,
+            cursor=None,
         )
 
         result = application.run()
-
-        # Print summary for single question mode (multi-question shows inline)
-        if result:
-            # Use provided console or create a new one
-            if self.console:
-                console = self.console
-            else:
-                from rich.console import Console
-                console = Console()
-
-            if self.questions is None:
-                # Single question mode - print to console
-                selected_opt = next((opt for opt in self.options if opt.get("value") == result), None)
-                selected_text = selected_opt.get("text", result) if selected_opt else result
-
-                console.print(f"[cyan]Selection:[/cyan] {self.question}")
-                console.print(f"[cyan]Selected:[/cyan] [bold cyan]{selected_text}[/bold cyan]")
-                console.print()
-            # Multi-question mode - summary shown inline in UI, no console output needed
 
         return result
 
@@ -313,10 +329,6 @@ class SelectionPanel:
                     },
                     "required": ["question", "options"]
                 }
-            },
-            "title": {
-                "type": "string",
-                "description": "Title for the selection dialog (optional, defaults to 'Select an Option')"
             }
         },
         "required": []
@@ -327,9 +339,7 @@ class SelectionPanel:
 def select_option(
     question: Optional[str] = None,
     options: Optional[List[Dict[str, str]]] = None,
-    questions: Optional[List[Dict[str, List[Dict[str, str]]]]] = None,
-    title: Optional[str] = None,
-    console = None
+    questions: Optional[List[Dict[str, Any]]] = None
 ) -> str:
     """Present an inline selection panel to the user.
 
@@ -345,8 +355,6 @@ def select_option(
         questions: List of question objects for multi-question mode, each containing:
             - question: The question text
             - options: List of option objects
-        title: Optional title for the panel (defaults to "Select an Option")
-        console: Rich console for display (optional)
 
     Returns:
         str: Tool result with exit_code and selected value(s)
@@ -374,11 +382,8 @@ def select_option(
                 if not value or not text:
                     return "exit_code=1\nEach option must have 'value' and 'text' fields"
 
-            # Set default title
-            dialog_title = title or "Select an Option"
-
             # Create and run the selection panel
-            panel = SelectionPanel(question, options, dialog_title, console)
+            panel = SelectionPanel(question, options)
             result = panel.run()
 
             # Handle user cancellation
@@ -421,11 +426,8 @@ def select_option(
                     if not value or not text:
                         return f"exit_code=1\nOption {opt_idx + 1} in question {q_idx + 1} must have 'value' and 'text' fields"
 
-            # Set default title
-            dialog_title = title or "Select Options"
-
             # Create and run the selection panel
-            panel = SelectionPanel(None, None, dialog_title, console, questions=questions)
+            panel = SelectionPanel(None, None, questions=questions)
             result = panel.run()
 
             # Handle user cancellation
