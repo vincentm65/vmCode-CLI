@@ -237,7 +237,7 @@ def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, giti
 
 @tool(
     name="execute_command",
-    description="Execute shell commands for git, system debugging, file operations, network tools, package management, and path navigation. Commands run from repository root with && chaining only. Use for git, ps, lsof, netstat, journalctl, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Do NOT use for code search (rg), file read/write, or directory listing. NO chaining with ;, |, >, <, ` (only && allowed).",
+    description="Execute shell commands for git, system debugging, file operations, network tools, package management, and path navigation. Commands run from repository root. Chaining: && (conditional), | (pipe) allowed. Use for git, ps, lsof, netstat, journalctl, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Disallowed commands: rg, cat, ls, grep, find, head, tail, sed, awk, sort, uniq, wc, echo, touch, get-content, type, get-childitem, dir, new-item, set-content, add-content, tee. Use native tools instead. NO chaining with ;, >, <, `.",
     parameters={
         "type": "object",
         "properties": {
@@ -280,15 +280,19 @@ def execute_command(
         Command output with exit code
     """
     # Import validation functions here to avoid circular dependency
-    from utils.validation import check_for_duplicate, check_command
+    from utils.validation import check_command, check_for_silent_blocked_command
 
     if not isinstance(command, str) or not command.strip():
         return "exit_code=1\nerror: 'command' argument must be a non-empty string."
 
-    # Check for duplicates
-    is_duplicate, redirect_msg = check_for_duplicate(chat_manager, command)
-    if is_duplicate:
-        return redirect_msg
+    # Check for commands that should use native tools instead (silent blocking)
+    is_blocked, reprompt_msg = check_for_silent_blocked_command(command)
+    if is_blocked:
+        # Return reprompt message to guide the AI to use the native tool
+        # This is not shown to the user - the AI sees it and can retry
+        if debug_mode and console:
+            console.print(f"[dim]Silently blocked command: {command.split()[0]}[/dim]")
+        return f"exit_code=1\n{reprompt_msg}"
 
     # Validate command
     is_safe, reason = check_command(command)

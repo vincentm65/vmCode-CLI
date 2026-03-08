@@ -399,7 +399,7 @@ PLAN_TYPE_LABELS = {
 # Commands that do NOT require approval (safe, read-only commands)
 ALLOWED_COMMANDS = [
     # System queries
-    "which", "whereis", "type", "pwd",
+    "which", "whereis", "pwd",
     
     # System info (read-only)
     "ps", "pgrep", "pidof",               # Process info
@@ -414,10 +414,6 @@ ALLOWED_COMMANDS = [
     
     # Package query (read-only only - install/upgrade requires approval)
     "pacman", "dpkg", "apt-cache", "rpm", "dnf", "yum",
-    
-    # Text utilities (read-only operations)
-    "grep", "egrep", "fgrep", "sed", "awk",
-    "cut", "sort", "head", "tail", "wc", "tr", "uniq",
     
     # Development queries
     "python", "python3", "node", "npm", "pip",  # When used for queries (version, help, etc.)

@@ -16,7 +16,6 @@ from prompt_toolkit.formatted_text import HTML
 from utils.markdown import left_align_headings
 from llm.config import TOOLS_REQUIRE_CONFIRMATION, WEB_SEARCH_REQUIRE_CONFIRMATION
 from utils.settings import MAX_TOOL_CALLS, MAX_COMMAND_OUTPUT_LINES, MonokaiDarkBGStyle
-from utils.validation import check_for_duplicate, check_command
 from tools import (
     confirm_tool,
     read_file,
@@ -1104,6 +1103,69 @@ class AgenticOrchestrator:
         if not tool_calls:
             return False  # Should not happen if called correctly
 
+        # Append assistant message with ALL tool calls (include content if present)
+        # This must happen BEFORE filtering so the LLM sees its original intent
+        content = (response.get("content") or "").strip()
+        assistant_msg = {"role": "assistant", "tool_calls": tool_calls}
+        if content:
+            assistant_msg["content"] = content
+        self.chat_manager.messages.append(assistant_msg)
+        # Log assistant tool call message
+        self.chat_manager.log_message(assistant_msg)
+
+        # NEW: Filter out non-allowed tools BEFORE execution
+        # This silently removes unknown tools or tools not in the allowed whitelist
+        # to prevent error messages from reaching the user while allowing the agent
+        # to continue with alternative tools.
+        from tools.base import ToolRegistry
+
+        filtered_calls = []
+        filtered_tool_ids = []  # Track filtered tool IDs to provide feedback
+
+        for tool_call in tool_calls:
+            function_name = tool_call.get("function", {}).get("name")
+
+            # Check if tool exists in registry
+            if not ToolRegistry.get(function_name):
+                # Silent fail - skip this tool call entirely
+                # Agent will receive empty result and can retry with correct tool
+                if self.debug_mode:
+                    self.console.print(f"[dim]Silently filtered unknown tool: {function_name}[/dim]")
+                filtered_tool_ids.append(tool_call.get("id"))
+                continue
+
+            # Check if tool is in allowed_tools whitelist (if provided)
+            if allowed_tools and function_name not in allowed_tools:
+                # Silent fail - skip this tool
+                if self.debug_mode:
+                    self.console.print(f"[dim]Silently filtered non-allowed tool: {function_name}[/dim]")
+                filtered_tool_ids.append(tool_call.get("id"))
+                continue
+
+            filtered_calls.append(tool_call)
+
+        # Replace with filtered list
+        tool_calls = filtered_calls
+
+        # Provide feedback to agent for filtered tools
+        # This allows the agent to understand which tools were not available
+        # without showing error messages to the user
+        if filtered_tool_ids:
+            for tool_id in filtered_tool_ids:
+                tool_msg = {
+                    "role": "tool",
+                    "tool_call_id": tool_id,
+                    "content": "exit_code=1\nTool not available. Please use the available tools from the function list."
+                }
+                self.chat_manager.messages.append(tool_msg)
+                self.chat_manager.log_message(tool_msg)
+
+        # If all tools were filtered, return early
+        if not tool_calls:
+            if self.debug_mode:
+                self.console.print("[dim]All tool calls were filtered, continuing...[/dim]")
+            return False
+
         self.empty_response_count = 0
         self.tool_calls_count += 1
 
@@ -1116,7 +1178,6 @@ class AgenticOrchestrator:
             tool.get("function", {}).get("name") == "sub_agent"
             for tool in tool_calls
         )
-        content = (response.get("content") or "").strip()
         # Route to panel if we're a sub-agent with a panel_updater, otherwise print to console
         if content:
             if self.is_sub_agent and self.panel_updater:
@@ -1127,14 +1188,6 @@ class AgenticOrchestrator:
                 md = Markdown(left_align_headings(content), code_theme=MonokaiDarkBGStyle, justify="left")
                 self.console.print(md)
                 self.console.print()
-
-        # Append assistant message with tool calls (include content if present)
-        assistant_msg = {"role": "assistant", "tool_calls": tool_calls}
-        if content:
-            assistant_msg["content"] = content
-        self.chat_manager.messages.append(assistant_msg)
-        # Log assistant tool call message
-        self.chat_manager.log_message(assistant_msg)
 
         # Check if we should use parallel execution
         from utils.settings import tool_settings
@@ -1686,10 +1739,21 @@ class AgenticOrchestrator:
                     elif function_name == "execute_command":
                         # Get console for approval prompt
                         console = self._get_console()
-                        
-                        # Check if command should be auto-approved
-                        from utils.validation import is_auto_approved_command
+
+                        # Check if command should be silently blocked (redirect to native tool)
+                        # This check happens BEFORE approval to avoid prompting for blocked commands
+                        from utils.validation import is_auto_approved_command, check_for_silent_blocked_command
                         command = arguments.get('command', '')
+                        is_blocked, reprompt_msg = check_for_silent_blocked_command(command)
+                        if is_blocked:
+                            # Return reprompt message to guide the AI to use the native tool
+                            # This is not shown to the user - the AI sees it and can retry
+                            if self.debug_mode:
+                                console.print(f"[dim]Silently blocked command: {command.split()[0]}[/dim]")
+                            result = f"exit_code=1\n{reprompt_msg}"
+                            return False, result
+
+                        # Check if command should be auto-approved
                         auto_approve = is_auto_approved_command(command)
 
                         # Request user approval (unless auto-approved)

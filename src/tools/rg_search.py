@@ -6,7 +6,6 @@ from typing import Optional
 
 from .helpers.base import tool
 from .shell import run_shell_command
-from utils.validation import check_for_duplicate
 from .helpers.converters import coerce_bool, coerce_int
 
 
@@ -139,11 +138,6 @@ def rg(
 
     # Build command string
     command = " ".join(cmd_parts)
-
-    # Check for duplicates
-    is_duplicate, redirect_msg = check_for_duplicate(chat_manager, command)
-    if is_duplicate:
-        return redirect_msg
 
     # Execute command
     try:
