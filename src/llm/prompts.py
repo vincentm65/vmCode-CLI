@@ -181,7 +181,7 @@ Not every question needs code exploration.""",
 
     "ask_questions": """## Ask Questions
 
-When you need user input on architectural decisions or design choices, use the question tool to ask 1-5 questions. This works in any mode (learn, edit, plan).""",
+When you need user input on anything, including architectural decisions or design choices, use the select_option tool to ask 1-5 questions. This works in any mode (learn, edit, plan).""",
 
     "tool_preferences": """## Tool Preferences
 

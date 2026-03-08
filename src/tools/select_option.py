@@ -1,6 +1,7 @@
 """Interactive selection tool for presenting multiple-choice questions to the user."""
 
 import html
+from threading import Timer
 from typing import Optional, List, Dict, Any, Union
 
 from prompt_toolkit import HTML
@@ -49,7 +50,6 @@ class SelectionPanel:
             self.question = question
             self.options = options
             self.selected_index = 0
-            self.current_question_idx = 0
         # Multi-question mode
         else:
             self.current_question_idx = 0
@@ -160,7 +160,8 @@ class SelectionPanel:
         """Display the selection panel and wait for user input.
 
         Returns:
-            Selected value, or None if canceled
+            Single question mode: Selected value (str), or None if canceled
+            Multi-question mode: List of selected values (List[str]), or None if canceled
         """
         # Create key bindings for navigation
         bindings = KeyBindings()
@@ -228,7 +229,6 @@ class SelectionPanel:
                     self._showing_summary = True
                     event.app.invalidate()
                     # Auto-exit after 1 second
-                    from threading import Timer
                     Timer(1.0, lambda: event.app.exit(result=self._user_response)).start()
             else:
                 # Multi-question mode - sequential
@@ -247,7 +247,6 @@ class SelectionPanel:
                     self._showing_summary = True
                     event.app.invalidate()
                     # Auto-exit after 1 second
-                    from threading import Timer
                     Timer(1.0, lambda: event.app.exit(result=self.selections)).start()
 
         @bindings.add(Keys.Escape)
@@ -357,9 +356,10 @@ def select_option(
             - options: List of option objects
 
     Returns:
-        str: Tool result with exit_code and selected value(s)
-            - exit_code=0: User selected option(s), value(s) returned
-            - exit_code=1: User canceled (pressed Esc) or invalid input
+        str: Formatted tool result with exit_code and selected value(s):
+            - "exit_code=0\\n{value}" for single question mode (value is the selected option's value)
+            - "exit_code=0\\n{value1, value2, ...}" for multi-question mode (comma-separated list)
+            - "exit_code=1\\n{error_message}" for user cancellation or validation errors
     """
     try:
         # Validate that either single or multi-question mode is provided
