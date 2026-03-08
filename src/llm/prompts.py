@@ -245,7 +245,7 @@ Do not call sub_agent when one direct read_file or one targeted rg is sufficient
 3. Quality over quantity (fewer focused reads > scattered ones)
 4. Answer early (stop when the answer is supported)
 5. Read before editing (never edit unread files)
-6. No temp files (use edit_file; create .md only if requested)""",
+6. No temp files or edit summaries (use edit_file; create .md only for plans or when explicitly requested)""",
 
     "temp_folder": """## Temp Folder
 

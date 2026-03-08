@@ -93,7 +93,7 @@ def display_startup_banner(approve_mode: str, interaction_mode: str = "edit"):
                 ("\n\n", ""),
                 ("No API key required • Conversations routed through vmCode proxy\n", "dim"),
                 ("Switch providers with ", "dim"),
-                ("/provider", "cyan"),
+                ("/provider", "bold cyan"),
                 (" command", "dim")
             ),
             border_style="bright_yellow",

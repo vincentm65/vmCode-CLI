@@ -139,12 +139,12 @@ def main():
             console.print(f"3. Or set environment variables:")
             console.print(f"   [dim]export OPENAI_API_KEY='sk-your-key'[/dim]\n")
             console.print(f"4. Then run: [green]vmcode[/green]\n")
-            console.print(f"[dim]You can also set keys interactively with: /key <your-key>[/dim]\n")
+            console.print(f"[dim]You can also set keys interactively with: [bold cyan]/key[/bold cyan] <your-key>[/dim]\n")
         else:
             console.print("[red]config.yaml.example not found. Please reinstall vmcode.[/red]\n")
         
         # Continue anyway - user can set keys via /key command
-        console.print("[yellow]Continuing... You can set API keys with the /key command.[/yellow]\n")
+        console.print("[yellow]Continuing... You can set API keys with the [bold cyan]/key[/bold cyan] command.[/yellow]\n")
     
     chat_manager = ChatManager()
     thinking_indicator = ThinkingIndicator(console)

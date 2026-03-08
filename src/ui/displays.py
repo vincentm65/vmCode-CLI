@@ -38,9 +38,9 @@ Examples:
   /provider kimi
 
 After switching, use:
-  /key <api_key>     - Set API key for current provider
-  /model <model>     - Set model for current provider"""
-    console.print(Panel(help_text, title="[cyan]Switch Provider[/cyan]"))
+  [bold cyan]/key[/bold cyan] <api_key>     - Set API key for current provider
+  [bold cyan]/model[/bold cyan] <model>     - Set model for current provider"""
+    console.print(Panel(help_text, title="[bold cyan]Switch Provider[/bold cyan]", border_style="grey23", padding=(0, 2)))
     console.print("")
 
 
@@ -55,19 +55,19 @@ def show_help_table(console):
     table.add_column("Command", no_wrap=True)
     table.add_column("Description")
 
-    table.add_row("/help", "Show help")
-    table.add_row("/exit", "Exit chat")
-    table.add_row("/debug", "Toggle debug")
-    table.add_row("/mode", "Toggle Plan/Edit/Learn mode")
-    table.add_row("/logging", "Toggle conversation logging")
-    table.add_row("/config", "Show all configuration settings")
-    table.add_row("/provider [name]", "Switch provider or show provider table")
-    table.add_row("/key <key>", "Set API key for current provider")
-    table.add_row("/model <name>", "Set model for current provider")
-    table.add_row("/usage [provider] [in|out] <cost>", "Set/view provider-specific token cost")
-    table.add_row("/compact [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
-    table.add_row("/init", "Generate agents.md")
-    table.add_row("/edit, /e", "Open editor for multi-line input")
+    table.add_row("[bold cyan]/help[/bold cyan]", "Show help")
+    table.add_row("[bold cyan]/exit[/bold cyan]", "Exit chat")
+    table.add_row("[bold cyan]/debug[/bold cyan]", "Toggle debug")
+    table.add_row("[bold cyan]/mode[/bold cyan]", "Toggle Plan/Edit/Learn mode")
+    table.add_row("[bold cyan]/logging[/bold cyan]", "Toggle conversation logging")
+    table.add_row("[bold cyan]/config[/bold cyan]", "Show all configuration settings")
+    table.add_row("[bold cyan]/provider[/bold cyan] [name]", "Switch provider or show provider table")
+    table.add_row("[bold cyan]/key[/bold cyan] <key>", "Set API key for current provider")
+    table.add_row("[bold cyan]/model[/bold cyan] <name>", "Set model for current provider")
+    table.add_row("[bold cyan]/usage[/bold cyan] [provider] [in|out] <cost>", "Set/view provider-specific token cost")
+    table.add_row("[bold cyan]/compact[/bold cyan] [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
+    table.add_row("[bold cyan]/init[/bold cyan]", "Generate agents.md")
+    table.add_row("[bold cyan]/edit[/bold cyan], [bold cyan]/e[/bold cyan]", "Open editor for multi-line input")
 
     console.print(Panel(table, title="[bold cyan]Commands[/bold cyan]", border_style="grey23", padding=(0, 2)))
 
@@ -157,8 +157,8 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
 
     # ===== Quick Commands Reference =====
     console.print()
-    help_text = """[bold cyan]Commands:[/bold cyan] /provider <name>  /model <path>  /key <key>
-[cyan]         :[/cyan] /usage [provider] [in|out] <$>  /debug  /mode  /logging """
+    help_text = """[bold cyan]Commands:[/bold cyan] [bold cyan]/provider[/bold cyan] <name>  [bold cyan]/model[/bold cyan] <path>  [bold cyan]/key[/bold cyan] <key>
+[cyan]         :[/cyan] [bold cyan]/usage[/bold cyan] [provider] [in|out] <$>  [bold cyan]/debug[/bold cyan]  [bold cyan]/mode[/bold cyan]  [bold cyan]/logging[/bold cyan] """
     console.print(Panel(help_text, title="[cyan]Quick Reference[/cyan]"))
     console.print()
 

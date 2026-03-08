@@ -185,12 +185,12 @@ def _handle_provider(chat_manager, console, debug_mode_container, args):
         cfg = config.get_provider_config(provider)
         if provider == "local":
             if not cfg.get('model'):
-                console.print("[dim]Tip: Set model path with /model <path_to_gguf>[/dim]")
+                console.print("[dim]Tip: Set model path with [bold cyan]/model[/bold cyan] <path_to_gguf>[/dim]")
         else:
             if not cfg.get('api_key'):
-                console.print("[dim]Tip: Set API key with /key <your_api_key>[/dim]")
+                console.print("[dim]Tip: Set API key with [bold cyan]/key[/bold cyan] <your_api_key>[/dim]")
             if not cfg.get('model'):
-                console.print("[dim]Tip: Set model with /model <model_name>[/dim]")
+                console.print("[dim]Tip: Set model with [bold cyan]/model[/bold cyan] <model_name>[/dim]")
     else:
         current = getattr(chat_manager.client, 'provider', 'unknown')
         show_provider_table(current, console)
@@ -205,8 +205,8 @@ def _handle_model(chat_manager, console, debug_mode_container, args):
         current_provider = getattr(chat_manager.client, 'provider', 'unknown')
         cfg = config.get_provider_config(current_provider)
         model = cfg.get('model') or cfg.get('api_model') or 'Not set'
-        console.print(f"[cyan]Current provider:[/cyan] {current_provider}")
-        console.print(f"[cyan]Current model:[/cyan] {model}")
+        console.print(f"[bold cyan]Current provider:[/bold cyan] {current_provider}")
+        console.print(f"[bold cyan]Current model:[/bold cyan] {model}")
         return CommandResult(status="handled")
 
     model = args.strip()
@@ -244,10 +244,10 @@ def _handle_key(chat_manager, console, debug_mode_container, args):
             if api_key:
                 # Show masked API key
                 masked = api_key[:8] + "..." if len(api_key) > 8 else "***"
-                console.print(f"[cyan]Current provider:[/cyan] {current_provider}")
-                console.print(f"[cyan]API key:[/cyan] {masked}")
+                console.print(f"[bold cyan]Current provider:[/bold cyan] {current_provider}")
+                console.print(f"[bold cyan]API key:[/bold cyan] {masked}")
             else:
-                console.print(f"[cyan]Current provider:[/cyan] {current_provider}")
+                console.print(f"[bold cyan]Current provider:[/bold cyan] {current_provider}")
                 console.print("[yellow]API key not set[/yellow]")
         return CommandResult(status="handled")
 
@@ -405,14 +405,14 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
 
         console.print(f"  Total:  ${session_cost['total_cost']:.6f}")
         console.print()
-        console.print(f"[dim]Note: Costs are per-model. Switch model with /model to set different costs.[/dim]")
+        console.print(f"[dim]Note: Costs are per-model. Switch model with [bold cyan]/model[/bold cyan] to set different costs.[/dim]")
         console.print()
 
     else:
         console.print(f"[yellow]Cost not configured for model '{current_model}'. Set with:[/yellow]")
-        console.print(f"  /usage in <cost>   - Set input token cost per 1M tokens")
-        console.print(f"  /usage out <cost>  - Set output token cost per 1M tokens")
-        console.print(f"[dim]Example: /usage in 2.50[/dim]")
+        console.print(f"  [bold cyan]/usage[/bold cyan] in <cost>   - Set input token cost per 1M tokens")
+        console.print(f"  [bold cyan]/usage[/bold cyan] out <cost>  - Set output token cost per 1M tokens")
+        console.print(f"[dim]Example: [bold cyan]/usage[/bold cyan] in 2.50[/dim]")
         console.print()
 
     return CommandResult(status="handled")
@@ -468,7 +468,7 @@ def process_command(chat_manager, user_input, console, debug_mode_container):
         return (result.status, result.replacement_input)
     elif cmd.startswith('/'):
         console.print(f"[red]Unknown command: {user_input}[/red]")
-        console.print("[dim]Type /help for available commands[/dim]")
+        console.print("[dim]Type [bold cyan]/help[/bold cyan] for available commands[/dim]")
         return ("handled", None)
 
     return (None, None)

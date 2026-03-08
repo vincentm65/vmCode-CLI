@@ -1430,12 +1430,20 @@ class AgenticOrchestrator:
                                             gitignore_spec=self.gitignore_spec,
                                             context_lines=args_dict.get('context_lines', 3)
                                         )
-                                        # Replace result with final result
-                                        result.result = final_result
+                                        # Strip exit_code line from final result before displaying
+                                        if final_result and isinstance(final_result, str):
+                                            final_lines = [line for line in final_result.split('\n') if not line.startswith('exit_code=')]
+                                            result.result = '\n'.join(final_lines).strip()
+                                        else:
+                                            result.result = final_result
                                     elif action == "reject":
                                         result.result = "exit_code=1\nEdit rejected by user."
+                                        # Show rejection to user
+                                        self.console.print("[dim]Edit rejected by user.[/dim]")
                                     elif action == "guide":
                                         result.result = f"exit_code=1\nEdit not applied. User guidance: {guidance}"
+                                        # Show guidance to user
+                                        self.console.print(f"[dim]Edit not applied. User guidance: {guidance}[/dim]")
 
                                     # Restart thinking indicator after user input
                                     if thinking_indicator:
@@ -1482,19 +1490,27 @@ class AgenticOrchestrator:
                                         gitignore_spec=self.gitignore_spec,
                                         context_lines=args_dict.get('context_lines', 3)
                                     )
-                                    # Replace result with final result
-                                    result.result = final_result
+                                    # Strip exit_code line from final result before displaying
+                                    if final_result and isinstance(final_result, str):
+                                        final_lines = [line for line in final_result.split('\n') if not line.startswith('exit_code=')]
+                                        result.result = '\n'.join(final_lines).strip()
+                                    else:
+                                        result.result = final_result
                                 elif action == "reject":
                                     result.result = "exit_code=1\nEdit rejected by user."
+                                    # Show rejection to user
+                                    self.console.print("[dim]Edit rejected by user.[/dim]")
                                 elif action == "guide":
                                     result.result = f"exit_code=1\nEdit not applied. User guidance: {guidance}"
+                                    # Show guidance to user
+                                    self.console.print(f"[dim]Edit not applied. User guidance: {guidance}[/dim]")
 
                                 # Restart thinking indicator after user input
                                 if thinking_indicator:
                                     thinking_indicator.start()
                             else:
-                                # Error occurred during preview - just show it
-                                self.console.print(result.result)
+                                # Error occurred during preview - don't show to user, but still return to agent
+                                pass
                         elif label:
                             _display_tool_feedback(label, result.result, self.console, panel_updater=self.panel_updater)
                             # Force flush to ensure immediate output
@@ -1670,15 +1686,23 @@ class AgenticOrchestrator:
                                             gitignore_spec=self.gitignore_spec,
                                             context_lines=arguments.get('context_lines', 3)
                                         )
+                                        # Strip exit_code line from final result before displaying
+                                        if result and isinstance(result, str):
+                                            result_lines = [line for line in result.split('\n') if not line.startswith('exit_code=')]
+                                            result = '\n'.join(result_lines).strip()
                                     elif action == "reject":
                                         result = "exit_code=1\nEdit rejected by user."
+                                        # Show rejection to user
+                                        console.print("[dim]Edit rejected by user.[/dim]")
                                     elif action == "guide":
                                         result = f"exit_code=1\nEdit not applied. User guidance: {guidance}"
+                                        # Show guidance to user
+                                        console.print(f"[dim]Edit not applied. User guidance: {guidance}[/dim]")
 
                                     # Restart thinking indicator after user input
                                     if thinking_indicator:
                                         thinking_indicator.start()
-                            # Show the preview diff
+                                # else: Text object with exit_code != 0 - don't show to user
                             elif result.startswith("exit_code=0"):
                                 # Extract and display the diff preview
                                 lines = result.split('\n')
@@ -1721,18 +1745,27 @@ class AgenticOrchestrator:
                                         gitignore_spec=self.gitignore_spec,
                                         context_lines=arguments.get('context_lines', 3)
                                     )
+                                    # Strip exit_code line from final result before displaying
+                                    if result and isinstance(result, str):
+                                        result_lines = [line for line in result.split('\n') if not line.startswith('exit_code=')]
+                                        result = '\n'.join(result_lines).strip()
                                 elif action == "reject":
                                     result = "exit_code=1\nEdit rejected by user."
+                                    # Show rejection to user
+                                    if console:
+                                        console.print("[dim]Edit rejected by user.[/dim]")
                                 elif action == "guide":
                                     result = f"exit_code=1\nEdit not applied. User guidance: {guidance}"
+                                    # Show guidance to user
+                                    if console:
+                                        console.print(f"[dim]Edit not applied. User guidance: {guidance}[/dim]")
 
                                 # Restart thinking indicator after user input
                                 if thinking_indicator:
                                     thinking_indicator.start()
                             else:
-                                # Error occurred during preview - just show it
-                                if console:
-                                    console.print(result)
+                                # Error occurred during preview - don't show to user, but still return to agent
+                                pass
                         return False, str(result)
                     elif function_name == "execute_command":
                         # Get console for approval prompt
