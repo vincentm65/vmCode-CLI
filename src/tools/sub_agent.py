@@ -6,6 +6,10 @@ from typing import Optional
 
 from .helpers.base import tool
 from core.sub_agent import run_sub_agent
+from utils.result_parsers import (
+    extract_exit_code,
+    extract_multiple_metadata,
+)
 
 
 class SimplePanelUpdater:
@@ -239,12 +243,11 @@ def _parse_and_inject_files(raw_result, repo_root, gitignore_spec, console):
                 content = "\n".join(content_lines).rstrip()
 
                 # Parse actual lines_read and start_line from metadata
-                lines_read_match = re.search(r'lines_read=(\d+)', first_line)
-                start_line_match = re.search(r'start_line=(\d+)', first_line)
+                metadata = extract_multiple_metadata(tool_result, 'lines_read', 'start_line')
 
-                if lines_read_match:
-                    actual_lines_read = int(lines_read_match.group(1))
-                    actual_start_line = int(start_line_match.group(1)) if start_line_match else start_line
+                if metadata.get('lines_read') is not None:
+                    actual_lines_read = metadata['lines_read']
+                    actual_start_line = metadata.get('start_line') or start_line
 
                     if actual_start_line > 1:
                         end_line = actual_start_line + actual_lines_read - 1

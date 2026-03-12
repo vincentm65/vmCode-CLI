@@ -26,7 +26,12 @@ from tools import (
 )
 from utils.settings import tool_settings
 from utils.web_search import run_web_search
-from utils.result_parsers import extract_exit_code
+from utils.result_parsers import (
+    extract_exit_code,
+    extract_metadata_from_result,
+    extract_all_metadata,
+    extract_multiple_metadata,
+)
 from tools.task_list import _format_task_list
 from exceptions import (
     LLMError,
@@ -308,11 +313,10 @@ def _handle_execute_command_feedback(tool_result, console, panel_updater):
     lines = tool_result.split('\n')
     if lines:
         # Extract exit code from first line
-        exit_code_match = re.search(r'exit_code=(\d+)', lines[0])
-        exit_code = int(exit_code_match.group(1)) if exit_code_match else None
+        exit_code = extract_exit_code(tool_result)
 
         # Get output (all lines after the exit_code line)
-        output_lines = lines[1:] if exit_code_match else lines
+        output_lines = lines[1:] if exit_code is not None else lines
         output_lines = [line for line in output_lines if line.strip()]
 
         # Truncate if too many lines
@@ -399,17 +403,15 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
 
     # For read_file: parse lines_read and start_line from first line
     if command.startswith("read_file"):
-        first_line = tool_result.split('\n')[0]
-        match = re.search(r'lines_read=(\d+)', first_line)
-        start_match = re.search(r'start_line=(\d+)', first_line)
-        if match:
-            count = int(match.group(1))
+        metadata = extract_multiple_metadata(tool_result, 'lines_read', 'start_line')
+        count = metadata.get('lines_read')
+        if count is not None:
             # Only add prefix for console, not for panel_updater
             prefix = "╰─ " if not panel_updater else ""
 
             # Build message with line range if start_line is present
-            if start_match:
-                start_line = int(start_match.group(1))
+            start_line = metadata.get('start_line')
+            if start_line:
                 if start_line > 1:
                     end_line = start_line + count - 1
                     message = f"{prefix}[dim]Read lines {start_line}-{end_line} ({count} line{'s' if count != 1 else ''})[/dim]"
@@ -425,19 +427,19 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
 
     # For rg: parse matches/files from result
     if command.startswith("rg"):
-        lines = tool_result.split('\n')
         prefix = "╰─ " if not panel_updater else ""
         message = None
 
         # Check for "No matches found" message (0 results)
+        lines = tool_result.split('\n')
         if any("No matches found" in line for line in lines):
             message = f"{prefix}[dim]No matches found[/dim]"
         # Check for matches=N or files=N pattern
         elif len(lines) > 1:
-            match = re.search(r'(matches|files)=(\d+)', lines[1])
-            if match:
-                count = int(match.group(2))
-                label = match.group(1)
+            metadata = extract_all_metadata(tool_result, line_index=1)
+            count = metadata.get('matches') or metadata.get('files')
+            if count is not None:
+                label = 'matches' if 'matches' in metadata else 'files'
                 if count == 0:
                     message = f"{prefix}[dim]No {label} found[/dim]"
                 else:
@@ -663,16 +665,14 @@ class SubAgentPanel:
                 match = re.search(r'read_file:?\s+(.+)', command)
                 if match:
                     path = match.group(1).strip()
-            
+
             # Parse lines_read from result
-            first_line = tool_result.split('\n')[0]
-            match = re.search(r'lines_read=(\d+)', first_line)
-            start_match = re.search(r'start_line=(\d+)', first_line)
-            
-            if match:
-                count = int(match.group(1))
-                if start_match:
-                    start_line = int(start_match.group(1))
+            metadata = extract_multiple_metadata(tool_result, 'lines_read', 'start_line')
+            count = metadata.get('lines_read')
+
+            if count is not None:
+                start_line = metadata.get('start_line')
+                if start_line:
                     if start_line > 1:
                         end_line = start_line + count - 1
                         message = f"[grey]read_file {path}[/grey]\n[dim]╰─ Read lines {start_line}-{end_line} ({count} line{'s' if count != 1 else ''})[/dim]"
@@ -691,14 +691,14 @@ class SubAgentPanel:
                 match = re.search(r'rg:?\s+(.+)', command)
                 if match:
                     pattern = match.group(1).strip()
-            
+
             # Parse matches/files from result
             lines = tool_result.split('\n')
             if len(lines) > 1:
-                match = re.search(r'(matches|files)=(\d+)', lines[1])
-                if match:
-                    count = int(match.group(2))
-                    label = match.group(1)
+                metadata = extract_all_metadata(tool_result, line_index=1)
+                count = metadata.get('matches') or metadata.get('files')
+                if count is not None:
+                    label = 'matches' if 'matches' in metadata else 'files'
                     if count == 0:
                         message = f"[grey]rg {pattern}[/grey]\n[dim]╰─ No {label} found[/dim]"
                     else:
