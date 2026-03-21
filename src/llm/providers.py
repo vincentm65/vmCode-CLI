@@ -379,7 +379,7 @@ HANDLER_REGISTRY = {
     "openrouter": OpenAIHandler,
     "glm": OpenAIHandler,
     "gemini": OpenAIHandler,
-    "minimax": OpenAIHandler,
+    "minimax": AnthropicHandler,
     "kimi": OpenAIHandler,
     "anthropic": AnthropicHandler,
     "local": OpenAIHandler,
