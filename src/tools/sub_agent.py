@@ -1,15 +1,10 @@
 """Sub-agent tool for complex multi-file exploration."""
 
-import re
 from pathlib import Path
-from typing import Optional
 
 from .helpers.base import tool
 from core.sub_agent import run_sub_agent
-from utils.result_parsers import (
-    extract_exit_code,
-    extract_multiple_metadata,
-)
+from utils.citation_parser import inject_file_contents
 
 
 class SimplePanelUpdater:
@@ -129,140 +124,11 @@ def sub_agent(
         raw_result = sub_agent_data.get('result', '')
 
         # Parse and inject file contents
-        injected_files_content = _parse_and_inject_files(
+        injected_result = inject_file_contents(
             raw_result, repo_root, gitignore_spec, console
         )
 
-        # Combine raw result with injected content
-        if injected_files_content:
-            final_result = raw_result + "\n\n## Injected File Contents\n\n" + "\n".join(injected_files_content)
-        else:
-            final_result = raw_result
-
-        return final_result
+        return injected_result
 
 
-def _calculate_line_range(start_line: int, end_line: int) -> int:
-    """Calculate max_lines from start and end line numbers.
 
-    Args:
-        start_line: Starting line number (1-based, inclusive)
-        end_line: Ending line number (1-based, inclusive)
-
-    Returns:
-        Number of lines in the range
-    """
-    return end_line - start_line + 1
-
-
-def _parse_and_inject_files(raw_result, repo_root, gitignore_spec, console):
-    """Parse sub-agent result and inject file contents.
-
-    Args:
-        raw_result: Sub-agent result text
-        repo_root: Repository root directory
-        gitignore_spec: PathSpec for .gitignore filtering
-        console: Rich console for output
-
-    Returns:
-        List of injected file content strings
-    """
-    injected_files_content = []
-
-    # Regex to find explicit citation patterns (bracketed notation only for safety)
-    file_pattern = re.compile(
-        r"(?:-\s+\[(.*?)\]\s+\((?:lines\s+)?(\d+)-(\d+)(?:\s*lines)?|full)\)|"
-        r"(?:lines\s+(\d+)-(\d+)\s+in\s+\[(.*?)\])|"
-        r"(?:\[(.*?)\]:(\d+)-(\d+))|"
-        r"(?:\[(.*?)\]:(\d+))|"
-        r"(?:\[(.*?)\](?![:(]))"
-    )
-
-    for line in raw_result.split('\n'):
-        match = file_pattern.search(line)
-        if match:
-            # Extract path and range from whichever pattern matched
-            if match.group(1):
-                # Pattern 1: - [file] (N-M) or (full)
-                rel_path = match.group(1).strip()
-                if match.group(2) and match.group(3):
-                    start_line = int(match.group(2))
-                    end_line = int(match.group(3))
-                    max_lines = _calculate_line_range(start_line, end_line)
-                else:
-                    start_line = 1
-                    max_lines = None
-            elif match.group(4) and match.group(5) and match.group(6):
-                # Pattern 2: lines N-M in [file]
-                start_line = int(match.group(4))
-                end_line = int(match.group(5))
-                rel_path = match.group(6).strip()
-                max_lines = _calculate_line_range(start_line, end_line)
-            elif match.group(7) and match.group(8) and match.group(9):
-                # Pattern 3: [file]:N-M
-                rel_path = match.group(7).strip()
-                start_line = int(match.group(8))
-                end_line = int(match.group(9))
-                max_lines = _calculate_line_range(start_line, end_line)
-            elif match.group(10) and match.group(11):
-                # Pattern 4: [file]:N (single line)
-                rel_path = match.group(10).strip()
-                start_line = int(match.group(11))
-                max_lines = 1
-            elif match.group(12):
-                # Pattern 5: [file] (full)
-                rel_path = match.group(12).strip()
-                start_line = 1
-                max_lines = None
-            else:
-                continue
-
-            try:
-                from .file_reader import read_file as read_file_with_bypass
-
-                tool_result = read_file_with_bypass(
-                    rel_path,
-                    repo_root,
-                    max_lines=max_lines,
-                    start_line=start_line,
-                    gitignore_spec=gitignore_spec,
-                )
-
-                # Check for exit code
-                first_line = tool_result.split('\n')[0] if tool_result else ""
-                if first_line.startswith("exit_code="):
-                    exit_code = first_line.split("=")[1].split()[0]
-                    if exit_code != "0":
-                        injected_files_content.append(f"### {rel_path} (Blocked or unavailable)")
-                        injected_files_content.append(tool_result.strip())
-                        injected_files_content.append("")
-                        continue
-
-                # Add to injected content (strip metadata line)
-                content_lines = tool_result.splitlines()[1:] if isinstance(tool_result, str) else []
-                content = "\n".join(content_lines).rstrip()
-
-                # Parse actual lines_read and start_line from metadata
-                metadata = extract_multiple_metadata(tool_result, 'lines_read', 'start_line')
-
-                if metadata.get('lines_read') is not None:
-                    actual_lines_read = metadata['lines_read']
-                    actual_start_line = metadata.get('start_line') or start_line
-
-                    if actual_start_line > 1:
-                        end_line = actual_start_line + actual_lines_read - 1
-                        header_info = f"lines {actual_start_line}-{end_line} ({actual_lines_read} line{'s' if actual_lines_read != 1 else ''})"
-                    else:
-                        header_info = f"lines {actual_start_line}-{actual_lines_read} ({actual_lines_read} line{'s' if actual_lines_read != 1 else ''})"
-                else:
-                    header_info = "full"
-
-                injected_files_content.append(f"### {rel_path} ({header_info})")
-                injected_files_content.append("```")
-                injected_files_content.append(content)
-                injected_files_content.append("```\n")
-
-            except Exception as e:
-                injected_files_content.append(f"### {rel_path} (Error reading file: {e})")
-
-    return injected_files_content

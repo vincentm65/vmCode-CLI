@@ -79,60 +79,81 @@ def _build_fully_whitespace_agnostic_pattern(search_text):
 
 
 def _find_unique_span_with_fallbacks(content, search_text):
+    """Find unique span for search_text, collecting diagnostics along the way.
+
+    Returns:
+        (span_tuple, diagnostics_list) on success
+        (None, diagnostics_list) on failure — diagnostics explain what was tried
+
+    diagnostics is a list of strings describing each matching stage.
+    """
+    diagnostics = []
+
+    # Stage 1: Exact byte match
     count = content.count(search_text)
+    diagnostics.append(f"exact match: {count} occurrence(s)")
     if count == 1:
         start = content.index(search_text)
-        return (start, start + len(search_text))
+        return (start, start + len(search_text)), diagnostics
     if count > 1:
         raise FileEditError(
             f"Search text appears {count} times in file (must be unique)",
             details={"count": count, "hint": "Add more surrounding context to make it unique"}
         )
 
+    # Stage 2: Line-normalized match (trailing whitespace ignored)
     if "\n" in search_text or "\r" in search_text:
         spans = _find_spans_by_line_normalization(
             content, search_text, collapse_whitespace=False
         )
+        diagnostics.append(f"line-normalized (trailing ws stripped): {len(spans)} match(es)")
         if len(spans) == 1:
-            return spans[0]
+            return spans[0], diagnostics
         if len(spans) > 1:
             raise FileEditError(
                 f"Search text appears {len(spans)} times in file (must be unique)",
                 details={"count": len(spans), "hint": "Add more surrounding context to make it unique"}
             )
 
+        # Stage 3: Line-normalized + collapsed whitespace
         spans = _find_spans_by_line_normalization(
             content, search_text, collapse_whitespace=True
         )
+        diagnostics.append(f"line-normalized (ws collapsed): {len(spans)} match(es)")
         if len(spans) == 1:
-            return spans[0]
+            return spans[0], diagnostics
         if len(spans) > 1:
             raise FileEditError(
                 f"Search text appears {len(spans)} times in file (must be unique)",
                 details={"count": len(spans), "hint": "Add more surrounding context to make it unique"}
             )
 
+    # Stage 4: Regex whitespace-insensitive pattern
     pattern = _build_whitespace_insensitive_pattern(search_text)
     matches = list(pattern.finditer(content))
+    diagnostics.append(f"whitespace-insensitive regex: {len(matches)} match(es)")
     if len(matches) == 1:
-        return matches[0].span()
+        return matches[0].span(), diagnostics
     if len(matches) > 1:
         raise FileEditError(
             f"Search text appears {len(matches)} times in file (must be unique)",
             details={"count": len(matches), "hint": "Add more surrounding context to make it unique"}
         )
 
+    # Stage 5: Fully whitespace-agnostic (only for single-line search)
     if not any(ch.isspace() for ch in search_text):
         pattern = _build_fully_whitespace_agnostic_pattern(search_text)
         matches = list(pattern.finditer(content))
+        diagnostics.append(f"fully whitespace-agnostic regex: {len(matches)} match(es)")
         if len(matches) == 1:
-            return matches[0].span()
+            return matches[0].span(), diagnostics
         if len(matches) > 1:
             raise FileEditError(
                 f"Search text appears {len(matches)} times in file (must be unique)",
                 details={"count": len(matches), "hint": "Add more surrounding context to make it unique"}
             )
-    return None
+
+    return None, diagnostics
 
 
 def _resolve_repo_path(path_str, repo_root, gitignore_spec=None):
@@ -237,14 +258,16 @@ def _prepare_edit(arguments, repo_root, gitignore_spec=None) -> tuple[str, dict]
         search, replace, file_newline
     )
 
-    search_span = _find_unique_span_with_fallbacks(original_content, search)
+    search_span, match_diagnostics = _find_unique_span_with_fallbacks(original_content, search)
     if search_span is None:
         search_preview = search[:200] + "..." if len(search) > 200 else search
+        diagnostics_summary = "\n".join(f"  {d}" for d in match_diagnostics)
         raise FileEditError(
             "Search text not found in file",
             details={
                 "search_preview": search_preview,
-                "hint": "Try adding more surrounding context (including nearby lines) to disambiguate whitespace/indentation differences."
+                "diagnostics": diagnostics_summary,
+                "hint": "Try adding more surrounding context (including nearby lines) to disambiguate whitespace/indentation differences. Check that blank-line counts in your search match the file exactly."
             }
         )
 

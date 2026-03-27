@@ -60,21 +60,21 @@ def get_bottom_toolbar_text(chat_manager):
 
     # Build toolbar string based on configuration
     # Model and mode are always shown
-    parts = [f'<style fg="white">Model: {model_display or provider_name} | {mode_label}: </style>{mode_val_colored}']
+    parts = [f'<style fg="white">Model: {model_display or provider_name} - {mode_label}: </style>{mode_val_colored}']
     
     # Conditionally add token counts
     if STATUS_BAR_SETTINGS.get("show_curr_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="cyan">curr</style><style fg="white">: {tokens_curr:,}</style>')
+        parts.append(f'<style fg="white"> | </style><style fg="grey">curr</style><style fg="white">: {tokens_curr:,}</style>')
     if STATUS_BAR_SETTINGS.get("show_in_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="cyan">in</style><style fg="white">: {tokens_in:,}</style>')
+        parts.append(f'<style fg="white"> | </style><style fg="grey">in</style><style fg="white">: {tokens_in:,}</style>')
     if STATUS_BAR_SETTINGS.get("show_out_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="cyan">out</style><style fg="white">: {tokens_out:,}</style>')
+        parts.append(f'<style fg="white"> | </style><style fg="grey">out</style><style fg="white">: {tokens_out:,}</style>')
     if STATUS_BAR_SETTINGS.get("show_total_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="cyan">total</style><style fg="white">: {tokens_total:,}</style>')
+        parts.append(f'<style fg="white"> | </style><style fg="grey">total</style><style fg="white">: {tokens_total:,}</style>')
     
     # Conditionally add cost
     if STATUS_BAR_SETTINGS.get("show_cost", True):
-        parts.append(f'<style fg="white"> | </style><style fg="cyan">cost</style><style fg="white">: ${total_cost:.4f}</style>')
+        parts.append(f'<style fg="white"> | </style><style fg="grey">cost</style><style fg="white">: ${total_cost:.4f}</style>')
     
     # Conditionally add completion time
     if STATUS_BAR_SETTINGS.get("show_completed", True) and last_completion is not None:

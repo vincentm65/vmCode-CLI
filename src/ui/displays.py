@@ -1,4 +1,4 @@
-"""UI display functions for command outputs."""
+"""UI display functions for command outputs.""" 
 
 from rich.table import Table
 from rich.panel import Panel
@@ -16,12 +16,12 @@ def show_provider_table(current_provider: str, console):
     table = Table("Provider", "Status", "Details", title="Providers", box=box.SIMPLE_HEAD)
     for provider in config.get_providers():
         cfg = config.get_provider_config(provider)
-        model = cfg.get('model', 'N/A')
-        if provider == 'local':
-            status = '✅' if cfg.get('model') else '❌ (set model path)'
+        model = cfg.get("model", "N/A")
+        if provider == "local":
+            status = "✅" if cfg.get("model") else "❌ (set model path)"
         else:
-            status = '✅' if cfg.get('api_key') else '❌ (set API key)'
-        active = ' [green](active)[/green]' if provider == current_provider else ''
+            status = "✅" if cfg.get("api_key") else "❌ (set API key)"
+        active = " [green](active)[/green]" if provider == current_provider else ""
         table.add_row(provider.capitalize(), status, f"{model[:40]}{active}")
 
     console.print(table)
@@ -68,6 +68,7 @@ def show_help_table(console):
     table.add_row("[bold cyan]/compact[/bold cyan] [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
     table.add_row("[bold cyan]/init[/bold cyan]", "Generate agents.md")
     table.add_row("[bold cyan]/edit[/bold cyan], [bold cyan]/e[/bold cyan]", "Open editor for multi-line input")
+    table.add_row("[bold cyan]/statusbar[/bold cyan], [bold cyan]/sb[/bold cyan] [item]", "Toggle status bar items (cost, tokens, etc.)")
 
     console.print(Panel(table, title="[bold cyan]Commands[/bold cyan]", border_style="grey23", padding=(0, 2)))
 
@@ -92,7 +93,7 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
     Args:
         chat_manager: ChatManager instance for runtime state
         console: Rich Console instance for output
-        debug_mode_container: Dict with 'debug' key for debug mode state
+        debug_mode_container: Dict with debug key for debug mode state
         current_provider: Name of the currently active provider
     """
     from core.config_manager import ConfigManager
@@ -100,10 +101,10 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
     config_data = config_manager.load()
 
     console.print()
-    
+
     # ===== Runtime Settings =====
     runtime_table = Table("Setting", "Status", title="Runtime Settings", box=box.SIMPLE_HEAD)
-    debug_status = "[green]ON[/green]" if debug_mode_container.get('debug') else "[dim]OFF[/dim]"
+    debug_status = "[green]ON[/green]" if debug_mode_container.get("debug") else "[dim]OFF[/dim]"
     runtime_table.add_row("Debug Mode", debug_status)
     logging_status = "[green]ON[/green]" if chat_manager.markdown_logger else "[dim]OFF[/dim]"
     runtime_table.add_row("Conversation Logging", logging_status)
@@ -123,27 +124,27 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
     console.print()
     provider_table = Table("Provider", "Model", "$ in/out", "API Key", title="Providers", box=box.SIMPLE_HEAD)
 
-    active_provider = config_data.get('LAST_PROVIDER', 'Not set').upper()
+    active_provider = config_data.get("LAST_PROVIDER", "Not set").upper()
     provider_table.add_row("[green]Active[/green]", f"[green]{active_provider}[/green]", "", "")
 
     def fmt(v, max_len=35):
         return v[:max_len-3] + "..." if len(v) > max_len else v
 
     # Local provider
-    local_model = config_data.get('LOCAL_MODEL_PATH', 'Not set')
+    local_model = config_data.get("LOCAL_MODEL_PATH", "Not set")
     provider_table.add_row("Local", fmt(local_model), "N/A", "N/A")
 
     # API providers
     for provider in ["OpenRouter", "GLM", "OpenAI", "Gemini", "MiniMax", "Anthropic", "Kimi"]:
-        model = config_data.get(f'{provider.upper()}_MODEL', 'Not set')
-        key = config_data.get(f'{provider.upper()}_API_KEY', '')
+        model = config_data.get(f"{provider.upper()}_MODEL", "Not set")
+        key = config_data.get(f"{provider.upper()}_API_KEY", "")
         key_status = "[green]✓[/green]" if key else "[red]✗[/red]"
 
         # Check for model-specific pricing
-        model_prices = config_data.get('MODEL_PRICES', {})
+        model_prices = config_data.get("MODEL_PRICES", {})
         if model and model in model_prices:
-            cost_in = model_prices[model].get('cost_in', 0)
-            cost_out = model_prices[model].get('cost_out', 0)
+            cost_in = model_prices[model].get("cost_in", 0)
+            cost_out = model_prices[model].get("cost_out", 0)
             if cost_in > 0 or cost_out > 0:
                 cost_str = f"${cost_in:.2f}/${cost_out:.2f}"
             else:
@@ -158,7 +159,6 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
     # ===== Quick Commands Reference =====
     console.print()
     help_text = """[bold cyan]Commands:[/bold cyan] [bold cyan]/provider[/bold cyan] <name>  [bold cyan]/model[/bold cyan] <path>  [bold cyan]/key[/bold cyan] <key>
-[cyan]         :[/cyan] [bold cyan]/usage[/bold cyan] [provider] [in|out] <$>  [bold cyan]/debug[/bold cyan]  [bold cyan]/mode[/bold cyan]  [bold cyan]/logging[/bold cyan] """
+[cyan]         :[/cyan] [bold cyan]/usage[/bold cyan] [provider] [in|out] <$>  [bold cyan]/debug[/bold cyan]  [bold cyan]/mode[/bold cyan]  [bold cyan]/logging[/bold cyan]  [bold cyan]/sb[/bold cyan] [item]"""
     console.print(Panel(help_text, title="[cyan]Quick Reference[/cyan]"))
     console.print()
-

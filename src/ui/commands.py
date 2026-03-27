@@ -8,7 +8,6 @@ from core.init import run_init
 from core.config_manager import ConfigManager as ConfigManagerClass
 from ui.displays import show_help_table, show_provider_table, show_config_overview
 from ui.banner import display_startup_banner
-
 # Global ConfigManager instance
 config_manager = ConfigManagerClass()
 
@@ -416,6 +415,71 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
+def _handle_statusbar(chat_manager, console, debug_mode_container, args):
+    """Handle status bar configuration command - toggle items on/off via SettingSelector."""
+    from ui.setting_selector import SettingOption, SettingCategory, SettingSelector
+
+    settings = config.STATUS_BAR_SETTINGS
+
+    # Define status bar toggle settings
+    sb_settings = [
+        SettingOption(
+            key="show_curr_tokens", text="Current context tokens",
+            value=settings.get("show_curr_tokens", True), input_type="boolean",
+        ),
+        SettingOption(
+            key="show_in_tokens", text="Total prompt tokens",
+            value=settings.get("show_in_tokens", True), input_type="boolean",
+        ),
+        SettingOption(
+            key="show_out_tokens", text="Total completion tokens",
+            value=settings.get("show_out_tokens", True), input_type="boolean",
+        ),
+        SettingOption(
+            key="show_total_tokens", text="Total session tokens",
+            value=settings.get("show_total_tokens", True), input_type="boolean",
+        ),
+        SettingOption(
+            key="show_cost", text="Session cost",
+            value=settings.get("show_cost", True), input_type="boolean",
+        ),
+        SettingOption(
+            key="show_completed", text="Last completion time",
+            value=settings.get("show_completed", True), input_type="boolean",
+        ),
+    ]
+
+    category = SettingCategory(title="Status Bar Items", settings=sb_settings)
+
+    selector = SettingSelector(
+        categories=[category],
+        title="",
+    )
+
+    changes = selector.run()
+
+    if changes is None:
+        console.print("[dim]Status bar settings unchanged.[/dim]")
+        return CommandResult(status="handled")
+
+    # Apply changes to runtime config
+    for key, value in changes.items():
+        config.update_status_bar_settings({key: value})
+
+    # Persist to config.json
+    try:
+        cfg_data = config_manager.load(force_reload=True)
+        if "STATUS_BAR_SETTINGS" not in cfg_data:
+            cfg_data["STATUS_BAR_SETTINGS"] = {}
+        cfg_data["STATUS_BAR_SETTINGS"].update(changes)
+        config_manager.save(cfg_data)
+        console.print("[green]Status bar settings saved.[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to save settings: {e}[/red]")
+
+    return CommandResult(status="handled")
+
+
 # Command registry - maps command names to their handlers
 _COMMAND_HANDLERS = {
     "/exit": _handle_exit,
@@ -437,6 +501,8 @@ _COMMAND_HANDLERS = {
     "/usage": _handle_usage,
     "/model": _handle_model,
     "/key": _handle_key,
+    "/statusbar": _handle_statusbar,
+    "/sb": _handle_statusbar,
 }
 
 

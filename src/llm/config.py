@@ -302,13 +302,42 @@ def reload_config():
     
     Note: This is a manual operation - call after config changes.
     """
-    global _CONFIG, _provider_registry_cache, _cached_provider, PROVIDER_REGISTRY, LLM_PROVIDER
+    global _CONFIG, _provider_registry_cache, _cached_provider, PROVIDER_REGISTRY, LLM_PROVIDER, STATUS_BAR_SETTINGS
     _CONFIG = _load_config()
     _provider_registry_cache = None
     _cached_provider = None
     # Rebuild module-level variables
     PROVIDER_REGISTRY = _get_provider_registry()
     LLM_PROVIDER = _get_provider()
+    # Rebuild status bar settings
+    STATUS_BAR_SETTINGS = _build_status_bar_settings()
+
+
+def _build_status_bar_settings():
+    """Build STATUS_BAR_SETTINGS dict from current _CONFIG."""
+    sbs = _CONFIG.get("STATUS_BAR_SETTINGS", {})
+    return {
+        "show_curr_tokens": sbs.get("show_curr_tokens", True),
+        "show_in_tokens": sbs.get("show_in_tokens", True),
+        "show_out_tokens": sbs.get("show_out_tokens", True),
+        "show_total_tokens": sbs.get("show_total_tokens", True),
+        "show_cost": sbs.get("show_cost", True),
+        "show_completed": sbs.get("show_completed", True),
+    }
+
+
+def update_status_bar_settings(settings_dict):
+    """Update STATUS_BAR_SETTINGS at runtime and persist to config.
+
+    Args:
+        settings_dict: Dict of settings to update (e.g., {"show_cost": False})
+
+    Returns:
+        Updated STATUS_BAR_SETTINGS dict
+    """
+    global STATUS_BAR_SETTINGS
+    STATUS_BAR_SETTINGS.update(settings_dict)
+    return STATUS_BAR_SETTINGS
 
 
 def get_providers():
@@ -349,6 +378,7 @@ __all__ = [
     "generate_config_template",
     "reload_config",
     "STATUS_BAR_SETTINGS",
+    "update_status_bar_settings",
 ]
 
 
@@ -366,14 +396,7 @@ TOOLS_REQUIRE_CONFIRMATION = False
 WEB_SEARCH_REQUIRE_CONFIRMATION = False
 
 # Status bar configuration
-STATUS_BAR_SETTINGS = {
-    "show_curr_tokens": _CONFIG.get("STATUS_BAR_SETTINGS", {}).get("show_curr_tokens", True),
-    "show_in_tokens": _CONFIG.get("STATUS_BAR_SETTINGS", {}).get("show_in_tokens", True),
-    "show_out_tokens": _CONFIG.get("STATUS_BAR_SETTINGS", {}).get("show_out_tokens", True),
-    "show_total_tokens": _CONFIG.get("STATUS_BAR_SETTINGS", {}).get("show_total_tokens", True),
-    "show_cost": _CONFIG.get("STATUS_BAR_SETTINGS", {}).get("show_cost", True),
-    "show_completed": _CONFIG.get("STATUS_BAR_SETTINGS", {}).get("show_completed", True),
-}
+STATUS_BAR_SETTINGS = _build_status_bar_settings()
 
 # Tool approval modes
 APPROVE_MODES = ("safe", "accept_edits")

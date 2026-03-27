@@ -270,6 +270,53 @@ def format_tool_result(result, command=None, is_rg=False, debug_mode=False):
     return f"exit_code={result.returncode}\n{output}\n\n"
 
 
+def _annotate_blank_lines(content):
+    """Replace consecutive blank lines with annotated markers.
+
+    Makes invisible whitespace visible to the LLM so it can reconstruct
+    exact blank-line counts when constructing edit_file search text.
+
+    Single blank lines are left as-is (they're unambiguous).
+    Runs of 2+ blank lines get a comment like:  # (3 blank lines)
+    Trailing whitespace on otherwise-blank lines is shown as:  # (trailing spaces: 4)
+    """
+    lines = content.split("\n")
+    result = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Check if this line is "blank" (empty or whitespace-only)
+        if line.strip() == "":
+            # Count consecutive blank lines starting here
+            blank_count = 0
+            while i < len(lines) and lines[i].strip() == "":
+                blank_count += 1
+                i += 1
+
+            if blank_count == 1:
+                # Single blank line — unambiguous, just output it
+                result.append("")
+            else:
+                # Multiple consecutive blank lines — annotate the count
+                # The first blank line is kept as-is, the rest are replaced
+                # with a single comment line showing the total count
+                result.append("")
+                result.append(f"# ({blank_count} blank lines)")
+        else:
+            # Check for trailing whitespace on non-empty lines
+            stripped_len = len(line.rstrip(" \t"))
+            trailing = len(line) - stripped_len
+            if trailing > 0:
+                # Show trailing whitespace indicator after the line
+                result.append(f"{line.rstrip(' \t')}")
+                result.append(f"# (trailing whitespace: {' '.join(['·'] * trailing)})")
+            else:
+                result.append(line)
+            i += 1
+
+    return "\n".join(result)
+
+
 def format_file_result(exit_code, content=None, error=None, path=None,
                        lines_read=None, start_line=None, truncated=False, items_count=None,
                        truncation_info=None):
@@ -318,7 +365,8 @@ def format_file_result(exit_code, content=None, error=None, path=None,
         return f"{metadata}\nerror: {error}"
 
     if content is not None:
-        return f"{metadata}\n{content}\n\n"
+        annotated = _annotate_blank_lines(content)
+        return f"{metadata}\n{annotated}\n\n"
 
     return f"{metadata}\n\n"
 

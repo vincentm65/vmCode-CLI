@@ -67,6 +67,8 @@ class SubAgentSettings:
     soft_limit_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("soft_limit_tokens", 75_000))
     hard_limit_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("hard_limit_tokens", 300_000))
     enable_compaction: bool = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("enable_compaction", False))
+    allowed_tools: list = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("allowed_tools", ["rg", "read_file", "list_directory", "web_search"]))
+    interaction_mode: str = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("interaction_mode", "plan"))
 
 
 # Context compaction settings

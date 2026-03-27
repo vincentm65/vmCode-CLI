@@ -11,34 +11,37 @@ from llm.prompts import build_sub_agent_prompt
 from utils.settings import sub_agent_settings
 
 
-# Read-only tools allowed for sub-agent
-SUB_AGENT_TOOLS = ["rg", "read_file", "list_directory", "web_search"]
-
-
-def _create_chat_manager():
-    """Create a fresh ChatManager instance for sub-agent use.
+def _configure_compaction():
+    """Create a ChatManager with compaction settings from config.
 
     Returns:
-        ChatManager: A new ChatManager instance with pre-configured system prompt
+        ChatManager: A new ChatManager instance with compaction configured
     """
-    # Subagent uses configurable compaction setting (disabled by default)
     if sub_agent_settings.enable_compaction:
-        # Use default compaction trigger from context_settings if enabled
-        chat_manager = ChatManager()
+        return ChatManager()
     else:
-        # Disable compaction by passing None (no auto-compaction)
-        chat_manager = ChatManager(compact_trigger_tokens=None)
+        return ChatManager(compact_trigger_tokens=None)
 
-    # Build sub-agent prompt with token awareness (use configurable soft limit)
+
+def _inject_system_prompt(chat_manager):
+    """Build sub-agent prompt and inject it with token usage info.
+
+    Args:
+        chat_manager: ChatManager instance to configure
+    """
     base_prompt = build_sub_agent_prompt()
     token_usage = chat_manager.token_tracker.get_usage_for_prompt(
         context_limit=sub_agent_settings.soft_limit_tokens
     )
-
-    # Inject token usage into sub-agent system prompt
     chat_manager.messages = [{"role": "system", "content": f"{base_prompt}\n\n{token_usage}"}]
-    
-    # Load agents.md if it exists in current working directory
+
+
+def _load_codebase_map(chat_manager):
+    """Load agents.md codebase map into sub-agent context if available.
+
+    Args:
+        chat_manager: ChatManager instance to add context to
+    """
     agents_path = Path.cwd() / "agents.md"
     if agents_path.exists():
         map_content = agents_path.read_text(encoding="utf-8").strip()
@@ -55,11 +58,33 @@ def _create_chat_manager():
         )
         chat_manager.messages.append({"role": "user", "content": user_msg})
         chat_manager.messages.append({"role": "assistant", "content": assistant_msg})
-    
-    # No conversation logging for sub-agent (isolated)
+
+
+def _configure_isolation(chat_manager):
+    """Apply isolation settings for sub-agent context.
+
+    Disables conversation logging and sets interaction mode from config.
+
+    Args:
+        chat_manager: ChatManager instance to configure
+    """
     chat_manager.conversation_logger = None
-    # CRITICAL: Force plan mode to restrict dangerous tools
-    chat_manager.interaction_mode = "plan"
+    chat_manager.interaction_mode = sub_agent_settings.interaction_mode
+
+
+def _create_chat_manager():
+    """Create a fresh ChatManager instance for sub-agent use.
+
+    Orchestrates compaction, prompt injection, codebase map loading,
+    and isolation configuration.
+
+    Returns:
+        ChatManager: A new ChatManager instance with pre-configured system prompt
+    """
+    chat_manager = _configure_compaction()
+    _inject_system_prompt(chat_manager)
+    _load_codebase_map(chat_manager)
+    _configure_isolation(chat_manager)
     return chat_manager
 
 
@@ -137,7 +162,7 @@ def run_sub_agent(
         orchestrator.run(
             task_query,
             thinking_indicator=None,
-            allowed_tools=SUB_AGENT_TOOLS
+            allowed_tools=sub_agent_settings.allowed_tools
         )
     except Exception as e:
         import traceback
