@@ -247,6 +247,16 @@ def _prepare_edit(arguments, repo_root, gitignore_spec=None) -> tuple[str, dict]
     try:
         with file_path.open("r", encoding="utf-8", newline="") as f:
             original_content = f.read()
+    except UnicodeDecodeError as e:
+        raise FileEditError(
+            "File contains non-UTF-8 bytes and cannot be edited safely",
+            details={
+                "path": str(file_path),
+                "encoding_error": str(e),
+                "hint": "This file contains bytes that are not valid UTF-8. "
+                        "Use execute_command to inspect or edit it with a tool like sed or xxd."
+            }
+        )
     except Exception as e:
         raise FileEditError(
             f"Failed to read file",
