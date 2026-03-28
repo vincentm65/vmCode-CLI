@@ -55,7 +55,7 @@ def get_bottom_toolbar_text(chat_manager):
     else:
         mode_label = "Approval"
         val = APPROVE_MODE_LABELS.get(chat_manager.approve_mode, chat_manager.approve_mode.upper())
-        colors = {"safe": "green", "accept_edits": "yellow"}
+        colors = {"safe": "green", "accept_edits": "yellow", "danger": "red"}
         mode_val_colored = f'<style fg="{colors.get(chat_manager.approve_mode, "white")}">{val}</style>'
 
     # Build toolbar string based on configuration

@@ -1442,6 +1442,7 @@ class AgenticOrchestrator:
                                     self.console,
                                     reason=args_dict.get('reason', 'Apply file edit with above changes'),
                                     requires_approval=True,
+                                    approve_mode=self.chat_manager.approve_mode,
                                     is_edit_tool=True,
                                     cycle_approve_mode=lambda: self.chat_manager.cycle_approve_mode()
                                 )
@@ -1764,7 +1765,8 @@ class AgenticOrchestrator:
                                 f"execute_command: {command[:80]}{'...' if len(command) > 80 else ''}",
                                 console,
                                 reason=arguments.get('reason', 'Execute shell command'),
-                                requires_approval=True
+                                requires_approval=True,
+                                approve_mode=self.chat_manager.approve_mode
                             )
 
                             if action == "accept":

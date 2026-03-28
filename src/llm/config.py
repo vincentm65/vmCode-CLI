@@ -399,10 +399,12 @@ WEB_SEARCH_REQUIRE_CONFIRMATION = False
 STATUS_BAR_SETTINGS = _build_status_bar_settings()
 
 # Tool approval modes
-APPROVE_MODES = ("safe", "accept_edits")
+APPROVE_MODES = ("safe", "accept_edits", "danger")
+CYCLEABLE_APPROVE_MODES = ("safe", "accept_edits")
 APPROVE_MODE_LABELS = {
     "safe": "Safe",
     "accept_edits": "Accept Edits",
+    "danger": "Danger",
 }
 
 # Interaction modes

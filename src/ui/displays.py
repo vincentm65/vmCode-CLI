@@ -109,8 +109,8 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
     mode = chat_manager.interaction_mode
     mode_color = mode_colors.get(mode, "white")
     runtime_table.add_row("Interaction Mode", f"[{mode_color}]{mode_labels.get(mode, mode.upper())}[/{mode_color}]")
-    approve_labels = {"safe": "SAFE", "normal": "NORMAL", "danger": "DANGER"}
-    approve_colors = {"safe": "green", "normal": "yellow", "danger": "red"}
+    approve_labels = {"safe": "SAFE", "accept_edits": "ACCEPT EDITS", "danger": "DANGER"}
+    approve_colors = {"safe": "green", "accept_edits": "yellow", "danger": "red"}
     approve_mode = chat_manager.approve_mode
     approve_color = approve_colors.get(approve_mode, "white")
     runtime_table.add_row("Approval Mode", f"[{approve_color}]{approve_labels.get(approve_mode, approve_mode.upper())}[/{approve_color}]")

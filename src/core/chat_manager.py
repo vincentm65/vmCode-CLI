@@ -1011,8 +1011,8 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             return self.cycle_plan_type()
 
         # In Edit/Learn mode, cycle approval modes
-        from llm.config import APPROVE_MODES
-        modes = APPROVE_MODES
+        from llm.config import CYCLEABLE_APPROVE_MODES
+        modes = CYCLEABLE_APPROVE_MODES
         try:
             next_index = (modes.index(self.approve_mode) + 1) % len(modes)
         except ValueError:

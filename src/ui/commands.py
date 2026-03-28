@@ -118,7 +118,7 @@ def _handle_config(chat_manager, console, debug_mode_container, args):
             input_type="select",
             options=[
                 {"value": "safe", "text": "SAFE"},
-                {"value": "normal", "text": "NORMAL"},
+                {"value": "accept_edits", "text": "ACCEPT EDITS"},
                 {"value": "danger", "text": "DANGER"},
             ],
         ),
@@ -194,8 +194,15 @@ def _handle_config(chat_manager, console, debug_mode_container, args):
             change_lines.append(f"  Interaction Mode: {labels.get(value, value.upper())}")
         elif key == "approve":
             chat_manager.approve_mode = value
-            labels = {"safe": "SAFE", "normal": "NORMAL", "danger": "DANGER"}
+            labels = {"safe": "SAFE", "accept_edits": "ACCEPT EDITS", "danger": "DANGER"}
             change_lines.append(f"  Approval Mode: {labels.get(value, value.upper())}")
+            if value == "danger":
+                console.print()
+                console.print("[bold red on default]  WARNING: DANGER MODE ENABLED[/bold red on default]")
+                console.print("[bold red on default]  All commands will be auto-approved.[/bold red on default]")
+                console.print("[bold red on default]  Dangerous git commands are still blocked.[/bold red on default]")
+                console.print("[bold yellow on default]  Use at your own risk![/bold yellow on default]")
+                console.print()
         elif key in sb_labels:
             sb_changes[key] = value
             state = "ON" if value else "OFF"

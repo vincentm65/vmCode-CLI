@@ -75,7 +75,7 @@ class SubAgentSettings:
 @dataclass
 class ContextSettings:
     """Context compaction thresholds and defaults."""
-    compact_trigger_tokens: int = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("compact_trigger_tokens", 100_000))
+    compact_trigger_tokens: int = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("compact_trigger_tokens", 80_000))
     log_conversations: bool = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("log_conversations", False))
     conversations_dir: str = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("conversations_dir", "conversations"))
     tool_compaction: ToolCompactionSettings = field(default_factory=ToolCompactionSettings)
