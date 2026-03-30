@@ -350,6 +350,26 @@ def main():
 
     display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
 
+    # First-run onboarding: check if active provider needs an API key but has none
+    try:
+        from llm import config as llm_config
+        active_provider = chat_manager.client.provider
+        provider_cfg = llm_config.get_provider_config(active_provider)
+        if (
+            provider_cfg.get("type") == "api"
+            and not provider_cfg.get("api_key")
+        ):
+            console.print()
+            console.print("[bold cyan]Welcome! Get started in two steps:[/bold cyan]")
+            console.print()
+            console.print("  [bold]1.[/bold] [bold white on grey23] /signup <email> [/bold white on grey23]  [dim]— create a free account & API key[/dim]")
+            console.print("  [bold]2.[/bold] [bold white on grey23] /provider[/bold white on grey23]          [dim]— or pick another provider (OpenAI, Anthropic, ...)[/dim]")
+            console.print()
+            console.print("[dim]Tip: use [bold cyan]/key <your-key>[/bold cyan] to set a key for any provider.[/dim]")
+            console.print()
+    except Exception:
+        pass  # Best-effort; don't block startup on failure
+
     # Setup prompt_toolkit with Tab key binding
     bindings = setup_common_bindings(chat_manager)
 

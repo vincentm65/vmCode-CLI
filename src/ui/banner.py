@@ -84,20 +84,3 @@ def display_startup_banner(approve_mode: str, interaction_mode: str = "edit"):
         padding=(0, 2)
     ))
 
-    # Show vmcode_free notice if using free tier
-    if config.LLM_PROVIDER == "vmcode_free":
-        console.print(Panel(
-            Text.assemble(
-                ("✨ ", "bright_yellow"),
-                ("Using vmCode Free Model", "bold bright_yellow"),
-                ("\n\n", ""),
-                ("No API key required • Conversations routed through vmCode proxy\n", "dim"),
-                ("Switch providers with ", "dim"),
-                ("/provider", "bold cyan"),
-                (" command", "dim")
-            ),
-            border_style="bright_yellow",
-            padding=(1, 2)
-        ))
-        console.print()
-

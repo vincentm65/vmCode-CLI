@@ -16,6 +16,7 @@ ENV_API_KEYS = {
     'OPENROUTER_API_KEY': os.environ.get('OPENROUTER_API_KEY'),
     'KIMI_API_KEY': os.environ.get('KIMI_API_KEY'),
     'MINIMAX_API_KEY': os.environ.get('MINIMAX_API_KEY'),
+    'VMCODE_PROXY_API_KEY': os.environ.get('VMCODE_PROXY_API_KEY'),
 }
 
 # Detect platform for llama.cpp paths
@@ -260,22 +261,24 @@ def _get_provider_registry():
             "cost_out": get_model_cost("kimi", _CONFIG.get("KIMI_MODEL", ""),
                                       "", "", 0.0, 0.0)[1]
         },
-        "vmcode_free": {
+        "vmcode": {
             "type": "api",
-            "api_key": "",
-            "model": "z-ai/glm-4.5-air:free",
-            "api_base": _CONFIG.get("VMCODE_FREE_API_BASE", "https://vmcode-five.vercel.app"),
-            "endpoint": "/chat",
-            "error_prefix": "vmCode Free",
+            "api_key": _CONFIG.get("VMCODE_PROXY_API_KEY", ""),
+            "model": _CONFIG.get("VMCODE_PROXY_MODEL", "openai/gpt-4o-mini"),
+            "api_base": _CONFIG.get("VMCODE_PROXY_API_BASE", "https://api.vmcode.dev"),
+            "endpoint": "/v1/chat/completions",
+            "error_prefix": "vmCode Proxy",
             "config_keys": {
-                "VMCODE_FREE_API_BASE": "https://vmcode-five.vercel.app",
+                "VMCODE_PROXY_API_KEY": "",
+                "VMCODE_PROXY_MODEL": "openai/gpt-4o-mini",
+                "VMCODE_PROXY_API_BASE": "https://api.vmcode.dev",
             },
-            "default_temperature": 0.7,
+            "default_temperature": 0.1,
             "default_top_p": 0.9,
             "allow_top_p": True,
             "allow_temperature": True,
             "cost_in": 0.0,
-            "cost_out": 0.0
+            "cost_out": 0.0,
         },
     }
     return _provider_registry_cache

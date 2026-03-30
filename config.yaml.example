@@ -12,6 +12,7 @@
 #   export OPENROUTER_API_KEY="sk-or-your-key-here"
 #   export KIMI_API_KEY="your-kimi-key-here"
 #   export MINIMAX_API_KEY="your-minimax-key-here"
+#   export VMCODE_PROXY_API_KEY="vmp_live_your-key-here"
 #
 # Or set interactively in the app:
 #   /key sk-your-api-key-here
@@ -20,7 +21,7 @@
 # =============================================================================
 
 # Last selected provider (saved automatically)
-LAST_PROVIDER: vmcode_free
+LAST_PROVIDER: vmcode
 
 # =============================================================================
 # API KEYS
@@ -62,8 +63,10 @@ MINIMAX_API_KEY: "your-minimax-key-here"
 MINIMAX_MODEL: "MiniMax-M2"
 MINIMAX_API_BASE: "https://api.minimax.io/anthropic/v1"
 
-# vmCode Free Tier (no API key needed - managed by vmCode proxy)
-VMCODE_FREE_API_BASE: "https://vmcode-five.vercel.app"
+# vmCode Proxy (subscription — API key from billing portal)
+VMCODE_PROXY_API_KEY: ""
+VMCODE_PROXY_MODEL: "openai/gpt-4o-mini"
+VMCODE_PROXY_API_BASE: "https://api.vmcode.dev"
 
 # =============================================================================
 # LOCAL MODEL SETTINGS (Optional)

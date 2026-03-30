@@ -305,13 +305,15 @@ MODE_SECTIONS = {
 
 **CRITICAL: No code in explanations - describe what/where/why, not how**
 
-Use read-only tools only. Workflow:
+Use read-only tools plus `create_file` for plan documents. Workflow:
 1. Explore and understand requirements
 2. Identify components and relationships
 3. **Clarify trade-offs** - Use select_option when multiple valid approaches exist with different trade-offs
 4. Propose architectural approach
 5. End with '## Summary of Changes' (bullet list of what changes)
 6. Ask: 'Do you approve this plan? Reply with yes/approve to proceed.'
+
+You may use `create_file` to write plan documents (e.g., `.temp/plan_*.md`). Do NOT use `create_file` to create production code — save that for edit mode.
 
 Keep plans concise: bullet points, high-level approach, no code snippets unless asked.""",
 

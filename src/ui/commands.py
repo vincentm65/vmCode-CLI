@@ -12,6 +12,15 @@ from core.agentic import SubAgentPanel
 from utils.settings import MonokaiDarkBGStyle, context_settings
 from utils.markdown import left_align_headings
 from rich.markdown import Markdown
+from rich.table import Table
+from rich import box
+import json
+import logging
+import urllib.request
+import urllib.error
+
+logger = logging.getLogger(__name__)
+
 # Global ConfigManager instance
 config_manager = ConfigManagerClass()
 
@@ -336,8 +345,8 @@ def _open_provider_editor(chat_manager, console, provider):
         value=current_model, input_type="text",
     ))
 
-    # API key (not for local or vmcode_free)
-    if provider not in ("local", "vmcode_free"):
+    # API key (not for local or vmcode — vmcode manages its own key via /signup)
+    if provider not in ("local", "vmcode"):
         current_key = cfg.get('api_key', '')
         # Show masked value, store actual in description for comparison
         masked = (current_key[:8] + "...") if len(current_key) > 8 else (current_key or "")
@@ -347,8 +356,8 @@ def _open_provider_editor(chat_manager, console, provider):
             description=current_key,
         ))
 
-    # Cost in/out (not for local or vmcode_free)
-    if provider not in ("local", "vmcode_free"):
+    # Cost in/out (not for local or vmcode — costs are server-side)
+    if provider not in ("local", "vmcode"):
         model_prices = config_data.get("MODEL_PRICES", {})
         existing = model_prices.get(current_model, {})
         settings.append(SettingOption(
@@ -689,6 +698,40 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
         return CommandResult(status="handled")
 
     # No args - show current usage stats
+    current_provider = getattr(chat_manager.client, 'provider', 'unknown')
+
+    # vmcode: fetch from proxy API
+    if current_provider == "vmcode":
+        cfg = config.get_provider_config("vmcode")
+        api_key = cfg.get('api_key', '')
+        api_base = cfg.get('api_base', 'https://api.vmcode.dev')
+
+        if not api_key:
+            console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+            console.print()
+            return CommandResult(status="handled")
+
+        status, usage = _call_proxy_api("GET", "/v1/usage", api_base, api_key=api_key)
+        if status == 0 or usage is None:
+            console.print("[red]Failed to fetch usage from vmcode.[/red]")
+            console.print("[dim]Check your API key and network connection.[/dim]")
+            console.print()
+            return CommandResult(status="handled")
+
+        plan_label = usage.get("plan", "unknown").capitalize()
+        tokens_used = usage.get("tokens_used", 0)
+        tokens_limit = usage.get("tokens_limit", 0)
+        tokens_remaining = usage.get("tokens_remaining", 0)
+        reset_date = usage.get("reset_date", "unknown")
+
+        console.print(f"[cyan]Proxy Usage ({plan_label} Plan):[/cyan]")
+        console.print(f"  Tokens used:     {tokens_used:,} / {tokens_limit:,}")
+        console.print(f"  Tokens remaining: {tokens_remaining:,}")
+        console.print(f"  Reset date:      {reset_date}")
+        console.print()
+        return CommandResult(status="handled")
+
+    # All other providers: show local session stats
     costs = config_manager.get_model_price(current_model)
     tracker = chat_manager.token_tracker
 
@@ -821,6 +864,330 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
+# ============================================
+# Shared proxy API helper
+# ============================================
+
+def _call_proxy_api(
+    method: str,
+    path: str,
+    api_base: str,
+    body: dict | None = None,
+    api_key: str | None = None,
+    timeout: int = 10,
+) -> tuple[int, dict | None]:
+    """Call a vmcode-proxy API endpoint.
+
+    Returns (status_code, parsed_json_or_None).
+    Returns (0, None) on network/parse failures.
+    """
+    try:
+        url = f"{api_base.rstrip('/')}{path}"
+        data = None
+        if body is not None:
+            data = json.dumps(body).encode("utf-8")
+
+        req = urllib.request.Request(url, data=data, method=method)
+        req.add_header("Content-Type", "application/json")
+        if api_key:
+            req.add_header("Authorization", f"Bearer {api_key}")
+
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return (resp.status, json.loads(resp.read().decode()))
+    except urllib.error.HTTPError as e:
+        try:
+            return (e.code, json.loads(e.read().decode()))
+        except Exception:
+            return (e.code, None)
+    except Exception as e:
+        logger.debug("Proxy API call failed: %s", e)
+        return (0, None)
+
+
+def _get_proxy_config(chat_manager):
+    """Get vmcode api_key and api_base from current config.
+
+    Returns (api_key, api_base) tuple. api_key may be empty string.
+    """
+    cfg = config.get_provider_config("vmcode")
+    api_key = cfg.get("api_key", "")
+    api_base = cfg.get("api_base", "https://api.vmcode.dev")
+    return api_key, api_base
+
+
+def _require_proxy_provider(chat_manager, console):
+    """Check that vmcode is the current provider.
+
+    Returns True if on vmcode, prints error and returns False otherwise.
+    """
+    current_provider = getattr(chat_manager.client, "provider", "unknown")
+    if current_provider != "vmcode":
+        console.print(
+            "[yellow]This command requires the vmcode provider.[/yellow]"
+        )
+        console.print("[dim]Run [bold cyan]/provider vmcode[/bold cyan] first.[/dim]")
+        console.print()
+        return False
+    return True
+
+
+# ============================================
+# Account command handlers
+# ============================================
+
+def _handle_plan(chat_manager, console, debug_mode_container, args):
+    """Handle /plan — show available plans."""
+    _, api_base = _get_proxy_config(chat_manager)
+
+    # Try the API first
+    status, data = _call_proxy_api("GET", "/v1/billing/plans", api_base)
+
+    if status == 200 and data and "plans" in data:
+        plans = data["plans"]
+    else:
+        # Fallback to hardcoded defaults
+        plans = [
+            {"id": "free", "name": "Free", "price": 0, "tokens": 0, "rate_limit": 0},
+            {"id": "lite", "name": "Lite", "price": 10, "tokens": 2_000_000, "rate_limit": 60},
+            {"id": "pro", "name": "Pro", "price": 50, "tokens": 15_000_000, "rate_limit": 300},
+        ]
+
+    # Determine current plan
+    current_provider = getattr(chat_manager.client, "provider", "unknown")
+    current_plan = None
+    if current_provider == "vmcode":
+        api_key, _ = _get_proxy_config(chat_manager)
+        if api_key:
+            acct_status, acct_data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
+            if acct_status == 200 and acct_data:
+                current_plan = acct_data.get("plan")
+
+    table = Table("Plan", "Price", "Monthly Tokens", "Rate Limit (req/min)", title="Available Plans", box=box.SIMPLE_HEAD)
+    for plan in plans:
+        is_current = current_plan and plan["id"] == current_plan
+        name = f"[bold green]{plan['name']} (current)[/bold green]" if is_current else plan["name"]
+        if plan["id"] == "free":
+            price = "Free model only"
+            tokens = "N/A"
+            rate = "N/A"
+        else:
+            price = f"${plan['price']}/mo" if plan["price"] > 0 else "Free"
+            tokens = f"{plan['tokens']:,}"
+            rate = str(plan["rate_limit"])
+        table.add_row(name, price, tokens, rate)
+
+    console.print(table)
+    console.print("[dim]Upgrade: [bold cyan]/upgrade pro[/bold cyan]  |  Manage: [bold cyan]/account[/bold cyan][/dim]")
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_signup(chat_manager, console, debug_mode_container, args):
+    """Handle /signup <email> — create account and switch to vmcode."""
+    if not args or not args.strip():
+        console.print("[red]Usage: /signup <email>[/red]")
+        console.print("[dim]Creates a vmcode account and generates an API key.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    email = args.strip()
+
+    # Basic client-side email validation
+    if "@" not in email or "." not in email.split("@")[-1]:
+        console.print("[red]Invalid email address.[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    _, api_base = _get_proxy_config(chat_manager)
+    console.print(f"[cyan]Creating account for {email}...[/cyan]")
+
+    status, data = _call_proxy_api("POST", "/v1/auth/signup", api_base, body={"email": email})
+
+    if status == 409:
+        console.print("[yellow]Account already exists for that email.[/yellow]")
+        console.print("[dim]Use [bold cyan]/key[/bold cyan] to set your API key, or [bold cyan]/account[/bold cyan] to view your account.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if status != 201 and status != 200:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Signup failed: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if not data or "api_key" not in data:
+        console.print("[red]Signup failed: unexpected response from server.[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    api_key = data["api_key"]
+
+    # Display the API key prominently
+    console.print()
+    console.print("[bold green]Account created successfully![/bold green]")
+    console.print()
+    console.print("[bold cyan]Your API key (save this — it won't be shown again):[/bold cyan]")
+    console.print(f"[bold white on grey23]  {api_key}  [/bold white on grey23]")
+    console.print()
+
+    # Save backup to ~/.vmcode/api_key.txt
+    try:
+        key_path = Path.home() / ".vmcode" / "api_key.txt"
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.write_text(api_key)
+        key_path.chmod(0o600)
+        console.print(f"[dim]Key backed up to {key_path}[/dim]")
+    except Exception as e:
+        console.print(f"[yellow]Could not save key backup: {e}[/yellow]")
+
+    # Persist API key to config (always succeeds or warns — never blocks)
+    try:
+        config_manager.set_api_key("vmcode", api_key)
+    except Exception as e:
+        console.print(f"[yellow]Could not save API key to config: {e}[/yellow]")
+        console.print("[dim]Use [bold cyan]/key {api_key}[/bold cyan] to set it manually.[/dim]")
+
+    # Switch to vmcode provider (best-effort)
+    try:
+        config_manager.set_provider("vmcode")
+        chat_manager.reload_config()
+        chat_manager.switch_provider("vmcode")
+        console.print("[green]Switched to vmcode provider.[/green]")
+    except Exception as e:
+        console.print(f"[yellow]Could not auto-switch to vmcode: {e}[/yellow]")
+        console.print("[dim]Run [bold cyan]/provider vmcode[/bold cyan] to switch manually.[/dim]")
+
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_account(chat_manager, console, debug_mode_container, args):
+    """Handle /account — show account info."""
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    api_key, api_base = _get_proxy_config(chat_manager)
+    if not api_key:
+        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    console.print("[cyan]Fetching account info...[/cyan]")
+    status, data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
+
+    if status != 200 or not data:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Failed to fetch account: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    console.print()
+    console.print(f"[bold cyan]Account:[/bold cyan]  {data.get('email', 'N/A')}")
+    plan = data.get("plan", "lite").capitalize()
+    sub_status = data.get("subscription_status", "none")
+    console.print(f"[bold cyan]Plan:[/bold cyan]      {plan}")
+
+    if sub_status and sub_status != "none":
+        console.print(f"[bold cyan]Status:[/bold cyan]    {sub_status}")
+        period_end = data.get("current_period_end")
+        if period_end:
+            console.print(f"[bold cyan]Renews:[/bold cyan]    {period_end}")
+    else:
+        console.print("[dim]No active subscription[/dim]")
+
+    prefix = data.get("api_key_prefix")
+    if prefix:
+        console.print(f"[bold cyan]API key:[/bold cyan]   {prefix}...")
+    key_count = len(data.get("keys", []))
+    console.print(f"[bold cyan]Keys:[/bold cyan]      {key_count}")
+    console.print()
+    console.print("[dim]Manage subscription: [bold cyan]/upgrade[/bold cyan][/dim]")
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_upgrade(chat_manager, console, debug_mode_container, args):
+    """Handle /upgrade [plan] — open checkout or billing portal."""
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    api_key, api_base = _get_proxy_config(chat_manager)
+    if not api_key:
+        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    # Determine target plan
+    target = (args or "").strip().lower()
+    if target in ("pro", ""):
+        target = "pro"
+    elif target in ("lite", "free"):
+        pass  # lite/free downgrade via portal
+    else:
+        console.print("[red]Usage: /upgrade [pro|lite|free][/red]")
+        console.print("[dim]/upgrade pro  — upgrade to Pro[/dim]")
+        console.print("[dim]/upgrade lite — manage Lite subscription[/dim]")
+        console.print("[dim]/upgrade free — manage Free tier[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    # Check current plan to avoid redundant actions
+    acct_status, acct_data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
+    if acct_status == 200 and acct_data:
+        current_plan = acct_data.get("plan", "free")
+        if current_plan == target:
+            console.print(f"[yellow]You're already on {current_plan.capitalize()}.[/yellow]")
+            console.print("[dim]Use [bold cyan]/account[/bold cyan] to manage your subscription.[/dim]")
+            console.print()
+            return CommandResult(status="handled")
+
+    console.print(f"[cyan]Opening {'checkout' if target == 'pro' else 'billing portal'}...[/cyan]")
+
+    if target == "pro":
+        status, data = _call_proxy_api(
+            "POST", "/v1/billing/checkout", api_base,
+            body={
+                "plan": "pro",
+                "success_url": "https://vmcode.dev",
+                "cancel_url": "https://vmcode.dev",
+            },
+            api_key=api_key,
+        )
+        if status == 200 and data and "url" in data:
+            url = data["url"]
+        else:
+            detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+            console.print(f"[red]Failed to create checkout session: {detail}[/red]")
+            console.print()
+            return CommandResult(status="handled")
+    else:
+        # lite/free — use billing portal
+        status, data = _call_proxy_api(
+            "POST", "/v1/billing/portal", api_base,
+            body={"return_url": "https://vmcode.dev"},
+            api_key=api_key,
+        )
+        if status == 200 and data and "url" in data:
+            url = data["url"]
+        else:
+            detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+            console.print(f"[red]Failed to open billing portal: {detail}[/red]")
+            console.print()
+            return CommandResult(status="handled")
+
+    # Open in browser
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        console.print(f"[green]Opened in browser: {url}[/green]")
+    except Exception:
+        console.print(f"[cyan]Copy this URL to your browser:[/cyan]")
+        console.print(f"  [bold]{url}[/bold]")
+
+    console.print()
+    return CommandResult(status="handled")
+
+
 # Command registry - maps command names to their handlers
 _COMMAND_HANDLERS = {
     "/exit": _handle_exit,
@@ -841,6 +1208,10 @@ _COMMAND_HANDLERS = {
     "/key": _handle_key,
     "/review": _handle_review,
     "/r": _handle_review,
+    "/signup": _handle_signup,
+    "/account": _handle_account,
+    "/plan": _handle_plan,
+    "/upgrade": _handle_upgrade,
 }
 
 

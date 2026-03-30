@@ -6,34 +6,12 @@ A CLI-based AI coding assistant capable of codebase search, file editing, comput
 
 ## Features
 
-- **Multiple LLM Provider Support**: OpenAI, Anthropic, OpenRouter, GLM, Gemini, Kimi, MiniMax, and local models
+- **Multiple LLM Provider Support**: vmCode, OpenAI, Anthropic, OpenRouter, GLM, Gemini, Kimi, MiniMax, and local models
 - **Tool-Based Interaction**: Code search (`rg`), file editing, directory operations, and web search
 - **Multiple Modes**: Edit (full access), Plan (read-only), and Learn (documentation style)
 - **Parallel Execution**: Run multiple tools concurrently for efficiency
 - **Conversation History**: Markdown logging with context compaction
 - **Approval Workflows**: Safety checks for dangerous commands
-
-## vmCode Free Tier
-
-The `vmcode_free` provider is included as a convenient default option for new users. It uses free LLM models with **no API key required**.
-
-### How It Works
-
-When using `vmcode_free`, your conversations are routed through vmCode's proxy server to access free LLM models:
-
-- All chat messages, code snippets, and file content are sent to the proxy
-- The proxy forwards requests to the underlying LLM provider
-- This enables free access without requiring individual API keys
-
-### Use Cases
-
-- **Quick testing** - Try vmCode immediately without configuration
-- **Evaluation** - Test the tool before committing to a paid provider
-- **Development** - Non-sensitive work where convenience is preferred
-
-### Recommended Setup
-
-For production work or sensitive code, we recommend using other providers. Type `/provider` to see all options
 
 ## Installation
 
@@ -138,6 +116,8 @@ vmcode
 - `OPENROUTER_API_KEY` - OpenRouter API key
 - `KIMI_API_KEY` - Kimi (Moonshot AI) API key
 - `MINIMAX_API_KEY` - MiniMax API key
+- `VMCODE_API_KEY` - vmCode API key (auto-set via `/signup`)
+- `VMCODE_API_BASE` - vmCode API base URL (default: `https://api.vmcode.dev`)
 
 ## Commands
 
@@ -146,6 +126,10 @@ vmcode
 - `/key <api_key>` - Set API key for current provider
 - `/mode <edit|plan|learn>` - Switch interaction mode
 - `/config` - Show all configuration settings
+- `/signup <email>` - Create a vmCode account
+- `/account` - View your vmCode account and plan details
+- `/plan` - View available vmCode plans
+- `/upgrade` - Upgrade your vmCode subscription
 - `/help` - Display all available commands
 
 /help Menu:
@@ -173,6 +157,18 @@ vmCode-CLI/
 │   └── utils/          # Utilities (file ops, search, validation)
 └── tests/              # Test suite (for development)
 ```
+
+## vmCode Plan
+
+vmCode offers a built-in proxy provider for a seamless setup experience. Create an account and start coding without configuring third-party API keys.
+
+```
+> /signup you@example.com
+```
+
+Available plans: **Free**, **Lite**, and **Pro**. Use `/plan` to see details and `/upgrade` to change plans.
+
+*Paid plans coming soon.*
 
 ## Security
 

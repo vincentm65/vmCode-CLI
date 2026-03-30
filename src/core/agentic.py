@@ -1588,6 +1588,17 @@ class AgenticOrchestrator:
         except (json.JSONDecodeError, TypeError):
             return False, "Error: Invalid JSON arguments."
 
+        # Restrict create_file to .temp/ in plan mode
+        if function_name == "create_file" and self.chat_manager.interaction_mode == "plan":
+            path = arguments.get("path_str", "")
+            normalized = path.replace("\\", "/").lstrip("/")
+            if ".." in normalized.split("/") or not normalized.startswith(".temp/"):
+                return False, (
+                    "exit_code=1\nIn plan mode, create_file can only write to the "
+                    ".temp/ directory. Use .temp/ for plan documents, "
+                    "code drafts, and temporary files."
+                )
+
         # Create SubAgentPanel for sub_agent tool calls
         panel_to_use = self.panel_updater
         if function_name == "sub_agent":

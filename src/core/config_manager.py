@@ -35,7 +35,15 @@ class ConfigManager:
         try:
             with open(self.config_path, 'r', encoding='utf-8-sig') as f:
                 self._cached_data = yaml.safe_load(f) or {}
-                return self._cached_data
+
+            # Migrate: rename vmcode_proxy / vmcode_free -> vmcode (provider ID rename)
+            old_provider = self._cached_data.get('LAST_PROVIDER')
+            if old_provider in ('vmcode_proxy', 'vmcode_free'):
+                logger.info("Migrating provider name '%s' -> 'vmcode'", old_provider)
+                self._cached_data['LAST_PROVIDER'] = 'vmcode'
+                self.save(self._cached_data, create_backup=True)
+
+            return self._cached_data
         except yaml.YAMLError as e:
             logger.error(f"Failed to parse config file {self.config_path}: {e}")
             logger.warning("Using default configuration template")
@@ -116,7 +124,7 @@ class ConfigManager:
         # Get model name from config if not provided
         if model is None:
             provider_model_map = {
-                'vmcode_free': 'VMCODE_FREE_MODEL',
+                                'vmcode': 'VMCODE_PROXY_MODEL',
                 'openrouter': 'OPENROUTER_MODEL',
                 'glm': 'GLM_MODEL',
                 'openai': 'OPENAI_MODEL',
@@ -144,6 +152,7 @@ class ConfigManager:
         # Map provider names to their config keys
         provider_keys = {
             'local': 'LOCAL_MODEL_PATH',
+            'vmcode': 'VMCODE_PROXY_MODEL',
             'openrouter': 'OPENROUTER_MODEL',
             'glm': 'GLM_MODEL',
             'openai': 'OPENAI_MODEL',
@@ -172,6 +181,7 @@ class ConfigManager:
         # Map provider names to their config keys
         provider_keys = {
             'openrouter': 'OPENROUTER_API_KEY',
+            'vmcode': 'VMCODE_PROXY_API_KEY',
             'glm': 'GLM_API_KEY',
             'openai': 'OPENAI_API_KEY',
             'gemini': 'GEMINI_API_KEY',
