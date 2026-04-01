@@ -86,7 +86,7 @@ class ThinkingIndicator:
             "Completing ...",
             "Computing ...",
             "Programming ...",
-            "Understanding ..."
+            "Understanding ...",
             "Vibing ...",
             "Perpetuating ...",
             "Analyzing ...",
@@ -164,7 +164,7 @@ class ThinkingIndicator:
             "Mining Bitcoin ...",
             "Accessing null pointer ...",
             "FIXING ME ...",
-            "READING ME ..."
+            "READING ME ...",
             "Converting to PDF and back ...",
             "Rewriting in Rust ...",
             "Rewriting in JavaScript ...",
@@ -318,9 +318,12 @@ def check_double_ctrl_c() -> bool:
         return False
 
 
-def _drain_stdin():
-    """Drain any pending input from stdin to prevent buffered keystrokes
-    (typed while the AI was processing) from being auto-submitted."""
+def _drain_stdin(session):
+    """Drain buffered keystrokes and clear the prompt_toolkit buffer.
+
+    Called after AI processing ends to discard any input the user
+    typed while the thinking indicator was active.
+    """
     try:
         if os.name != 'nt':
             import termios
@@ -329,6 +332,13 @@ def _drain_stdin():
             import msvcrt
             while msvcrt.kbhit():
                 msvcrt.getch()
+    except Exception:
+        pass
+
+    try:
+        buf = session.default_buffer
+        if buf and buf.text:
+            buf.text = ""
     except Exception:
         pass
 
@@ -444,9 +454,6 @@ def main():
                 break
 
             try:
-                # Drain any keystrokes buffered while AI was processing
-                _drain_stdin()
-
                 # Use prompt_toolkit for input with Tab key binding and dynamic prompt
                 prompt_kwargs = {
                     "bottom_toolbar": lambda: get_bottom_toolbar_text(chat_manager),
@@ -571,6 +578,7 @@ def main():
                 finally:
                     thinking_indicator.stop(show_completion=True)
                     INPUT_BLOCKED['blocked'] = False
+                    _drain_stdin(session)
 
             except KeyboardInterrupt:
                 # Ctrl+C pressed while waiting for input
