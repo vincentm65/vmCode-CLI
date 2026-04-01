@@ -55,6 +55,9 @@ CTRL_C_TRACKER = {
     'exit_requested': False
 }
 
+# Block input during thinking/agentic processing (prevents key presses from being queued)
+INPUT_BLOCKED = {'blocked': False}
+
 # Path constants
 REPO_ROOT = Path.cwd().resolve()
 APP_ROOT = (
@@ -281,6 +284,11 @@ class ThinkingIndicator:
     def pause(self):
         # Stop without showing completion time (accumulates elapsed time)
         self.stop(show_completion=False)
+        # Ensure status line cleanup is fully flushed to terminal
+        try:
+            self.console.file.flush()
+        except Exception:
+            pass
 
     def resume(self):
         # Resume with timer continuing from accumulated time
@@ -308,6 +316,21 @@ def check_double_ctrl_c() -> bool:
         # First Ctrl+C or too much time passed - update timestamp and continue
         CTRL_C_TRACKER['last_time'] = current_time
         return False
+
+
+def _drain_stdin():
+    """Drain any pending input from stdin to prevent buffered keystrokes
+    (typed while the AI was processing) from being auto-submitted."""
+    try:
+        if os.name != 'nt':
+            import termios
+            termios.tcflush(sys.stdin.fileno(), termios.TCIFLUSH)
+        else:
+            import msvcrt
+            while msvcrt.kbhit():
+                msvcrt.getch()
+    except Exception:
+        pass
 
 
 def main():
@@ -396,13 +419,17 @@ def main():
 
     @bindings.add('tab')
     def toggle_mode(event):
-        """Toggle between Plan and Edit modes."""
+        """Toggle between Plan and Edit modes (blocked during thinking)."""
+        if INPUT_BLOCKED.get('blocked', False):
+            return
         chat_manager.toggle_interaction_mode()
         event.app.invalidate()
 
     @bindings.add('escape', 'escape')
     def clear_input(event):
-        """Clear the current input line on double ESC press."""
+        """Clear the current input line on double ESC press (blocked during thinking)."""
+        if INPUT_BLOCKED.get('blocked', False):
+            return
         buffer = event.app.current_buffer
         if buffer is not None:
             buffer.text = ""
@@ -417,6 +444,9 @@ def main():
                 break
 
             try:
+                # Drain any keystrokes buffered while AI was processing
+                _drain_stdin()
+
                 # Use prompt_toolkit for input with Tab key binding and dynamic prompt
                 prompt_kwargs = {
                     "bottom_toolbar": lambda: get_bottom_toolbar_text(chat_manager),
@@ -447,6 +477,7 @@ def main():
                 chat_manager.maybe_auto_compact(console)
 
                 thinking_indicator.start()
+                INPUT_BLOCKED['blocked'] = True
                 try:
                     console.print()  # Extra newline after user input to separate from LLM response
                     # Add user message
@@ -539,6 +570,7 @@ def main():
                             console.print(f"[red]Error during generation: {e}[/red]", markup=False)
                 finally:
                     thinking_indicator.stop(show_completion=True)
+                    INPUT_BLOCKED['blocked'] = False
 
             except KeyboardInterrupt:
                 # Ctrl+C pressed while waiting for input

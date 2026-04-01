@@ -113,7 +113,11 @@ class LLMClient:
                 error_details = response.text if response.text else str(response.status_code)
                 raise LLMConnectionError(
                     f"Error communicating with {config['error_prefix']}",
-                    details={"provider": self.provider, "original_error": error_details}
+                    details={
+                        "provider": self.provider,
+                        "original_error": error_details,
+                        "status_code": response.status_code,
+                    }
                 )
             response.raise_for_status()
 

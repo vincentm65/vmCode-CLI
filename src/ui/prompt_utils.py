@@ -95,7 +95,12 @@ def setup_common_bindings(chat_manager):
 
     @bindings.add('s-tab')
     def toggle_approve_mode(event):
-        """Toggle between modes using Shift+Tab."""
+        """Toggle between modes using Shift+Tab (blocked during thinking)."""
+        # Import here to avoid circular imports and get current state
+        import importlib
+        main_module = importlib.import_module('ui.main')
+        if main_module.INPUT_BLOCKED.get('blocked', False):
+            return
         chat_manager.cycle_approve_mode()
         event.app.invalidate()
     

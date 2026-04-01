@@ -19,8 +19,7 @@ from .helpers.base import tool
 CUSTOM_INPUT_SENTINEL = "__custom_input__"
 CUSTOM_INPUT_OPTION = {
     "value": CUSTOM_INPUT_SENTINEL,
-    "text": "Type your own input...",
-    "description": "Provide your own answer instead of selecting from the list"
+    "text": "Type your own input..."
 }
 
 
@@ -135,7 +134,7 @@ class SelectionPanel:
                         if opt.get("value") == CUSTOM_INPUT_SENTINEL and self._editing_custom_input:
                             # Editing mode: show text field with user input
                             typed = self._custom_input_texts.get(0, "")
-                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}> {typed}</style>')
+                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}{typed}</style>')
                             lines.append(f'<style fg="gray">   Type your answer, Enter to confirm, Esc to go back</style>')
                         else:
                             # Navigation mode
@@ -206,7 +205,7 @@ class SelectionPanel:
                         if opt.get("value") == CUSTOM_INPUT_SENTINEL and self._editing_custom_input:
                             # Editing mode: show text field with user input
                             typed = self._custom_input_texts.get(self.current_question_idx, "")
-                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}> {typed}</style>')
+                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}{typed}</style>')
                             lines.append(f'<style fg="gray">   Type your answer, Enter to confirm, Esc to go back</style>')
                         else:
                             # Navigation mode
@@ -418,7 +417,7 @@ class SelectionPanel:
 
 @tool(
     name="select_option",
-    description="Ask the user a question with selectable options using arrow keys. Displays an inline panel where the user navigates with arrow keys and presses Enter to select. A 'Type your own input...' option is automatically appended as the last option, allowing the user to provide a free-form answer. Set 'allow_custom_input' to false on a question to disable this. Useful for clarifying requirements, making decisions, or getting user preferences. Supports both single question and multi-question forms (single question = array with 1 item).",
+    description="Ask the user a question with selectable options using arrow keys. Displays an inline panel where the user navigates with arrow keys and presses Enter to select. A 'Type your own input...' option is automatically appended as the last option, allowing the user to provide a free-form answer. Useful for clarifying requirements, making decisions, or getting user preferences. Supports both single question and multi-question forms (single question = array with 1 item).",
     parameters={
         "type": "object",
         "properties": {
@@ -429,7 +428,6 @@ class SelectionPanel:
                     "type": "object",
                     "properties": {
                         "question": {"type": "string", "description": "The question text"},
-                        "allow_custom_input": {"type": "boolean", "description": "If true (default), appends a 'Type your own input...' option as the last option, letting the user provide a free-form answer. Set to false to disable."},
                         "options": {
                             "type": "array",
                             "description": "List of options for this question",
@@ -507,10 +505,9 @@ def select_option(
                 if not value or not text:
                     return f"exit_code=1\nOption {opt_idx + 1} in question {q_idx + 1} must have 'value' and 'text' fields"
 
-        # Append custom input option to each question that allows it
+        # Always append custom input option to each question
         for q in questions:
-            if q.get("allow_custom_input", True):
-                q["options"] = list(q["options"]) + [CUSTOM_INPUT_OPTION]
+            q["options"] = list(q["options"]) + [CUSTOM_INPUT_OPTION]
 
         # Create and run the selection panel
         panel = SelectionPanel(questions)

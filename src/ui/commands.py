@@ -769,7 +769,7 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
             return CommandResult(status="handled")
 
         plan_label = usage.get("plan", "unknown").capitalize()
-        console.print(f"[bold cyan]📊 Usage — {plan_label} Plan[/bold cyan]")
+        console.print(f"[bold cyan]Usage -- {plan_label} Plan[/bold cyan]")
         console.print()
 
         for period in ("daily", "weekly", "monthly"):
@@ -777,14 +777,16 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
             pct = data.get("pct_used", 0)
             label = period.capitalize()
             filled = int(round(pct / 100 * 20))
-            bar = "█" * filled + "░" * (20 - filled)
+            bar = "\u2588" * filled + "\u2591" * (20 - filled)
+            reset_at = data.get("reset_at", "")
             if pct >= 90:
-                icon = "🔴"
+                indicator = "[bold red]![/bold red]"
             elif pct >= 70:
-                icon = "🟡"
+                indicator = "[bold yellow]~[/bold yellow]"
             else:
-                icon = "🟢"
-            console.print(f"  {icon} [bold]{label:7s}[/bold]  {bar}  [bold]{pct:.1f}%[/bold]")
+                indicator = "[bold green]+[/bold green]"
+            reset_str = f"  [dim]resets {reset_at}[/dim]" if reset_at else ""
+            console.print(f"  {indicator} [bold]{label:7s}[/bold]  {bar}  [bold]{pct:.1f}%[/bold]{reset_str}")
 
         console.print()
         return CommandResult(status="handled")

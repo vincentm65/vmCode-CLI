@@ -502,6 +502,115 @@ def _handle_empty_response(empty_response_count, console):
     return True, empty_response_count
 
 
+# Timeout retry constants
+_RETRY_MAX_ATTEMPTS = 3
+_RETRY_DELAY_SECONDS = 5
+_RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
+_RETRYABLE_ERROR_KEYWORDS = (
+    "timeout", "timed out", "connectionerror", "connection refused",
+    "connection reset", "connection aborted", "name or service not known",
+    "network unreachable", "no route to host", "eof occurred",
+)
+_NON_RETRYABLE_STATUS_CODES = {400, 401, 403, 405, 422}
+
+
+def _is_retryable_error(error):
+    """Check if an LLMConnectionError is retryable.
+
+    Retryable conditions:
+    - Timeout or connection-level errors (network unreachable, DNS failure, etc.)
+    - HTTP 429 (rate limited), 502, 503, 504 (server errors)
+
+    Non-retryable conditions:
+    - HTTP 400, 401, 403, 405, 422 (client/auth errors)
+    - LLMResponseError (malformed response data)
+
+    Args:
+        error: Exception instance (typically LLMConnectionError)
+
+    Returns:
+        bool: True if the error is retryable
+    """
+    # Never retry response parsing errors
+    if isinstance(error, LLMResponseError):
+        return False
+
+    # Check HTTP status code first (most reliable signal)
+    details = getattr(error, 'details', {}) or {}
+    status_code = details.get("status_code")
+    if status_code is not None:
+        if status_code in _NON_RETRYABLE_STATUS_CODES:
+            return False
+        if status_code in _RETRYABLE_STATUS_CODES:
+            return True
+
+    # For network-level errors, check the original error message
+    original_error = details.get("original_error", "")
+    original_lower = original_error.lower()
+    return any(keyword in original_lower for keyword in _RETRYABLE_ERROR_KEYWORDS)
+
+
+def _show_retry_countdown(console, attempt, max_attempts, error_message):
+    """Show a live countdown before retrying a failed LLM request.
+
+    Displays a Rich Live panel with a ticking countdown from 5 to 1,
+    then a brief "Retrying now..." message.
+
+    Args:
+        console: Rich console for output
+        attempt: Current attempt number (1-based)
+        max_attempts: Maximum number of attempts
+        error_message: The error message to display (will be truncated)
+
+    Returns:
+        bool: True if countdown completed, False if interrupted by KeyboardInterrupt
+    """
+    # Truncate long error messages for display
+    error_summary = error_message[:120] + "..." if len(error_message) > 120 else error_message
+
+    with Live(console=console, refresh_per_second=4) as live:
+        for remaining in range(_RETRY_DELAY_SECONDS, 0, -1):
+            countdown_text = (
+                f"[bold yellow]Connection failed[/bold yellow]\n"
+                f"[dim]{error_summary}[/dim]\n"
+                f"\n"
+                f"[yellow]Retrying in {remaining}s... "
+                f"(attempt {attempt}/{max_attempts})[/yellow]"
+            )
+            live.update(Panel(
+                Text.from_markup(countdown_text, justify="left"),
+                title="[yellow]Timeout Retry[/yellow]",
+                title_align="left",
+                border_style="yellow",
+                padding=(0, 1),
+            ))
+            try:
+                time.sleep(1)
+            except KeyboardInterrupt:
+                # User cancelled during countdown
+                live.update(Panel(
+                    "[yellow]Retry cancelled.[/yellow]",
+                    title="[yellow]Timeout Retry[/yellow]",
+                    title_align="left",
+                    border_style="yellow",
+                    padding=(0, 1),
+                ))
+                time.sleep(0.3)  # Brief pause so user sees the cancellation
+                return False
+
+        # Brief "Retrying now..." flash
+        live.update(Panel(
+            "[green]Retrying now...[/green]",
+            title="[yellow]Timeout Retry[/yellow]",
+            title_align="left",
+            border_style="yellow",
+            padding=(0, 1),
+        ))
+        time.sleep(0.3)
+
+    return True
+
+
 def _handle_tool_limit_reached(chat_manager, console):
     """Handle case when tool call limit is exceeded.
 
@@ -957,6 +1066,9 @@ class AgenticOrchestrator:
     def _get_llm_response(self, allowed_tools=None):
         """Get next LLM response with tool definitions.
 
+        Includes automatic retry with live countdown for timeout/connection errors.
+        Retries up to 3 times with a 5-second countdown between attempts.
+
         Args:
             allowed_tools: Optional list of allowed tool names (overrides mode-based filtering)
 
@@ -978,25 +1090,52 @@ class AgenticOrchestrator:
         else:
             tools = _tools_for_mode(self.chat_manager.interaction_mode)
 
-        try:
-            response = self.chat_manager.client.chat_completion(
-                self.chat_manager.messages, stream=False, tools=tools
-            )
-        except LLMError as e:
-            self.console.print(f"[red]LLM Error: {e}[/red]")
-            return None
+        # Retry loop for timeout/connection errors
+        last_error = None
+        for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+            try:
+                response = self.chat_manager.client.chat_completion(
+                    self.chat_manager.messages, stream=False, tools=tools
+                )
+            except LLMError as e:
+                last_error = e
 
-        # Extract and track usage data
-        if isinstance(response, dict) and 'usage' in response:
-            self.chat_manager.token_tracker.add_usage(response['usage'])
+                # Check if this error is retryable
+                if _is_retryable_error(e) and attempt < _RETRY_MAX_ATTEMPTS:
+                    # Show live countdown and retry
+                    countdown_ok = _show_retry_countdown(
+                        self.console, attempt + 1, _RETRY_MAX_ATTEMPTS, str(e)
+                    )
+                    if not countdown_ok:
+                        # User cancelled the retry
+                        self.console.print("[yellow]Retry cancelled by user.[/yellow]")
+                        return None
+                    continue
+                else:
+                    # Non-retryable error or final attempt exhausted
+                    self.console.print(f"[red]LLM Error: {e}[/red]")
+                    return None
 
-        try:
-            message = response["choices"][0]["message"]
-        except (KeyError, IndexError):
-            self.console.print("[red]Error: invalid response from model[/red]")
-            return None
+            # Successful response — parse and return
+            # Extract and track usage data
+            if isinstance(response, dict) and 'usage' in response:
+                self.chat_manager.token_tracker.add_usage(response['usage'])
 
-        return message
+            try:
+                message = response["choices"][0]["message"]
+            except (KeyError, IndexError):
+                self.console.print("[red]Error: invalid response from model[/red]")
+                return None
+
+            # If we retried, show a success message
+            if attempt > 1:
+                self.console.print(f"[dim]Request succeeded on attempt {attempt}/{_RETRY_MAX_ATTEMPTS}.[/dim]")
+
+            return message
+
+        # Should not reach here, but handle gracefully
+        self.console.print(f"[red]LLM Error: {last_error}[/red]")
+        return None
 
     def _handle_final_response(self, response):
         """Handle non-tool-call response (final answer).
@@ -1807,6 +1946,7 @@ class AgenticOrchestrator:
                         # Force print to clear the status line
                         temp_console = self._get_console()
                         temp_console.print()
+                        temp_console.file.flush()
                     
                     result = tool.execute(arguments, context)
                     
