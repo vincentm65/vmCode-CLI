@@ -544,7 +544,8 @@ def main():
                                     {"role": "assistant", "content": full_response}
                                 )
 
-                                # Add usage tracking
+                                # Add usage tracking (also captures upstream cost
+                                # if present in usage dict, e.g. OpenRouter's usage.cost)
                                 if usage_data:
                                     chat_manager.token_tracker.add_usage(usage_data)
 

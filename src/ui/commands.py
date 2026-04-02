@@ -317,9 +317,12 @@ def _handle_clear(chat_manager, console, debug_mode_container, args):
     console.print(f"  Out: {conv_out:,} tokens")
     console.print(f"  Total: {conv_total:,} tokens")
 
-    # Display cost if configured
-    if costs['in'] > 0 or costs['out'] > 0:
-        conv_cost = chat_manager.token_tracker.calculate_conversation_cost(costs['in'], costs['out'])
+    # Display cost — prefer upstream-reported actual cost
+    tracker_conv = chat_manager.token_tracker
+    if tracker_conv.conv_actual_cost > 0:
+        console.print(f"  Cost: ${tracker_conv.conv_actual_cost:.4f} (upstream-reported)")
+    elif costs['in'] > 0 or costs['out'] > 0:
+        conv_cost = tracker_conv.calculate_conversation_cost(costs['in'], costs['out'])
         console.print(f"  Cost: ${conv_cost['total_cost']:.4f}")
 
     console.print()
@@ -535,13 +538,21 @@ def _handle_model(chat_manager, console, debug_mode_container, args):
         cfg = config.get_provider_config(current_provider)
         current_model = cfg.get('model') or cfg.get('api_model') or ''
         
+        # Models available via vmcode proxy (matches pricing table in usage_tracker.py)
         vmcode_models = [
-            ("GLM-4.7", "glm-4.7"),
+            # GLM models
+            ("GLM-5.1", "glm-5.1"),
             ("GLM-5", "glm-5"),
             ("GLM-5-Turbo", "glm-5-turbo"),
-            ("Minimax-2.7", "minimax-2.7"),
+            ("GLM-4.7", "glm-4.7"),
+            ("GLM-4.5-Air", "glm-4.5-air"),
+            # MiniMax models
+            ("MiniMax-2.7", "minimax-2.7"),
+            ("MiniMax-2.7-HighSpeed", "minimax-2.7-highspeed"),
+            ("MiniMax-2.5", "minimax-2.5"),
+            ("MiniMax-2.5-HighSpeed", "minimax-2.5-highspeed"),
         ]
-        
+
         model_settings = []
         for display_name, model_id in vmcode_models:
             label = display_name
@@ -803,8 +814,16 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
     console.print()
     
 
-    # Display costs if configured
-    if costs['in'] > 0 or costs['out'] > 0:
+    # Display costs — prefer upstream-reported actual cost (e.g. OpenRouter)
+    # over locally estimated cost from token counts × static rates
+    if tracker.has_actual_cost():
+        console.print(f"[cyan]Session Cost ({current_model}):[/cyan]")
+        console.print(f"  Total:  ${tracker.total_actual_cost:.6f} (upstream-reported)")
+        console.print()
+        console.print(f"[dim]Note: Cost reported directly by the provider (e.g. OpenRouter), "
+                      f"not estimated from token rates.[/dim]")
+        console.print()
+    elif costs['in'] > 0 or costs['out'] > 0:
         session_cost = tracker.calculate_session_cost(costs['in'], costs['out'])
         console.print(f"[cyan]Session Cost ({current_model}):[/cyan]")
 

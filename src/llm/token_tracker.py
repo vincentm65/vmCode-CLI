@@ -15,11 +15,16 @@ class TokenTracker:
 
         # Context tokens: current conversation length (all messages in context)
         self.current_context_tokens = 0   # Updated via set_context_tokens()
+
+        # Upstream-reported cost (e.g. OpenRouter's actual cost per request)
+        self.total_actual_cost = 0.0       # Cumulative actual cost (never reset by compaction)
+        self.conv_actual_cost = 0.0        # Per-conversation actual cost (reset on /new)
     def add_usage(self, usage_data):
         """Add token usage from API response.
 
         Args:
-            usage_data: dict with 'prompt_tokens', 'completion_tokens' (total derived)
+            usage_data: dict with 'prompt_tokens', 'completion_tokens' (total derived).
+                        May also contain 'cost' (OpenRouter) for upstream-reported actual cost.
         """
         if not usage_data or not isinstance(usage_data, dict):
             return
@@ -35,6 +40,31 @@ class TokenTracker:
         self.conv_prompt_tokens += prompt_tokens
         self.conv_completion_tokens += completion_tokens
         self.conv_total_tokens += prompt_tokens + completion_tokens
+
+        # Auto-extract upstream-reported cost (e.g. OpenRouter includes 'cost'
+        # inside the usage object) so all call sites get cost tracking for free.
+        upstream_cost = usage_data.get('cost')
+        if upstream_cost is not None:
+            try:
+                self.add_actual_cost(float(upstream_cost))
+            except (ValueError, TypeError):
+                pass
+
+    def add_actual_cost(self, cost_usd: float):
+        """Add upstream-reported actual cost for a request.
+
+        Used when providers like OpenRouter return the exact cost in the response,
+        which is more accurate than estimating from token counts × static rates.
+
+        Args:
+            cost_usd: Actual cost in USD for a single request
+        """
+        self.total_actual_cost += cost_usd
+        self.conv_actual_cost += cost_usd
+
+    def has_actual_cost(self) -> bool:
+        """Whether any upstream-reported cost has been recorded."""
+        return self.total_actual_cost > 0.0
     def get_session_summary(self):
         """Return formatted session usage summary string."""
         return (
@@ -70,6 +100,7 @@ class TokenTracker:
         else:
             self.total_tokens = total_tokens
         self.current_context_tokens = 0  # Reset context tokens
+        # Note: total_actual_cost is preserved across resets (cumulative billing)
     @staticmethod
     def estimate_tokens(text, model=""):
         """Estimate token count using tiktoken.
@@ -129,6 +160,7 @@ class TokenTracker:
         self.conv_prompt_tokens = 0
         self.conv_completion_tokens = 0
         self.conv_total_tokens = 0
+        self.conv_actual_cost = 0.0
 
     def calculate_conversation_cost(self, cost_in: float, cost_out: float) -> dict:
         """Calculate conversation cost based on token usage.

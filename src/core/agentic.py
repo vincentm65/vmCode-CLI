@@ -11,6 +11,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
+from rich.live import Live
 
 from prompt_toolkit.formatted_text import HTML
 from utils.markdown import left_align_headings
