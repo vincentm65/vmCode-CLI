@@ -493,7 +493,6 @@ def main():
                     console.print()  # Extra newline after user input to separate from LLM response
                     # Add user message
                     if TOOLS_ENABLED:
-                        chat_manager.command_history.clear()
                         try:
                             agentic_answer(
                                 chat_manager,

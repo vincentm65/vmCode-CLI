@@ -1,10 +1,20 @@
-"""Command validation and duplicate detection."""
+"""Command validation."""
 
 import os
 import re
 import shlex
 from urllib.parse import urlparse
 from llm.config import ALLOWED_COMMANDS
+
+# Shell operators that indicate command chaining or redirection.
+# Shared between validation.py and shell.py — keep in one place to avoid drift.
+# Matches: &&, ||, ;, |, >, <, backticks, $(), ${}
+# NOTE: Alternations are sorted longest-first so that '&&' and '||' match
+# before '|' — reordering the raw list is safe because we sort at runtime.
+_RAW_CHAINING_PATTERNS = ["&&", "||", ";", "|", ">", "<", "`", "$(", "${"]
+CHAINING_OPERATORS = re.compile(
+    "|".join(re.escape(p) for p in sorted(_RAW_CHAINING_PATTERNS, key=len, reverse=True))
+)
 
 # Localhost patterns allowed over plain HTTP (no TLS needed for loopback)
 _LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
@@ -59,14 +69,6 @@ SILENT_COMMAND_BLOCKED = {
 }
 
 
-def normalize_for_comparison(command):
-    """Normalize command for duplicate detection."""
-    # Remove shell prefix (e.g., "powershell ") and extra whitespace
-    cmd = command.strip().lower()
-    if cmd.startswith("powershell "):
-        cmd = cmd[11:].strip()
-    return cmd
-
 
 def check_for_silent_blocked_command(command):
     """Check if command should be silently blocked (redirect to native tool).
@@ -86,6 +88,16 @@ def check_for_silent_blocked_command(command):
     # Strip "powershell " prefix if present
     if command.lower().startswith("powershell "):
         command = command[len("powershell "):].strip()
+
+    # For chained commands, only skip silent blocking if the FIRST command
+    # is not a blocked tool. e.g. "cd /var/log && tail -f" is allowed, but
+    # "cat file && echo done" is still redirected to read_file.
+    if CHAINING_OPERATORS.search(command):
+        first_segment = CHAINING_OPERATORS.split(command, maxsplit=1)[0].strip()
+        first_tokens = _tokenize_segment(first_segment)
+        if first_tokens and first_tokens[0].lower() not in SILENT_COMMAND_BLOCKED:
+            return False, None
+        # else: fall through to blocked check below
 
     # Tokenize and get command name
     tokens = _tokenize_segment(command)
@@ -122,28 +134,6 @@ def check_for_silent_blocked_command(command):
     return False, None
 
 
-def check_for_duplicate(chat_manager, command):
-    """Check if command was already run and return simple warning.
-
-    Returns:
-        tuple: (is_duplicate, redirect_message)
-    """
-    normalized = normalize_for_comparison(command)
-
-    if normalized in chat_manager.command_history:
-        redirect_msg = (
-            f"exit_code=DUPLICATE\n"
-            f"This exact command was already executed: {command}\n\n"
-            f"The result is already in your conversation history.\n"
-            f"Try a DIFFERENT command with different search terms, "
-            f"different file paths, or a different approach entirely."
-        )
-        return True, redirect_msg
-
-    # Add to history
-    chat_manager.command_history.append(normalized)
-    return False, None
-
 
 def _tokenize_segment(segment):
     use_posix = os.name != "nt"
@@ -153,97 +143,18 @@ def _tokenize_segment(segment):
         return segment.split()
 
 
-def _has_unquoted_operator(command, blocked_operators):
-    """Check if command contains unquoted blocked operators.
-    
-    This properly handles quoted strings (e.g., 'echo "foo > bar"' should be allowed).
-    
-    Args:
-        command: Command string to check
-        blocked_operators: Tuple of operator characters to check
-    
-    Returns:
-        bool: True if any blocked operator appears unquoted
-    """
-    use_posix = os.name != 'nt'
-    
-    # Try to tokenize - this will handle quoted strings properly
-    try:
-        tokens = shlex.split(command, posix=use_posix)
-    except ValueError:
-        # If tokenization fails, fall back to simple check (conservative)
-        return any(op in command for op in blocked_operators)
-    
-    # Check if any token exactly matches a blocked operator
-    # These operators are parsed as separate tokens by the shell
-    for token in tokens:
-        if token in blocked_operators:
-            return True
-    
-    # Also check for operators attached to arguments (e.g., "file>out" or ">file")
-    # These are dangerous even if shlex doesn't separate them as distinct tokens
-    for token in tokens:
-        for op in blocked_operators:
-            if op in token and token != op:
-                # Check if operator is at the start or end (attachment)
-                if token.startswith(op) or token.endswith(op):
-                    return True
-    
-    return False
-
-
-def _parse_pipe_chain(command):
-    """Parse a command string into individual commands in a pipe chain.
-    
-    Args:
-        command: Command string that may contain pipe operators
-        
-    Returns:
-        list: List of individual command strings
-    """
-    # Strip whitespace
-    command = command.strip()
-    if not command:
-        return []
-    
-    use_posix = os.name != 'nt'
-    commands = []
-    current_cmd = []
-    
-    try:
-        # Tokenize to handle quoted strings properly
-        tokens = shlex.split(command, posix=use_posix)
-        
-        # Split on pipe operator
-        for token in tokens:
-            if token == '|':
-                # End current command and start new one
-                if current_cmd:
-                    commands.append(shlex.join(current_cmd))
-                    current_cmd = []
-            else:
-                current_cmd.append(token)
-        
-        # Add final command
-        if current_cmd:
-            commands.append(shlex.join(current_cmd))
-        
-        return commands
-    except ValueError:
-        # If tokenization fails, fall back to simple split
-        # This is less accurate but still functional
-        return [cmd.strip() for cmd in command.split('|') if cmd.strip()]
-
-
 def check_command(command):
-    """Validate command against safety checks.
+    """Perform basic structural validation on a command.
+
+    Rejects empty commands and nested powershell invocations.
+    Approval and safety checks are handled upstream by the caller.
 
     Args:
         command: Command string to validate
 
     Returns:
-        tuple: (is_safe, reason) - is_safe is True if command is allowed
-               If is_safe is True, the caller should check approval requirements separately
+        tuple: (is_valid, reason) - is_valid is True if the command
+               has a non-empty structure. reason is set on rejection.
     """
     command = command.strip()
     if not command:
@@ -253,44 +164,14 @@ def check_command(command):
     if command.lower().startswith("powershell "):
         command = command[len("powershell "):].strip()
 
-    # Block dangerous operators (command chaining and redirection)
-    # Allow && for conditional chaining (stops on error - safer than ; or &)
-    # Allow | for piping, but each command in the pipe chain will be validated separately
-    blocked_operators = (";", ">", "<", "`")
-    if _has_unquoted_operator(command, blocked_operators):
-        return False, "contains disallowed shell operators"
-    
-    # Note: && is allowed for conditional chaining. | is allowed for piping.
-    # The agent will display a warning in debug mode when using && or | for multi-step commands.
-
     # After stripping prefix, reject if it still starts with "powershell"
     if command.lower().startswith("powershell"):
         return False, "nested powershell invocation"
 
-    # Parse pipe chain and validate each command
-    pipe_commands = _parse_pipe_chain(command)
-    
-    if len(pipe_commands) > 1:
-        # We have a pipe chain - validate each command separately
-        for i, cmd in enumerate(pipe_commands):
-            # Check each command against silent blocked list
-            is_blocked, reprompt_msg = check_for_silent_blocked_command(cmd)
-            if is_blocked:
-                # Modify the reprompt message to indicate which command in the pipe chain
-                return False, f"Pipe chain blocked: command {i+1} uses '{cmd.split()[0]}' - {reprompt_msg}"
-            
-            # Validate each command has a valid command name
-            tokens = _tokenize_segment(cmd)
-            if not tokens:
-                return False, f"Pipe chain blocked: command {i+1} is empty"
-            
-            # All commands in pipe chain must be valid (not in silent blocked list)
-            # They still go through normal approval process
-    else:
-        # Single command - validate normally
-        tokens = _tokenize_segment(command)
-        if not tokens:
-            return False, "empty command"
+    # Basic validation - ensure command has content
+    tokens = _tokenize_segment(command)
+    if not tokens:
+        return False, "empty command"
 
     # Allow all other commands
     return True, None
@@ -299,11 +180,16 @@ def check_command(command):
 def is_auto_approved_command(command):
     """Check if a command should be auto-approved (safe, read-only commands).
 
+    Auto-approval is only granted when the command is a single, unchained
+    invocation of a command in ALLOWED_COMMANDS. Any shell chaining operators
+    (&&, ||, ;, |, >, <, backticks, $(), ${}) force the command to require
+    user approval.
+
     Args:
         command: Command string to validate
 
     Returns:
-        bool: True if command is in ALLOWED_COMMANDS list (auto-approved)
+        bool: True if command is in ALLOWED_COMMANDS list and not chained
     """
     command = command.strip()
     if not command:
@@ -312,6 +198,12 @@ def is_auto_approved_command(command):
     # Strip "powershell " prefix if present (legacy support for Windows users)
     if command.lower().startswith("powershell "):
         command = command[len("powershell "):].strip()
+
+    # Reject any command containing chaining/redirection operators
+    # This catches &&, ||, ;, |, >, <, backticks, $(), ${} even inside quoted
+    # strings — conservative by design, since auto-approval skips user review
+    if CHAINING_OPERATORS.search(command):
+        return False
 
     # Tokenize and get command name
     tokens = _tokenize_segment(command)

@@ -11,7 +11,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
-from rich.live import Live
+
 from prompt_toolkit.formatted_text import HTML
 from utils.markdown import left_align_headings
 from llm.config import TOOLS_REQUIRE_CONFIRMATION, WEB_SEARCH_REQUIRE_CONFIRMATION
@@ -504,7 +504,7 @@ def _handle_empty_response(empty_response_count, console):
 
 # Timeout retry constants
 _RETRY_MAX_ATTEMPTS = 3
-_RETRY_DELAY_SECONDS = 5
+_RETRY_DELAYS = (2, 4)  # exponential backoff per attempt
 _RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
 _RETRYABLE_ERROR_KEYWORDS = (
     "timeout", "timed out", "connectionerror", "connection refused",
@@ -550,64 +550,22 @@ def _is_retryable_error(error):
     return any(keyword in original_lower for keyword in _RETRYABLE_ERROR_KEYWORDS)
 
 
-def _show_retry_countdown(console, attempt, max_attempts, error_message):
-    """Show a live countdown before retrying a failed LLM request.
-
-    Displays a Rich Live panel with a ticking countdown from 5 to 1,
-    then a brief "Retrying now..." message.
+def _wait_with_cancel_message(console, delay_seconds):
+    """Wait briefly before retrying, showing a dim status line.
 
     Args:
         console: Rich console for output
-        attempt: Current attempt number (1-based)
-        max_attempts: Maximum number of attempts
-        error_message: The error message to display (will be truncated)
+        delay_seconds: Seconds to wait
 
     Returns:
-        bool: True if countdown completed, False if interrupted by KeyboardInterrupt
+        bool: True if wait completed, False if interrupted by KeyboardInterrupt
     """
-    # Truncate long error messages for display
-    error_summary = error_message[:120] + "..." if len(error_message) > 120 else error_message
-
-    with Live(console=console, refresh_per_second=4) as live:
-        for remaining in range(_RETRY_DELAY_SECONDS, 0, -1):
-            countdown_text = (
-                f"[bold yellow]Connection failed[/bold yellow]\n"
-                f"[dim]{error_summary}[/dim]\n"
-                f"\n"
-                f"[yellow]Retrying in {remaining}s... "
-                f"(attempt {attempt}/{max_attempts})[/yellow]"
-            )
-            live.update(Panel(
-                Text.from_markup(countdown_text, justify="left"),
-                title="[yellow]Timeout Retry[/yellow]",
-                title_align="left",
-                border_style="yellow",
-                padding=(0, 1),
-            ))
-            try:
-                time.sleep(1)
-            except KeyboardInterrupt:
-                # User cancelled during countdown
-                live.update(Panel(
-                    "[yellow]Retry cancelled.[/yellow]",
-                    title="[yellow]Timeout Retry[/yellow]",
-                    title_align="left",
-                    border_style="yellow",
-                    padding=(0, 1),
-                ))
-                time.sleep(0.3)  # Brief pause so user sees the cancellation
-                return False
-
-        # Brief "Retrying now..." flash
-        live.update(Panel(
-            "[green]Retrying now...[/green]",
-            title="[yellow]Timeout Retry[/yellow]",
-            title_align="left",
-            border_style="yellow",
-            padding=(0, 1),
-        ))
-        time.sleep(0.3)
-
+    console.print(f"[dim]Connection issue, retrying in {delay_seconds}s... (Ctrl+C to cancel)[/dim]")
+    try:
+        time.sleep(delay_seconds)
+    except KeyboardInterrupt:
+        console.print("[dim]Retry cancelled.[/dim]")
+        return False
     return True
 
 
@@ -1102,13 +1060,9 @@ class AgenticOrchestrator:
 
                 # Check if this error is retryable
                 if _is_retryable_error(e) and attempt < _RETRY_MAX_ATTEMPTS:
-                    # Show live countdown and retry
-                    countdown_ok = _show_retry_countdown(
-                        self.console, attempt + 1, _RETRY_MAX_ATTEMPTS, str(e)
-                    )
-                    if not countdown_ok:
-                        # User cancelled the retry
-                        self.console.print("[yellow]Retry cancelled by user.[/yellow]")
+                    delay = _RETRY_DELAYS[min(attempt - 1, len(_RETRY_DELAYS) - 1)]
+                    wait_ok = _wait_with_cancel_message(self.console, delay)
+                    if not wait_ok:
                         return None
                     continue
                 else:
@@ -1126,10 +1080,6 @@ class AgenticOrchestrator:
             except (KeyError, IndexError):
                 self.console.print("[red]Error: invalid response from model[/red]")
                 return None
-
-            # If we retried, show a success message
-            if attempt > 1:
-                self.console.print(f"[dim]Request succeeded on attempt {attempt}/{_RETRY_MAX_ATTEMPTS}.[/dim]")
 
             return message
 

@@ -9,6 +9,7 @@ from rich.panel import Panel
 from llm.config import TOOLS_REQUIRE_CONFIRMATION
 from utils.settings import tool_settings
 from exceptions import CommandExecutionError
+from utils.validation import CHAINING_OPERATORS
 
 from .helpers.base import tool
 from .helpers.formatters import format_tool_result
@@ -55,8 +56,8 @@ _SAFE_GIT_SUBCOMMANDS = frozenset({
 def _is_safe_git_command(command: str) -> bool:
     """Check if a git command is read-only (safe to auto-approve).
 
-    Returns True only for known-safe read-only git commands.
-    All other git commands return False (require approval).
+    Returns True only for known-safe read-only git commands with no chaining.
+    Any shell operators (&&, ||, ;, |, >, <, backticks, $(), ${}) force approval.
     Non-git commands return False.
     """
     command = command.strip()
@@ -66,6 +67,10 @@ def _is_safe_git_command(command: str) -> bool:
     # Strip "powershell " prefix if present
     if command.lower().startswith("powershell "):
         command = command[len("powershell "):].strip()
+
+    # Reject any command containing chaining/redirection operators
+    if CHAINING_OPERATORS.search(command):
+        return False
 
     # Tokenize
     use_posix = os.name != "nt"
@@ -272,13 +277,13 @@ def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, giti
 
 @tool(
     name="execute_command",
-    description="Execute shell commands for git, system debugging, file operations, network tools, package management, and path navigation. Commands run from repository root. Chaining: && (conditional), | (pipe) allowed. Use for git, ps, lsof, netstat, journalctl, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Disallowed commands: rg, cat, ls, grep, find, head, tail, sed, awk, sort, uniq, wc, echo, touch, get-content, type, get-childitem, dir, new-item, set-content, add-content, tee. Use native tools instead. NO chaining with ;, >, <, `.",
+    description="Execute shell commands for git, system debugging, file operations, network tools, package management, and path navigation. Commands run from repository root. Use for git, ps, lsof, netstat, journalctl, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Disallowed commands: rg, cat, ls, grep, find, head, tail, sed, awk, sort, uniq, wc, echo, touch, get-content, type, get-childitem, dir, new-item, set-content, add-content, tee. Use native tools instead.",
     parameters={
         "type": "object",
         "properties": {
             "command": {
                 "type": "string",
-                "description": "Command to execute. Examples: 'git status', 'ps aux', 'cd /var/log && tail -f syslog'"
+                "description": "Command to execute. Examples: 'git status', 'ps aux', 'systemctl restart nginx'"
             },
             "reason": {
                 "type": "string",

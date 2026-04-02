@@ -29,7 +29,6 @@ class ChatManager:
         self.messages = []
         self.server_process: Optional[subprocess.Popen] = None
         self._log_file: Optional[IO] = None  # Track llama_server log file handle
-        self.command_history = []  # Track executed commands to prevent repeats
         self.approve_mode = "safe"
         self.interaction_mode = "edit"  # Default to edit mode
         self.plan_type = "feature"  # Default plan type (for plan interaction mode)
@@ -1086,17 +1085,16 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         return self.interaction_mode
 
     def reset_session(self):
-        """Reset chat session (clear messages and history).
+        """Reset chat session (clear messages and task list).
 
         This is a public wrapper for _init_messages that also clears
-        command history.
+        the in-session task list.
         """
         # End current conversation logging session before reset
         if self.markdown_logger:
             self.markdown_logger.end_session()
 
         self._init_messages(reset_totals=False)
-        self.command_history.clear()
         self.task_list.clear()
         self.task_list_title = None
 
