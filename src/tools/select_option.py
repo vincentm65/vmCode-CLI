@@ -451,7 +451,8 @@ class SelectionPanel:
         "required": ["questions"]
     },
     allowed_modes=["edit", "plan"],
-    requires_approval=False
+    requires_approval=False,
+    terminal_policy="yield"
 )
 def select_option(
     questions: List[Dict[str, Any]],

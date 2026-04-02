@@ -82,7 +82,7 @@ class ThinkingIndicator:
         self.message = message
         self.spinner = spinner
         self._last_word_change = 0
-        self._word_change_interval = 15.0  # Change word every 5 seconds
+        self._word_change_interval = 15.0  # Change word every 15 seconds
         
         self._common_words = [
             "Thinking ...",
@@ -103,7 +103,7 @@ class ThinkingIndicator:
             "Predicting next token ...",
             "Outsourcing ...",
             "Checking vitals ...",
-            "Scanning fingerpints ...",
+            "Scanning fingerprints ...",
             "Rerouting ...",
             "Refactoring ...",
             "Burning tokens ...",
@@ -111,7 +111,7 @@ class ThinkingIndicator:
             "Recalculating ...",
             "Spinning ...",
             "Pointing ...",
-            "Demateralizing ...",
+            "Dematerializing ...",
             "Compiling ...",
             "Fetching ...",
             "Buffering ...",
@@ -122,11 +122,11 @@ class ThinkingIndicator:
             "Authenticating ...",
             "Validating ...",
         ]
-        
+
         self._rare_words = [
-            "\"Engineering\" ...",
+            '"Engineering" ...',
             "Deleting (jk) ...",
-            "Computer... Fix my program",
+            "Computer... Fix my program ...",
             "Exiting VIM ...",
             "Rolling for perception ...",
             "Pinging ...",
@@ -144,7 +144,6 @@ class ThinkingIndicator:
             "Asking Stack Overflow ...",
             "Reading the docs ...",
             "Asking ChatGPT ...",
-            "Reading the docs ...",
             "Binging it ...",
             "Googling it ...",
             "Dockerizing ...",
@@ -159,7 +158,7 @@ class ThinkingIndicator:
             "Merging conflicts ...",
             "Feature creeping ...",
         ]
-        
+
         self._legendary_words = [
             "I'm confused ...",
             "Running in O(n²) ...",
@@ -176,7 +175,7 @@ class ThinkingIndicator:
             "Contacting AWS Support ...",
             "Reviewing footage ...",
             "Dedotating wam ...",
-            "Pondeing the orb ...",
+            "Pondering the orb ...",
             "Computer... ENHANCE ...",
             "Consulting council ...",
             "Releasing the files ...",
@@ -184,9 +183,7 @@ class ThinkingIndicator:
             "Uhhhh ...",
             "Selling data ...",
             "Okeyyy lets go ...",
-
         ]
-
         self._status = None
         self._active = False
         self._start_time = None
@@ -246,7 +243,7 @@ class ThinkingIndicator:
             # Calculate elapsed time including previous pauses
             elapsed = self._elapsed_before_pause + (time.time() - self._start_time)
 
-            # Change word every 5 seconds
+            # Change word every 15 seconds
             if elapsed - self._last_word_change >= self._word_change_interval:
                 self.message = self._select_random_word()
                 self._last_word_change = elapsed
@@ -261,25 +258,40 @@ class ThinkingIndicator:
             
             self._stop_timer.wait(0.1)  # Update every 100ms
 
-    def stop(self, show_completion=False):
+    def stop(self, reset=False):
+        """Stop the thinking indicator.
+
+        Args:
+            reset: If True, reset elapsed time and state for next use cycle.
+        """
         # Calculate and store elapsed time (including accumulated pauses)
         elapsed_time = None
         if self._start_time:
             elapsed_time = self._elapsed_before_pause + (time.time() - self._start_time)
             self._elapsed_before_pause = elapsed_time
         
-        # Stop timer thread
+        # Stop timer thread first (close race window before stopping status)
+        self._active = False
         self._stop_timer.set()
         if self._timer_thread:
             self._timer_thread.join(timeout=0.5)
         
-        if self._status and self._active:
+        if self._status:
             self._status.stop()
-            self._active = False
+            self._status = None
+            # Bypass Rich's console infrastructure entirely for cleanup.
+            # After status.stop(), Rich's internal buffer may be out of sync with
+            # the actual terminal state. Writing directly to stdout ensures we
+            # have a clean cursor position before the next UI element renders.
+            # \r = move to column 0, \033[K = clear to EOL
+            try:
+                sys.stdout.write("\r\033[K")
+                sys.stdout.flush()
+            except Exception:
+                pass
         
-        # Display final elapsed time only on true completion
-        if show_completion and elapsed_time is not None:
-            # Reset state after true completion
+        # Reset state for next use cycle
+        if reset:
             self._has_been_started = False
             self._elapsed_before_pause = 0.0
         
@@ -287,12 +299,7 @@ class ThinkingIndicator:
 
     def pause(self):
         # Stop without showing completion time (accumulates elapsed time)
-        self.stop(show_completion=False)
-        # Ensure status line cleanup is fully flushed to terminal
-        try:
-            self.console.file.flush()
-        except Exception:
-            pass
+        self.stop(reset=False)
 
     def resume(self):
         # Resume with timer continuing from accumulated time
@@ -536,6 +543,11 @@ def main():
                                         chunks.append(chunk)
                                 full_response = "".join(chunks)
 
+                                # Clear thinking indicator before printing response
+                                thinking_indicator.stop(reset=True)
+                                INPUT_BLOCKED['blocked'] = False
+                                _drain_stdin(session)
+
                                 if full_response.strip():
                                     md = Markdown(left_align_headings(full_response), code_theme=MonokaiDarkBGStyle, justify="left")
                                     console.print(md)
@@ -550,8 +562,6 @@ def main():
                                     chat_manager.token_tracker.add_usage(usage_data)
 
                                 chat_manager._update_context_tokens()
-
-                                console.print()  # Extra spacing
                             except KeyboardInterrupt:
                                 # Ctrl+C pressed during streaming
                                 if not check_double_ctrl_c():
@@ -580,7 +590,7 @@ def main():
                         except Exception as e:
                             console.print(f"[red]Error during generation: {e}[/red]", markup=False)
                 finally:
-                    thinking_indicator.stop(show_completion=True)
+                    thinking_indicator.stop(reset=True)
                     INPUT_BLOCKED['blocked'] = False
                     _drain_stdin(session)
 

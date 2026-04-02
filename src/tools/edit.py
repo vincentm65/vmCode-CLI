@@ -407,7 +407,8 @@ def run_edit_file(arguments, repo_root, console, gitignore_spec=None) -> str | T
         "required": ["path", "search", "replace"]
     },
     allowed_modes=["edit", "plan"],
-    requires_approval=True
+    requires_approval=True,
+    terminal_policy="stop"
 )
 def edit_file(
     path: str,

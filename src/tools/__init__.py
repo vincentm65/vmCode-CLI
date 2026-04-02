@@ -92,6 +92,10 @@ from .helpers import (
     build_context,
     get_tool_schemas,
     get_tools_for_mode,
+    get_terminal_policy,
+    TERMINAL_NONE,
+    TERMINAL_YIELD,
+    TERMINAL_STOP,
 )
 
 # Make base module available for backward compatibility

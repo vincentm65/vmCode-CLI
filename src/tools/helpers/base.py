@@ -6,10 +6,16 @@ filtered by interaction mode.
 """
 
 import inspect
-from typing import Dict, List, Optional, Callable, Any, Set
+from typing import Dict, List, Optional, Callable, Any
 from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
+
+
+# Terminal policy constants for thinking indicator handoff
+TERMINAL_NONE = "none"      # Indicator keeps running (non-interactive tools)
+TERMINAL_YIELD = "yield"    # Indicator pauses, clears line, tool takes over terminal (Live/prompt_toolkit)
+TERMINAL_STOP = "stop"      # Indicator fully stops (approval prompts need clean terminal)
 
 
 @dataclass
@@ -22,6 +28,7 @@ class ToolDefinition:
         parameters: JSON Schema for tool parameters
         allowed_modes: List of interaction modes where this tool is allowed
         requires_approval: Whether this tool requires user confirmation
+        terminal_policy: How this tool interacts with the thinking indicator
         handler: Function that executes the tool
     """
     name: str
@@ -29,6 +36,7 @@ class ToolDefinition:
     parameters: Dict[str, Any]
     allowed_modes: List[str] = field(default_factory=lambda: ["edit", "plan"])
     requires_approval: bool = False
+    terminal_policy: str = TERMINAL_NONE  # Default: indicator keeps running
     handler: Optional[Callable] = None
 
     def to_openai_schema(self) -> Dict[str, Any]:
@@ -166,12 +174,28 @@ class ToolRegistry:
         return len(cls._tools)
 
 
+def get_terminal_policy(tool_name: str) -> str:
+    """Get the terminal policy for a tool.
+
+    Args:
+        tool_name: Name of the tool
+
+    Returns:
+        Terminal policy string (TERMINAL_NONE, TERMINAL_YIELD, or TERMINAL_STOP)
+    """
+    tool_def = ToolRegistry.get(tool_name)
+    if tool_def:
+        return tool_def.terminal_policy
+    return TERMINAL_NONE  # Default to none for unknown tools
+
+
 def tool(
     name: str,
     description: str,
     parameters: Dict[str, Any],
     allowed_modes: Optional[List[str]] = None,
-    requires_approval: bool = False
+    requires_approval: bool = False,
+    terminal_policy: str = TERMINAL_NONE
 ) -> Callable:
     """Decorator for registering tool functions.
 
@@ -213,6 +237,7 @@ def tool(
             parameters=parameters,
             allowed_modes=allowed_modes or ["edit", "plan"],
             requires_approval=requires_approval,
+            terminal_policy=terminal_policy,
             handler=func
         )
 
