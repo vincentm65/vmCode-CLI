@@ -540,6 +540,8 @@ def _handle_model(chat_manager, console, debug_mode_container, args):
         
         # Models available via vmcode proxy (matches pricing table in usage_tracker.py)
         vmcode_models = [
+            # Free model (routes via OpenRouter, $0 cost)
+            ("GLM-4.5-Air (Free)", "z-ai/glm-4.5-air:free"),
             # GLM models
             ("GLM-5.1", "glm-5.1"),
             ("GLM-5", "glm-5"),
@@ -1091,7 +1093,7 @@ def _handle_signup(chat_manager, console, debug_mode_container, args):
 
     if status == 409:
         console.print("[yellow]Account already exists for that email.[/yellow]")
-        console.print("[dim]Use [bold cyan]/key[/bold cyan] to set your API key, or [bold cyan]/account[/bold cyan] to view your account.[/dim]")
+        console.print("[dim]Use [bold cyan]/login {email}[/bold cyan] to log in on this device.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1111,6 +1113,7 @@ def _handle_signup(chat_manager, console, debug_mode_container, args):
     # Display the API key prominently
     console.print()
     console.print("[bold green]Account created successfully![/bold green]")
+    console.print("[dim]Check your inbox for a verification email. Use [bold cyan]/resend[/bold cyan] if it doesn't arrive.[/dim]")
     console.print()
     console.print("[bold cyan]Your API key (save this — it won't be shown again):[/bold cyan]")
     console.print(f"[bold white on grey23]  {api_key}  [/bold white on grey23]")
@@ -1187,7 +1190,283 @@ def _handle_account(chat_manager, console, debug_mode_container, args):
     key_count = len(data.get("keys", []))
     console.print(f"[bold cyan]Keys:[/bold cyan]      {key_count}")
     console.print()
-    console.print("[dim]Manage subscription: [bold cyan]/upgrade[/bold cyan][/dim]")
+    console.print("[dim]Manage subscription: [bold cyan]/upgrade[/bold cyan] or [bold cyan]/manage[/bold cyan][/dim]")
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_login(chat_manager, console, debug_mode_container, args):
+    """Handle /login <email> — log in to an existing vmcode account on this device.
+
+    Two paths:
+    - User has their API key: validate it, save to config, switch provider.
+    - User lost their key: email a new one via /reset-key endpoint.
+    """
+    if not args or not args.strip():
+        console.print("[red]Usage: /login <email>[/red]")
+        console.print("[dim]Log in to an existing vmcode account on this device.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    email = args.strip()
+
+    # Basic client-side email validation
+    if "@" not in email or "." not in email.split("@")[-1]:
+        console.print("[red]Invalid email address.[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    # Check if already logged in to a different account
+    api_key, api_base = _get_proxy_config(chat_manager)
+    if api_key:
+        try:
+            acct_status, acct_data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
+            if acct_status == 200 and acct_data:
+                current_email = acct_data.get("email", "")
+                if current_email and current_email.lower() != email.lower():
+                    from rich.prompt import Confirm
+                    console.print(f"[yellow]Already logged in as {current_email}[/yellow]")
+                    if not Confirm.ask(f"Switch to {email}?", default=False):
+                        console.print("[dim]Cancelled.[/dim]")
+                        console.print()
+                        return CommandResult(status="handled")
+        except Exception:
+            pass  # If we can't check, just proceed
+
+    console.print()
+    console.print(f"[bold cyan]vmCode Login[/bold cyan]")
+    console.print(f"[dim]Logging in as {email}[/dim]")
+    console.print()
+
+    from rich.prompt import Confirm, Prompt
+
+    if Confirm.ask("Do you have your API key?", default=True):
+        # Path 1: user has their key — validate and save
+        raw_key = Prompt.ask("API key")
+
+        if not raw_key.strip():
+            console.print("[yellow]No key entered. Aborted.[/yellow]")
+            console.print()
+            return CommandResult(status="handled")
+
+        raw_key = raw_key.strip()
+
+        console.print("[cyan]Validating API key...[/cyan]")
+        status, data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=raw_key)
+
+        if status == 200 and data and data.get("email", "").lower() == email.lower():
+            # Valid key — save and switch
+            try:
+                config_manager.set_api_key("vmcode", raw_key)
+            except Exception as e:
+                console.print(f"[yellow]Could not save API key to config: {e}[/yellow]")
+                console.print(f"[dim]Use [bold cyan]/key {raw_key}[/bold cyan] to set it manually.[/dim]")
+
+            try:
+                config_manager.set_provider("vmcode")
+                chat_manager.reload_config()
+                chat_manager.switch_provider("vmcode")
+                console.print("[green]Switched to vmcode provider.[/green]")
+            except Exception as e:
+                console.print(f"[yellow]Could not auto-switch to vmcode: {e}[/yellow]")
+                console.print("[dim]Run [bold cyan]/provider vmcode[/bold cyan] to switch manually.[/dim]")
+
+            plan = data.get("plan", "free")
+            verified = "yes" if data.get("verified") else "no"
+            console.print(f"[green]Logged in as {email}[/green] (plan: {plan}, verified: {verified})")
+            console.print()
+            return CommandResult(status="handled")
+
+        if status in (401, 403):
+            console.print("[red]Invalid API key.[/red]")
+            console.print("[dim]Double-check your key and try again, or say 'no' to get a new one emailed.[/dim]")
+        else:
+            detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+            console.print(f"[red]Validation failed: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    # Path 2: user lost their key — email a new one
+    console.print(f"[cyan]Sending a new API key to {email}...[/cyan]")
+    console.print("[dim]This will create a new key and email it to you. Old keys remain valid.[/dim]")
+    console.print()
+
+    if not Confirm.ask("Send a new API key to this email?", default=False):
+        console.print("[dim]Cancelled.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    status, data = _call_proxy_api("POST", "/v1/auth/reset-key", api_base, body={"email": email})
+
+    if status == 429:
+        detail = (data or {}).get("detail", "Too many requests.") if data else "Too many requests."
+        console.print(f"[yellow]{detail}[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if status != 200 and status != 201:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Failed to send: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    message = (data or {}).get("message", "Check your email for the new API key.")
+    console.print(f"[green]{message}[/green]")
+    console.print("[dim]Once you receive the key, run: [bold cyan]/key <your-new-key>[/bold cyan][/dim]")
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_resend(chat_manager, console, debug_mode_container, args):
+    """Handle /resend [email] — resend verification email.
+
+    If no email is given, fetches it from the account endpoint.
+    """
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    api_key, api_base = _get_proxy_config(chat_manager)
+    if not api_key:
+        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    # Resolve email: use arg, or fetch from account
+    email = args.strip() if args and args.strip() else None
+    if not email:
+        acct_status, acct_data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
+        if acct_status == 200 and acct_data:
+            email = acct_data.get("email")
+            if acct_data.get("verified"):
+                console.print("[green]Email is already verified.[/green]")
+                console.print()
+                return CommandResult(status="handled")
+
+    if not email:
+        console.print("[red]Could not determine your email. Usage: /resend <email>[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    console.print(f"[cyan]Sending verification email to {email}...[/cyan]")
+    status, data = _call_proxy_api("POST", "/v1/auth/resend", api_base, body={"email": email})
+
+    if status == 429:
+        detail = (data or {}).get("detail", "Too many requests.") if data else "Too many requests."
+        console.print(f"[yellow]{detail}[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if status != 200 and status != 201:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Failed to send: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    message = (data or {}).get("message", "Verification email sent.")
+    console.print(f"[green]{message}[/green]")
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_reset_key(chat_manager, console, debug_mode_container, args):
+    """Handle /reset-key [email] — request a new API key via email.
+
+    If no email is given, fetches it from the account endpoint (requires API key).
+    If email is given, works without an API key (for users who lost everything).
+    """
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    api_key, api_base = _get_proxy_config(chat_manager)
+
+    # Resolve email: use arg, or fetch from account
+    email = args.strip() if args and args.strip() else None
+    if not email and api_key:
+        acct_status, acct_data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
+        if acct_status == 200 and acct_data:
+            email = acct_data.get("email")
+
+    if not email:
+        console.print("[red]Could not determine your email. Usage: /reset-key <email>[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    console.print(f"[cyan]Sending new API key to {email}...[/cyan]")
+    console.print("[dim]This will create a new key and email it to you. Old keys remain valid.[/dim]")
+    console.print()
+
+    from rich.prompt import Confirm
+    if not Confirm.ask("Send a new API key to this email?", default=False):
+        console.print("[dim]Cancelled.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    status, data = _call_proxy_api("POST", "/v1/auth/reset-key", api_base, body={"email": email})
+
+    if status == 429:
+        detail = (data or {}).get("detail", "Too many requests.") if data else "Too many requests."
+        console.print(f"[yellow]{detail}[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if status != 200 and status != 201:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Failed to send: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    message = (data or {}).get("message", "Check your email for the new API key.")
+    console.print(f"[green]{message}[/green]")
+    console.print()
+    return CommandResult(status="handled")
+
+
+def _handle_manage(chat_manager, console, debug_mode_container, args):
+    """Handle /manage — open Stripe Customer Portal for subscription management."""
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    api_key, api_base = _get_proxy_config(chat_manager)
+    if not api_key:
+        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    console.print("[cyan]Opening billing portal...[/cyan]")
+    status, data = _call_proxy_api(
+        "POST", "/v1/billing/portal", api_base,
+        body={"return_url": "https://vmcode.dev"},
+        api_key=api_key,
+    )
+
+    if status == 400:
+        detail = (data or {}).get("detail", "No subscription found.") if data else "No subscription found."
+        console.print(f"[yellow]{detail}[/yellow]")
+        console.print("[dim]Subscribe to a plan first with [bold cyan]/upgrade[/bold cyan].[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    if status != 200 or not data or "url" not in data:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Failed to open billing portal: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    url = data["url"]
+
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        console.print("[green]Opened in browser[/green]")
+    except Exception:
+        pass
+
+    console.print()
+    console.print("[cyan]Or copy this link:[/cyan]")
+    console.print(f"  [bold]{url}[/bold]")
     console.print()
     return CommandResult(status="handled")
 
@@ -1269,29 +1548,40 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
     # Skip if already on the selected plan
     if target == current_plan:
         console.print(f"[yellow]You're already on {current_plan.capitalize()}.[/yellow]")
-        console.print("[dim]Use [bold cyan]/account[/bold cyan] to manage your subscription.[/dim]")
+        console.print("[dim]Use [bold cyan]/manage[/bold cyan] to cancel or change your subscription.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
-    console.print(f"[cyan]Opening {'checkout' if target == 'pro' else 'billing portal'}...[/cyan]")
-
-    if target == "pro":
-        plan_id = "pro"
-    elif target == "lite":
-        plan_id = "lite"
+    if target == "free" and current_plan != "free":
+        # Downgrade: open Stripe Customer Portal so user can cancel
+        console.print("[cyan]Opening billing portal to manage your subscription...[/cyan]")
+        status, data = _call_proxy_api(
+            "POST", "/v1/billing/portal", api_base,
+            body={"return_url": "https://vmcode.dev"},
+            api_key=api_key,
+        )
+        action = "open billing portal"
     else:
-        plan_id = "free"
+        # Upgrade: open Stripe Checkout
+        console.print(f"[cyan]Opening checkout...[/cyan]")
 
-    status, data = _call_proxy_api(
-        "POST", "/v1/billing/checkout", api_base,
-        body={
-            "plan": plan_id,
-            "success_url": "https://vmcode.dev",
-            "cancel_url": "https://vmcode.dev",
-        },
-        api_key=api_key,
-    )
-    action = "create checkout session"
+        if target == "pro":
+            plan_id = "pro"
+        elif target == "lite":
+            plan_id = "lite"
+        else:
+            plan_id = "free"
+
+        status, data = _call_proxy_api(
+            "POST", "/v1/billing/checkout", api_base,
+            body={
+                "plan": plan_id,
+                "success_url": "https://vmcode.dev",
+                "cancel_url": "https://vmcode.dev",
+            },
+            api_key=api_key,
+        )
+        action = "create checkout session"
 
     if status == 200 and data and "url" in data:
         url = data["url"]
@@ -1317,6 +1607,74 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
+def _handle_rotate_key(chat_manager, console, debug_mode_container, args):
+    """Handle /rotate-key — invalidate current API key and generate a new one."""
+    if not _require_proxy_provider(chat_manager, console):
+        return CommandResult(status="handled")
+
+    api_key, api_base = _get_proxy_config(chat_manager)
+    if not api_key:
+        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print()
+        return CommandResult(status="handled")
+
+    # Warn user
+    console.print("[bold yellow]This will invalidate your current API key and generate a new one.[/bold yellow]")
+    console.print("[dim]Make sure you can save the new key before proceeding.[/dim]")
+    console.print()
+
+    from rich.prompt import Confirm
+    if not Confirm.ask("Rotate your API key?", default=False):
+        console.print("[dim]Cancelled.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    console.print("[cyan]Rotating API key...[/cyan]")
+    status, data = _call_proxy_api(
+        "POST", "/v1/auth/rotate-key", api_base,
+        body={},
+        api_key=api_key,
+    )
+
+    if status != 200 or not data or "api_key" not in data:
+        detail = (data or {}).get("detail", "Unknown error") if data else "Network error"
+        console.print(f"[red]Failed to rotate key: {detail}[/red]")
+        console.print()
+        return CommandResult(status="handled")
+
+    new_key = data["api_key"]
+
+    # Display new key
+    console.print()
+    console.print("[bold green]API key rotated successfully.[/bold green]")
+    console.print("[bold red]Your old key is no longer valid.[/bold red]")
+    console.print()
+    console.print("[bold cyan]Your new API key (save this — it won't be shown again):[/bold cyan]")
+    console.print(f"[bold white on grey23]  {new_key}  [/bold white on grey23]")
+    console.print()
+
+    # Save to config
+    try:
+        config_manager.set_api_key("vmcode", new_key)
+        console.print("[green]New key saved to config.[/green]")
+    except Exception as e:
+        console.print(f"[yellow]Could not save to config: {e}[/yellow]")
+        console.print(f"[dim]Use [bold cyan]/key {new_key}[/bold cyan] to set it manually.[/dim]")
+
+    # Backup to file
+    try:
+        key_path = Path.home() / ".vmcode" / "api_key.txt"
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key_path.write_text(new_key)
+        key_path.chmod(0o600)
+        console.print(f"[dim]Key backed up to {key_path}[/dim]")
+    except Exception:
+        pass
+
+    console.print()
+    return CommandResult(status="handled")
+
+
 # Command registry - maps command names to their handlers
 _COMMAND_HANDLERS = {
     "/exit": _handle_exit,
@@ -1338,9 +1696,14 @@ _COMMAND_HANDLERS = {
     "/review": _handle_review,
     "/r": _handle_review,
     "/signup": _handle_signup,
+    "/login": _handle_login,
+    "/resend": _handle_resend,
+    "/reset-key": _handle_reset_key,
     "/account": _handle_account,
     "/plan": _handle_plan,
+    "/manage": _handle_manage,
     "/upgrade": _handle_upgrade,
+    "/rotate-key": _handle_rotate_key,
 }
 
 

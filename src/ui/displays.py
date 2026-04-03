@@ -64,13 +64,26 @@ def show_help_table(console):
     table.add_row("[bold cyan]/init[/bold cyan]", "Generate agents.md")
     table.add_row("[bold cyan]/edit[/bold cyan], [bold cyan]/e[/bold cyan]", "Open editor for multi-line input")
     table.add_row("[bold cyan]/review[/bold cyan] [args], [bold cyan]/r[/bold cyan]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
-    table.add_row("[bold cyan]/signup[/bold cyan] <email>", "Create vmcode account and get API key")
-    table.add_row("[bold cyan]/account[/bold cyan]", "View account info and subscription")
-    table.add_row("[bold cyan]/plan[/bold cyan]", "View available plans and pricing")
-    table.add_row("[bold cyan]/upgrade[/bold cyan] [pro|lite]", "Upgrade plan or manage subscription")
 
 
     console.print(Panel(table, title="[bold cyan]Commands[/bold cyan]", border_style="grey23", padding=(0, 2)))
+
+    # Account management section
+    console.print()
+    acct_table = Table(show_header=True, box=box.SIMPLE_HEAD)
+    acct_table.add_column("Command", no_wrap=True)
+    acct_table.add_column("Description")
+
+    acct_table.add_row("[bold cyan]/signup[/bold cyan] <email>", "Create vmcode account and get API key")
+    acct_table.add_row("[bold cyan]/login[/bold cyan]", "Log in to an existing vmcode account")
+    acct_table.add_row("[bold cyan]/account[/bold cyan]", "View account info and subscription status")
+    acct_table.add_row("[bold cyan]/plan[/bold cyan]", "View available plans and pricing")
+    acct_table.add_row("[bold cyan]/upgrade[/bold cyan]", "Upgrade or change your plan")
+    acct_table.add_row("[bold cyan]/manage[/bold cyan]", "Cancel subscription or update payment (Stripe portal)")
+    acct_table.add_row("[bold cyan]/rotate-key[/bold cyan]", "Invalidate current API key and generate a new one")
+    acct_table.add_row("[bold cyan]/reset-key[/bold cyan]", "Get a new API key emailed to you (lost key recovery)")
+
+    console.print(Panel(acct_table, title="[bold cyan]Account[/bold cyan]", border_style="grey23", padding=(0, 2)))
 
     # Keybinds section
     console.print()
