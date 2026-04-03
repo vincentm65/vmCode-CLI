@@ -231,10 +231,7 @@ class SettingSelector:
                 elif setting.input_type == "options" and setting.options:
                     # Show each option on its own line with radio-style selection
                     label = setting.text
-                    if is_selected:
-                        lines.append(f"> <b>{label}</b>")
-                    else:
-                        lines.append(f"  <b>{label}</b>")
+                    lines.append(f"  <b>{label}</b>")
                     for opt_idx, opt in enumerate(setting.options):
                         opt_text = opt.get("text", str(opt.get("value", "")))
                         opt_value = opt.get("value")

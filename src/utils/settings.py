@@ -34,6 +34,7 @@ class ToolSettings:
     enable_parallel_execution: bool = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("enable_parallel_execution", True))
     max_parallel_workers: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_parallel_workers", 10))
     max_command_output_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_command_output_lines", 100))
+    max_shell_output_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_shell_output_lines", 200))
     max_file_preview_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_file_preview_lines", 200))
 
 
@@ -91,4 +92,5 @@ sub_agent_settings = SubAgentSettings()
 # Tool execution constants
 MAX_TOOL_CALLS = tool_settings.max_tool_calls
 MAX_COMMAND_OUTPUT_LINES = tool_settings.max_command_output_lines
+MAX_SHELL_OUTPUT_LINES = tool_settings.max_shell_output_lines
 MAX_FILE_PREVIEW_LINES = tool_settings.max_file_preview_lines

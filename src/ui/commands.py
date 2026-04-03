@@ -555,33 +555,37 @@ def _handle_model(chat_manager, console, debug_mode_container, args):
             ("MiniMax-2.5-HighSpeed", "minimax-2.5-highspeed"),
         ]
 
-        model_settings = []
+        model_options = []
+        active_value = current_model
         for display_name, model_id in vmcode_models:
-            label = display_name
             if model_id == current_model or display_name.lower() == current_model.lower():
-                label += "  <style fg='green'>(Active)</style>"
-            model_settings.append(SettingOption(
-                key=model_id,
-                text=label,
-                value=False,
-                input_type="nav",
-                on_text="",
-                off_text="",
-            ))
+                active_value = model_id
+            model_options.append({
+                "value": model_id,
+                "text": display_name,
+            })
+
+        model_setting = SettingOption(
+            key="model",
+            text="Select Model",
+            value=active_value,
+            input_type="options",
+            options=model_options,
+        )
         
         selector = SettingSelector(
-            categories=[SettingCategory(title="vmcode Models", settings=model_settings)],
-            title="Select Model",
+            categories=[SettingCategory(title="", settings=[model_setting])],
+            title="",
             show_save=False,
         )
         result = selector.run()
         
-        if result is None or not isinstance(result, dict) or '_nav' not in result:
+        if result is None or not isinstance(result, dict) or 'model' not in result:
             display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
             console.print("[dim]Cancelled.[/dim]")
             return CommandResult(status="handled")
         
-        model = result['_nav']
+        model = result['model']
     elif not args:
         # Show current model for current provider
         cfg = config.get_provider_config(current_provider)
@@ -1500,23 +1504,38 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
             {"id": "pro", "name": "Pro", "price": 50, "tokens": 15_000_000, "rate_limit": 300},
         ]
 
-    # Build plan options for selector
+    # Only show plans the user can upgrade to (current plan excluded)
+    # Tier ordering: free < lite < pro
+    _TIER_ORDER = {"free": 0, "lite": 1, "pro": 2}
+    current_tier = _TIER_ORDER.get(current_plan, 0)
+
+    upgradeable_plans = [
+        p for p in plans
+        if _TIER_ORDER.get(p["id"], 0) > current_tier
+    ]
+
+    if not upgradeable_plans:
+        # Pro user — no upgrades available
+        console.print()
+        console.print(f"[bold green]You're on the {current_plan.capitalize()} plan — the highest tier.[/bold green]")
+        console.print("[dim]Use [bold cyan]/manage[/bold cyan] to cancel or change your subscription.[/dim]")
+        console.print()
+        return CommandResult(status="handled")
+
+    # Build plan options from upgradeable plans only
     plan_options = []
-    for plan in plans:
-        if plan["id"] == "free":
-            price_desc = "Free model only"
-        else:
-            price_desc = f"${plan['price']}/mo" if plan["price"] > 0 else "Free"
+    for plan in upgradeable_plans:
+        price_desc = f"${plan['price']}/mo" if plan.get("price", 0) > 0 else "Free"
         plan_options.append({
             "value": plan["id"],
             "text": plan["name"],
             "description": price_desc,
         })
 
-    # Map current plan to option value
-    current_value = current_plan if current_plan in ("pro", "lite", "free") else "free"
+    # Default selection to the first upgradeable plan
+    first_upgrade = upgradeable_plans[0]["id"]
 
-    # Show plan selector
+    # Show plan selector — title includes current plan
     selector = SettingSelector(
         categories=[
             SettingCategory(
@@ -1524,15 +1543,15 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
                 settings=[
                     SettingOption(
                         key="plan",
-                        text="Select a plan:",
-                        value=current_value,
+                        text=f"Select a plan  (current: {current_plan.capitalize()}):",
+                        value=first_upgrade,
                         input_type="options",
                         options=plan_options,
                     )
                 ]
             )
         ],
-        title="Choose Your Plan",
+        title="Upgrade Your Plan",
         show_save=False,
     )
 
@@ -1543,45 +1562,21 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
         console.print()
         return CommandResult(status="handled")
 
-    target = result.get("plan", "pro")
+    target = result.get("plan", first_upgrade)
 
-    # Skip if already on the selected plan
-    if target == current_plan:
-        console.print(f"[yellow]You're already on {current_plan.capitalize()}.[/yellow]")
-        console.print("[dim]Use [bold cyan]/manage[/bold cyan] to cancel or change your subscription.[/dim]")
-        console.print()
-        return CommandResult(status="handled")
+    # Upgrade: open Stripe Checkout
+    console.print(f"[cyan]Opening checkout for {target.capitalize()}...[/cyan]")
 
-    if target == "free" and current_plan != "free":
-        # Downgrade: open Stripe Customer Portal so user can cancel
-        console.print("[cyan]Opening billing portal to manage your subscription...[/cyan]")
-        status, data = _call_proxy_api(
-            "POST", "/v1/billing/portal", api_base,
-            body={"return_url": "https://vmcode.dev"},
-            api_key=api_key,
-        )
-        action = "open billing portal"
-    else:
-        # Upgrade: open Stripe Checkout
-        console.print(f"[cyan]Opening checkout...[/cyan]")
-
-        if target == "pro":
-            plan_id = "pro"
-        elif target == "lite":
-            plan_id = "lite"
-        else:
-            plan_id = "free"
-
-        status, data = _call_proxy_api(
-            "POST", "/v1/billing/checkout", api_base,
-            body={
-                "plan": plan_id,
-                "success_url": "https://vmcode.dev",
-                "cancel_url": "https://vmcode.dev",
-            },
-            api_key=api_key,
-        )
-        action = "create checkout session"
+    status, data = _call_proxy_api(
+        "POST", "/v1/billing/checkout", api_base,
+        body={
+            "plan": target,
+            "success_url": "https://vmcode.dev",
+            "cancel_url": "https://vmcode.dev",
+        },
+        api_key=api_key,
+    )
+    action = "create checkout session"
 
     if status == 200 and data and "url" in data:
         url = data["url"]

@@ -16,6 +16,20 @@ except ImportError:
     DEFAULT_TERMINAL_WIDTH = 80
     FORMATTER_MAX_LINES = 100
 
+# Shell output truncation (lazy import to avoid circular dependency)
+_SHELL_MAX_LINES = None
+
+def _get_shell_max_lines():
+    """Get shell output line limit from settings (lazy import)."""
+    global _SHELL_MAX_LINES
+    if _SHELL_MAX_LINES is None:
+        try:
+            from utils.settings import MAX_SHELL_OUTPUT_LINES
+            _SHELL_MAX_LINES = MAX_SHELL_OUTPUT_LINES
+        except ImportError:
+            _SHELL_MAX_LINES = 200
+    return _SHELL_MAX_LINES
+
 
 def _detect_newline(text):
     """Detect the newline character used in text."""
@@ -266,6 +280,20 @@ def format_tool_result(result, command=None, is_rg=False, debug_mode=False):
             output = "\n".join(output_lines)
 
         return f"exit_code={result.returncode}\n{label}={count}\n{output}\n\n"
+
+    # For non-rg shell commands: apply head+tail truncation
+    output_lines = output.splitlines()
+    max_lines = _get_shell_max_lines()
+
+    if len(output_lines) > max_lines:
+        head_count = max_lines // 2
+        tail_count = max_lines - head_count
+        omitted = len(output_lines) - max_lines
+        head = "\n".join(output_lines[:head_count])
+        tail = "\n".join(output_lines[-tail_count:])
+        output = f"{head}\n\n... ({omitted} lines omitted) ...\n\n{tail}"
+    else:
+        output = "\n".join(output_lines)
 
     return f"exit_code={result.returncode}\n{output}\n\n"
 
