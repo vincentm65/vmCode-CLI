@@ -50,7 +50,7 @@ class SimplePanelUpdater:
 
 @tool(
     name="sub_agent",
-    description="MANDATORY: MUST CALL THIS FIRST before ANY rg or read_file when answering: 'how something works', architecture, patterns, multi-file flows, or broad exploration. DO NOT search manually - this tool is 10x faster. Examples: 'How does authentication work?', 'Explain the data flow', 'Where is X handled?'",
+    description="MANDATORY: MUST CALL THIS FIRST before ANY rg or read_file when answering 'how something works', architecture, patterns, multi-file flows, or broad exploration. DO NOT search manually - this tool is 10x faster. Examples: 'How does authentication work?', 'Explain the data flow', 'Where is X handled?'",
     parameters={
         "type": "object",
         "properties": {

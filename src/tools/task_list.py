@@ -47,18 +47,18 @@ def _format_task_list(task_list, title=None):
 
 @tool(
     name="create_task_list",
-    description="Create or replace an in-session task list for tracking long EDIT workflows.",
+    description="Create or replace an in-session task list for tracking long edit workflows.",
     parameters={
         "type": "object",
         "properties": {
             "tasks": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Task descriptions. Non-empty after trimming."
+                "description": "Task descriptions (non-empty after trimming)"
             },
             "title": {
                 "type": "string",
-                "description": "Optional short title for the task list."
+                "description": "Optional short title"
             }
         },
         "required": ["tasks"]
@@ -124,18 +124,18 @@ def create_task_list(
 
 @tool(
     name="complete_task",
-    description="Mark one or more tasks complete in the current in-session task list.",
+    description="Mark one or more tasks complete in the current task list.",
     parameters={
         "type": "object",
         "properties": {
             "task_id": {
                 "type": "integer",
-                "description": "Zero-based index of a single task to mark complete."
+                "description": "Zero-based index of a single task to complete"
             },
             "task_ids": {
                 "type": "array",
                 "items": {"type": "integer"},
-                "description": "Array of zero-based task indices to mark complete."
+                "description": "Zero-based task indices to complete"
             }
         }
     },
@@ -200,7 +200,7 @@ def complete_task(
 
 @tool(
     name="show_task_list",
-    description="Show the current in-session task list without modifying it.",
+    description="Show the current task list without modifying it.",
     parameters={"type": "object", "properties": {}},
     allowed_modes=["edit"],
     requires_approval=False

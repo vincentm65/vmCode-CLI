@@ -224,7 +224,7 @@ def _execute_shell_command(command, repo_root, env, debug_mode, console):
     return result
 
 
-def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, gitignore_spec=None):
+def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, gitignore_spec=None, max_matches=None):
     """Execute command via rg (direct) or shell (PowerShell on Windows, /bin/sh on Unix/Linux).
 
     Args:
@@ -249,7 +249,7 @@ def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, giti
             cmd_list = [str(executable)] + args
             result = _execute_direct_command(cmd_list, repo_root, env, debug_mode, console)
             # AI gets truncated results (via format_tool_result); user sees summary via _display_tool_feedback
-            formatted_result = format_tool_result(result, command=command, is_rg=True, debug_mode=True)
+            formatted_result = format_tool_result(result, command=command, is_rg=True, debug_mode=True, max_matches=max_matches)
         else:
             # Shell execution (PowerShell on Windows, /bin/sh on Unix/Linux)
             result = _execute_shell_command(args, repo_root, env, debug_mode, console)
@@ -277,17 +277,17 @@ def run_shell_command(command, repo_root, rg_exe_path, console, debug_mode, giti
 
 @tool(
     name="execute_command",
-    description="Execute shell commands for git, system debugging, file operations, network tools, package management, and path navigation. Commands run from repository root. Use for git, ps, lsof, netstat, journalctl, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Disallowed commands: rg, cat, ls, grep, find, head, tail, sed, awk, sort, uniq, wc, echo, touch, get-content, type, get-childitem, dir, new-item, set-content, add-content, tee. Use native tools instead.",
+    description="Execute shell commands for git, system tasks, file ops, network, and package management. Runs from repo root. Use for git, ps, systemctl, rm, mv, cp, mkdir, ping, curl, wget, ssh, pacman, pip, npm, apt. Disallowed: rg, cat, ls, grep, find, head, tail, sed, awk, sort, uniq, wc, echo, touch, get-content, type, get-childitem, dir, new-item, set-content, add-content, tee. Use native tools instead.",
     parameters={
         "type": "object",
         "properties": {
             "command": {
                 "type": "string",
-                "description": "Command to execute. Examples: 'git status', 'ps aux', 'systemctl restart nginx'"
+                "description": "Command to execute"
             },
             "reason": {
                 "type": "string",
-                "description": "Brief explanation of why this command is needed (shown during confirmation)"
+                "description": "Brief explanation (shown during confirmation)"
             }
         },
         "required": ["command"]

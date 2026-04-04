@@ -35,11 +35,11 @@ def _validate_create_path(
 
 @tool(
     name="create_file",
-    description="Create a new file with optional initial content. File must not exist. For small files, include content directly. Creates a preview of the written content (up to 200 lines) with syntax highlighting. Works on any path in the filesystem.",
+    description="Create a new file with optional initial content. File must not exist.",
     parameters={
         "type": "object",
         "properties": {
-            "path_str": {"type": "string", "description": "Path to create (works anywhere on filesystem)"},
+            "path_str": {"type": "string", "description": "Path to create"},
             "content": {"type": "string", "description": "Initial content (omit for empty file)"}
         },
         "required": ["path_str"]

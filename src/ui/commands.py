@@ -862,11 +862,37 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
 
     from tools.review_sub_agent import review_changes
 
-    # Determine git diff arguments
+    # Parse args: separate git diff flags from user intent
+    # Format: /r [git-args] [-- intent description]
+    # Examples:
+    #   /r --staged
+    #   /r I wanted to reduce the system prompt length
+    #   /r --staged -- I was refactoring the auth module
+    user_intent = None
+    git_args = ""
+
     if args and args.strip():
-        git_args = args.strip()
-    else:
-        git_args = ""
+        raw_args = args.strip()
+        # Explicit delimiter: " -- " splits git args from intent
+        if " -- " in raw_args:
+            parts = raw_args.split(" -- ", 1)
+            git_args = parts[0].strip()
+            user_intent = parts[1].strip()
+        else:
+            # Heuristic: tokens starting with '-' are git flags, rest is intent
+            tokens = raw_args.split()
+            git_tokens = []
+            intent_tokens = []
+            in_intent = False
+            for token in tokens:
+                if in_intent or not token.startswith("-"):
+                    in_intent = True
+                    intent_tokens.append(token)
+                else:
+                    git_tokens.append(token)
+            git_args = " ".join(git_tokens)
+            if intent_tokens:
+                user_intent = " ".join(intent_tokens)
 
     # Build git diff argument list (no shell=True to prevent command injection)
     git_argv = ["git", "diff"] + git_args.split()
@@ -879,7 +905,11 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
             console.print(f"[red]Rejected dangerous character in argument: {arg}[/red]")
             return CommandResult(status="handled")
 
-    console.print(f"[cyan]Running: {' '.join(git_argv)}[/cyan]")
+    if user_intent:
+        console.print(f"[cyan]Running: {' '.join(git_argv)}[/cyan]")
+        console.print(f"[dim]Intent: {user_intent}[/dim]")
+    else:
+        console.print(f"[cyan]Running: {' '.join(git_argv)}[/cyan]")
 
     # Run git diff
     result = subprocess.run(
@@ -926,6 +956,7 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
         chat_manager=chat_manager,
         panel_updater=panel,
         skip_citation_injection=True,
+        user_intent=user_intent,
     )
 
     # Display result as rendered Markdown
@@ -937,9 +968,12 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
 
     # Inject review into chat history so the agent has context for follow-up questions
     if review_result:
+        review_cmd = "/review"
+        if user_intent:
+            review_cmd += f"\n\nUser intent: {user_intent}"
         chat_manager.messages.append({
             "role": "user",
-            "content": "/review"
+            "content": review_cmd
         })
         chat_manager.messages.append({
             "role": "assistant",

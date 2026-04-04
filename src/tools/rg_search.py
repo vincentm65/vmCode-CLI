@@ -11,7 +11,7 @@ from .helpers.converters import coerce_bool, coerce_int
 
 @tool(
     name="rg",
-    description="Search files using ripgrep. Use for ALL code searches (never use shell commands). Supports regex, file filtering (glob/type), and multiple output modes: content (matches with context), files_with_matches (paths), or count.",
+    description="Search files using ripgrep. Use for ALL code searches (never shell commands). Supports regex, glob/type filtering, and output modes: content, files_with_matches, or count.",
     parameters={
         "type": "object",
         "properties": {
@@ -25,11 +25,11 @@ from .helpers.converters import coerce_bool, coerce_int
             },
             "glob": {
                 "type": "string",
-                "description": "Glob pattern to filter files (e.g. \"*.js\", \"**/*.tsx\")"
+                "description": "Glob filter (e.g. \"*.js\", \"**/*.tsx\")"
             },
             "type": {
                 "type": "string",
-                "description": "File type to search (e.g. js, py, rust, go, java)"
+                "description": "File type (e.g. js, py, rust, go, java)"
             },
             "output_mode": {
                 "type": "string",
@@ -38,7 +38,7 @@ from .helpers.converters import coerce_bool, coerce_int
             },
             "context_lines": {
                 "type": "integer",
-                "description": "Context lines before/after matches (requires output_mode: content)"
+                "description": "Context lines around matches (requires output_mode: content)"
             },
             "case_insensitive": {
                 "type": "boolean",
@@ -46,7 +46,11 @@ from .helpers.converters import coerce_bool, coerce_int
             },
             "multiline": {
                 "type": "boolean",
-                "description": "Enable multiline mode (patterns can span lines)"
+                "description": "Patterns can span lines"
+            },
+            "max_matches": {
+                "type": "integer",
+                "description": "Max matches across all files (default: 100, 0 = use line limit)"
             }
         },
         "required": ["pattern"]
@@ -139,10 +143,15 @@ def rg(
     # Build command string
     command = " ".join(cmd_parts)
 
+    # Get max_matches from kwargs (default: 100, set to 0 for no limit)
+    raw = coerce_int(kwargs.get("max_matches"))[0] if kwargs.get("max_matches") is not None else None
+    max_matches = raw if raw is not None and raw >= 0 else 100
+
     # Execute command
     try:
         result = run_shell_command(
-            command, repo_root, rg_exe_path, console, debug_mode, gitignore_spec
+            command, repo_root, rg_exe_path, console, debug_mode, gitignore_spec,
+            max_matches=max_matches
         )
         return result
     except Exception as e:

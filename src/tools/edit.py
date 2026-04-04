@@ -311,6 +311,14 @@ def preview_edit_file(arguments, repo_root, gitignore_spec=None) -> tuple[str, T
         + payload["replace"]
         + payload["original_content"][end:]
     )
+
+    # Early exit for no-op edits (e.g. fuzzy match produced identical content)
+    if new_content == payload["original_content"]:
+        raise FileEditError(
+            "Edit is a no-op: replacement produces identical content",
+            details={"hint": "Check that your search/replace text actually differs."}
+        )
+
     diff_text = _build_diff(
         payload["original_content"],
         new_content,
@@ -346,6 +354,14 @@ def run_edit_file(arguments, repo_root, console, gitignore_spec=None) -> str | T
             payload["context_lines"],
         )
 
+        # Skip write for no-op edits (safety net — preview should have caught this,
+        # but guards against race conditions or direct calls to run_edit_file)
+        if new_content == payload["original_content"]:
+            raise FileEditError(
+                "Edit is a no-op: replacement produces identical content",
+                details={"hint": "Check that your search/replace text actually differs."}
+            )
+
         # Write to file
         try:
             with payload["file_path"].open("w", encoding="utf-8", newline="") as f:
@@ -379,17 +395,17 @@ def run_edit_file(arguments, repo_root, console, gitignore_spec=None) -> str | T
 
 @tool(
     name="edit_file",
-    description="Apply search/replace edit to file. Search text must appear exactly once. Works on any file in the filesystem.",
+    description="Apply search/replace edit to file. Search text must appear exactly once.",
     parameters={
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Path to edit (works anywhere on filesystem)"
+                "description": "Path to edit"
             },
             "search": {
                 "type": "string",
-                "description": "Exact text to find. Must be unique. Include context. Multi-line supported."
+                "description": "Exact text to find. Must be unique. Multi-line supported."
             },
             "replace": {
                 "type": "string",
@@ -401,7 +417,7 @@ def run_edit_file(arguments, repo_root, console, gitignore_spec=None) -> str | T
             },
             "reason": {
                 "type": "string",
-                "description": "Brief explanation of why this edit is needed (shown during confirmation)"
+                "description": "Brief explanation (shown during confirmation)"
             }
         },
         "required": ["path", "search", "replace"]

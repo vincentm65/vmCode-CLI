@@ -10,7 +10,7 @@ from exceptions import LLMConnectionError
 
 @tool(
     name="web_search",
-    description="Search web for info, docs, current events using DuckDuckGo (no API key needed).",
+    description="Search web for info, docs, and current events using DuckDuckGo (no API key needed).",
     parameters={
         "type": "object",
         "properties": {
@@ -20,7 +20,7 @@ from exceptions import LLMConnectionError
             },
             "num_results": {
                 "type": "integer",
-                "description": "Results to return (default: 5, max: 10)"
+                "description": "Results to return (default: 5, max 10)"
             }
         },
         "required": ["query"]

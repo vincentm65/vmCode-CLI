@@ -419,13 +419,13 @@ class SelectionPanel:
 
 @tool(
     name="select_option",
-    description="Ask the user a question with selectable options using arrow keys. Displays an inline panel where the user navigates with arrow keys and presses Enter to select. A 'Type your own input...' option is automatically appended as the last option, allowing the user to provide a free-form answer. Useful for clarifying requirements, making decisions, or getting user preferences. Supports both single question and multi-question forms (single question = array with 1 item).",
+    description="Ask the user a question with selectable options using arrow keys. An inline panel shows options navigable with arrow keys. A 'Type your own input...' option is auto-appended for free-form answers. Supports single and multi-question forms (single = array with 1 item).",
     parameters={
         "type": "object",
         "properties": {
             "questions": {
                 "type": "array",
-                "description": "List of questions. Single question mode: array with 1 item. Multi-question mode: array with multiple items.",
+                "description": "List of questions (single = array with 1 item, multi = array with multiple items).",
                 "items": {
                     "type": "object",
                     "properties": {

@@ -215,13 +215,13 @@ def _read_file_content(
 
 @tool(
     name="read_file",
-    description="Read file contents using Python file reader. Use this to view a file (or a specific line range). Prefer this over rg when you already know the file path. Works on any file in the filesystem.",
+    description="Read file contents. Prefer over rg when you know the file path.",
     parameters={
         "type": "object",
         "properties": {
-            "path_str": {"type": "string", "description": "Path to read (works anywhere on filesystem)"},
+            "path_str": {"type": "string", "description": "Path to read"},
             "max_lines": {"type": "integer", "description": "Max lines to read (omit for full file)"},
-            "start_line": {"type": "integer", "description": "1-based starting line number (default: 1). Use with max_lines to read a specific excerpt."}
+            "start_line": {"type": "integer", "description": "1-based start line (default: 1)"}
         },
         "required": ["path_str"]
     },

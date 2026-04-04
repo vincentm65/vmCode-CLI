@@ -62,15 +62,9 @@ Use the smallest number of tool calls needed. Prefer one precise search over mul
 
 Make independent calls in parallel (e.g., rg + read_file(file1) + read_file(file2)). If calls depend on previous results, run them sequentially. Never guess or use placeholders for dependent values.""",
 
-    "be_concise": """## Be Concise
-- Answer from existing context first (codebase map, training data, previous results)
-- State what you're doing, then do it (skip narration)
-- Read the minimum needed to answer""",
 
-    "use_existing_context": """## Use Existing Context
-- Codebase map (agents.md) - file purposes and structure
-- Previous reads - files in conversation history
-- Tool results - previous searches may contain answers""",
+
+
 
     "trust_subagent_context": """## CRITICAL: Trust Subagent Results
 
@@ -106,13 +100,6 @@ Violating this instruction wastes tokens and shows you didn't read the subagent'
 - If needed facts are not visible in current context, reacquire only the missing fact with minimum tools
 - After edits, treat earlier reads of that file as stale - re-read to verify final state
 - Stop investigating once the answer is supported by available evidence""",
-
-    "config_reference": """## Config Reference
-
-When users mention changing providers, LLM settings, or configuration, check the `config.json` file for current configuration values. This file contains:
-- Provider settings (e.g., OpenAI, Anthropic, local models)
-- API keys and endpoints
-- Model parameters and defaults""",
 
     "code_references": """## Code References
 
@@ -242,24 +229,6 @@ This works in any mode (edit, plan).""",
 - Editing files: use `edit_file` tool
 - python/python3 commands to edit/modify files (use native tools: create_file, edit_file)""",
 
-    "computer_agent_capabilities": """## Computer Agent Capabilities
-
-### Working Directory & Navigation
-- All commands execute from **repository root** (check with `pwd`)
-- Use `cd` to navigate: `cd /var/log && tail -f syslog`
-- Absolute paths allowed for system debugging
-
-### Debugging Tools (execute_command)
-**Process:** `ps aux`, `pgrep -f process_name`, `lsof -i :port`, `lsof -p PID`
-**Network:** `netstat -tulpn`, `ss -tulpn`, `curl -v URL`, `ping -c 4 host`
-**Logs:** `journalctl -u service_name`, `journalctl -f`, `tail -f /var/log/syslog`, `dmesg | tail`
-**Services:** `systemctl status/start/stop/restart service`
-**Files:** `file filename`, `stat filename`, `md5sum file`, `ls -lah path`
-
-### Command Chaining
-- Use `&&` for conditional chaining (stops on error): `cd /var/log && tail -f syslog`
-- Do NOT use `;`, `&`, `|` (blocked for safety)""",
-
     "when_to_use_sub_agent": """## When to Use sub_agent
 
 Use for broad multi-file exploration when the answer is not already available from visible context. This includes tracing flows, architecture questions, and pattern analysis requiring multiple search+read cycles.
@@ -275,15 +244,7 @@ Do not call sub_agent when one direct read_file or one targeted rg is sufficient
 3. Don't retry the same failed approach
 4. **If the error indicates ambiguity in requirements**, use select_option to clarify with the user rather than guessing""",
 
-    "best_practices": """## Best Practices
 
-1. Think before acting (prevent wasted calls)
-2. Batch independent calls (minimize tokens)
-3. Quality over quantity (fewer focused reads > scattered ones)
-4. Answer early (stop when the answer is supported)
-5. Read before editing (never edit unread files)
-6. Use select_option when facing trade-offs or ambiguity (faster than guessing and iterating)
-7. No temp files or edit summaries (use edit_file; create .md only for plans or when explicitly requested)""",
 
     "temp_folder": """## Temp Folder
 
@@ -523,9 +484,6 @@ def build_system_prompt(mode: str, plan_type: str = None) -> str:
         BASE_SECTIONS["professional_objectivity"],
         BASE_SECTIONS["think_before_acting"],
         BASE_SECTIONS["batch_independent_calls"],
-        BASE_SECTIONS["be_concise"],
-        BASE_SECTIONS["use_existing_context"],
-        BASE_SECTIONS["config_reference"],
         BASE_SECTIONS["code_references"],
         BASE_SECTIONS["exploration_pattern"],
         BASE_SECTIONS["targeted_searching"],
@@ -534,10 +492,8 @@ def build_system_prompt(mode: str, plan_type: str = None) -> str:
         BASE_SECTIONS["casual_interactions"],
         BASE_SECTIONS["ask_questions"],
         BASE_SECTIONS["tool_preferences"],
-        BASE_SECTIONS["computer_agent_capabilities"],
         BASE_SECTIONS["when_to_use_sub_agent"],
         BASE_SECTIONS["error_handling"],
-        BASE_SECTIONS["best_practices"],
         BASE_SECTIONS["temp_folder"],
         MODE_SECTIONS[mode],
     ]
@@ -572,15 +528,11 @@ def build_sub_agent_prompt(sub_agent_type: str = "research") -> str:
         BASE_SECTIONS["professional_objectivity"],
         BASE_SECTIONS["think_before_acting"],
         BASE_SECTIONS["batch_independent_calls"],
-        BASE_SECTIONS["be_concise"],
-        BASE_SECTIONS["use_existing_context"],
-        BASE_SECTIONS["config_reference"],
         BASE_SECTIONS["code_references"],
         SUB_AGENT_SECTIONS["response_format"],
         BASE_SECTIONS["exploration_pattern"],
         BASE_SECTIONS["targeted_searching"],
         BASE_SECTIONS["casual_interactions"],
-        BASE_SECTIONS["best_practices"],
         BASE_SECTIONS["temp_folder"],
         mode_section,
     ]

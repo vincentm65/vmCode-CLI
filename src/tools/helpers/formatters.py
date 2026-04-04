@@ -211,7 +211,20 @@ def _normalize_search_replace_for_newlines(search, replace, newline):
     return normalized_search, normalized_replace, True
 
 
-def format_tool_result(result, command=None, is_rg=False, debug_mode=False):
+def _is_rg_match_line(line):
+    """Return True if an rg output line is a match (not context/separator).
+
+    Match formats:
+      path:line:content   (colon before line number)
+      line:content        (single-file search, line starts with number)
+    Context/separators are excluded (path-line:content uses hyphen, not colon).
+    """
+    if re.search(r':\d+:', line):
+        return True
+    return bool(re.match(r'^\d+:', line))
+
+
+def format_tool_result(result, command=None, is_rg=False, debug_mode=False, max_matches=None):
     """Format subprocess result for model consumption.
 
     Args:
@@ -219,10 +232,14 @@ def format_tool_result(result, command=None, is_rg=False, debug_mode=False):
         command: The command that was executed (for display and mode detection)
         is_rg: Whether this was an rg command (affects empty output and counting)
         debug_mode: If True, show full output; if False, show summary only
+        max_matches: Maximum number of matches to return (0 = use line-based limit, >0 = match limit)
 
     Returns:
         str: Formatted result with exit code
     """
+    # Number of trailing context lines to include after the last match when truncating
+    _RG_TRAILING_CONTEXT_LINES = 5
+
     output = (result.stdout or "") + (result.stderr or "")
     output = output.strip()
 
@@ -248,17 +265,8 @@ def format_tool_result(result, command=None, is_rg=False, debug_mode=False):
                 lines = [line for line in output.splitlines() if line.strip()]
                 count = len(lines)
             else:
-                # Normal mode: count match lines by finding ':number:' pattern
-                # Match format 1: path:line:content (colon before line number)
-                # Match format 2: line:content (when searching single file)
-                # Context format: path-line:content (hyphen before line number)
-                # Try both patterns - check for path:line:content first, then line:content at start
-                path_line_matches = re.findall(r':\d+:', output)
-                if path_line_matches:
-                    count = len(path_line_matches)
-                else:
-                    # Single file search: count lines starting with line number
-                    count = len(re.findall(r'^\d+:', output, re.MULTILINE))
+                # Normal mode: count match lines (lines with ':number:' pattern), not context
+                count = sum(1 for line in output.splitlines() if _is_rg_match_line(line))
         else:
             # Error occurred (exit code 2 or higher)
             count = 0
@@ -270,8 +278,56 @@ def format_tool_result(result, command=None, is_rg=False, debug_mode=False):
             # Exit code 0 but no output - unusual but possible
             return f"exit_code={result.returncode}\n{output}\n\n"
 
-        # Truncate output if it exceeds MAX_LINES
+        # Truncate output
         output_lines = output.splitlines()
+
+        # Use max_matches directly if positive (>0 means match limit, 0/None means line-based fallback)
+        effective_max_matches = max_matches if max_matches and max_matches > 0 else None
+
+        if effective_max_matches is not None and "--files-with-matches" in (command or "").lower():
+            # files_with_matches mode: truncate by file count (each line is a file)
+            if len(output_lines) > effective_max_matches:
+                truncated = "\n".join(output_lines[:effective_max_matches])
+                omitted = len(output_lines) - effective_max_matches
+                output = f"{truncated}\n\n... ({omitted} more {label} truncated)"
+                return f"exit_code={result.returncode}\n{label}={len(output_lines)}\n{output}\n\n"
+            else:
+                output = "\n".join(output_lines)
+                return f"exit_code={result.returncode}\n{label}={count}\n{output}\n\n"
+
+        if effective_max_matches is not None:
+            # Match-based truncation: find lines that are actual matches (contain :number:)
+            # and cut after the Nth match including its trailing context
+            is_match = [_is_rg_match_line(line) for line in output_lines]
+
+            # Compute total match count once upfront
+            total_matches = sum(is_match)
+
+            # Find cutoff point after Nth match
+            match_count = 0
+            cutoff = len(output_lines)
+            for i, match in enumerate(is_match):
+                if match:
+                    match_count += 1
+                    if match_count >= effective_max_matches:
+                        # Include up to _RG_TRAILING_CONTEXT_LINES trailing context lines after this match
+                        cutoff = i + 1
+                        for j in range(i + 1, min(i + 1 + _RG_TRAILING_CONTEXT_LINES, len(is_match))):
+                            if is_match[j]:
+                                break
+                            cutoff = j + 1
+                        break
+
+            if cutoff < len(output_lines):
+                truncated = "\n".join(output_lines[:cutoff])
+                omitted_matches = max(0, total_matches - effective_max_matches)
+                output = f"{truncated}\n\n... ({omitted_matches} more {label} truncated)"
+                return f"exit_code={result.returncode}\n{label}={total_matches}\n{output}\n\n"
+            else:
+                output = "\n".join(output_lines)
+                return f"exit_code={result.returncode}\n{label}={total_matches}\n{output}\n\n"
+
+        # Fallback: line-based truncation
         if len(output_lines) > MAX_LINES:
             truncated = "\n".join(output_lines[:MAX_LINES])
             omitted = len(output_lines) - MAX_LINES

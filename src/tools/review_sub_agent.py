@@ -100,6 +100,7 @@ def review_changes(
     gitignore_spec=None,
     panel_updater=None,
     skip_citation_injection=False,
+    user_intent: str = None,
 ) -> str:
     """Run review sub-agent on a git diff.
 
@@ -113,6 +114,7 @@ def review_changes(
         panel_updater: Optional SubAgentPanel for live updates
         skip_citation_injection: If True, return raw result without
             injecting file contents (useful when output goes to user)
+        user_intent: Optional description of what the user was trying to do
 
     Returns:
         Review result (with injected file contents unless skip_citation_injection)
@@ -131,11 +133,20 @@ def review_changes(
         panel_updater = SimplePanelUpdater(console)
 
     # Task query for the review agent
-    task_query = (
-        "Analyze the diff provided above. "
-        "For each changed file, use read_file to get surrounding context. "
-        "Then provide a structured code review with findings, issues, and suggestions."
-    )
+    if user_intent:
+        task_query = (
+            "Analyze the diff provided above. "
+            "For each changed file, use read_file to get surrounding context. "
+            "Then provide a structured code review with findings, issues, and suggestions.\n\n"
+            f"The user's intent for these changes was: {user_intent}\n"
+            "Use this context to better understand the changes and focus your review accordingly."
+        )
+    else:
+        task_query = (
+            "Analyze the diff provided above. "
+            "For each changed file, use read_file to get surrounding context. "
+            "Then provide a structured code review with findings, issues, and suggestions."
+        )
 
     with panel_updater as panel:
         sub_agent_data = run_sub_agent(

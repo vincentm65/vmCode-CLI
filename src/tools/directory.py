@@ -145,15 +145,15 @@ def _validate_directory_path(
 
 @tool(
     name="list_directory",
-    description="List directory contents using Python file lister (preferred over PowerShell). Works on any directory in the filesystem.",
+    description="List directory contents (preferred over PowerShell).",
     parameters={
         "type": "object",
         "properties": {
-            "path_str": {"type": "string", "description": "Path to list (default: '.', works anywhere on filesystem)"},
+            "path_str": {"type": "string", "description": "Path to list (default: '.')"},
             "recursive": {"type": "boolean", "description": "List recursively (default: false)"},
             "show_files": {"type": "boolean", "description": "Include files (default: true)"},
             "show_dirs": {"type": "boolean", "description": "Include directories (default: true)"},
-            "pattern": {"type": "string", "description": "Glob pattern to filter results (e.g., \"*.py\")"}
+            "pattern": {"type": "string", "description": "Glob filter (e.g., \"*.py\")"}
         },
         "required": ["path_str"]
     },
