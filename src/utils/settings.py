@@ -1,5 +1,6 @@
 """Centralized configuration for vmCode."""
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Set
 
 # Load config from llm.config
@@ -82,12 +83,68 @@ class ContextSettings:
     tool_compaction: ToolCompactionSettings = field(default_factory=ToolCompactionSettings)
 
 
+@dataclass
+class ObsidianSettings:
+    """Obsidian vault integration settings.
+
+    Supports runtime updates via update() method for /obsidian commands.
+    """
+    vault_path: str = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("vault_path", ""))
+    enabled: bool = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("enabled", False))
+    auto_resolve_links: bool = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("auto_resolve_links", True))
+    exclude_folders: str = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("exclude_folders", ".obsidian,.trash"))
+
+    def update(self, **kwargs):
+        """Update settings fields at runtime.
+
+        Args:
+            **kwargs: Field names and values to update
+        """
+        from dataclasses import fields
+        valid_keys = {f.name for f in fields(self)}
+        for key, value in kwargs.items():
+            if key in valid_keys:
+                setattr(self, key, value)
+
+    def is_configured(self) -> bool:
+        """Check if Obsidian integration is configured in settings.
+
+        Returns:
+            True if enabled and vault_path is set (does NOT validate disk)
+        """
+        return self.enabled and bool(self.vault_path)
+
+    def is_active(self) -> bool:
+        """Check if Obsidian integration is fully operational.
+
+        Validates the vault path exists on disk and contains .obsidian/.
+
+        Returns:
+            True if enabled, vault_path is set, and vault is valid on disk
+        """
+        if not self.enabled or not self.vault_path:
+            return False
+        root = Path(self.vault_path).resolve()
+        if not root.is_dir():
+            return False
+        return (root / ".obsidian").is_dir()
+
+    @property
+    def exclude_folders_list(self) -> list:
+        """Return exclude_folders as a pre-parsed list of strings.
+
+        Avoids repeated str.split(",") on every rg call.
+        """
+        return [f.strip() for f in self.exclude_folders.split(",") if f.strip()]
+
+
 # Global instances
 server_settings = ServerSettings()
 tool_settings = ToolSettings()
 file_settings = FileSettings()
 context_settings = ContextSettings()
 sub_agent_settings = SubAgentSettings()
+obsidian_settings = ObsidianSettings()
 
 # Tool execution constants
 MAX_TOOL_CALLS = tool_settings.max_tool_calls

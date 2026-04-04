@@ -369,6 +369,19 @@ Focus on improving performance, efficiency, and resource usage.
 - Resource usage (memory, CPU, I/O)
 - Measurable improvements with benchmarks
 - Trade-offs between performance and maintainability""",
+
+    "obsidian_guidance": """## Obsidian Vault Integration
+
+An Obsidian vault is linked.
+
+**Tools:** `obsidian_resolve(name, get_backlinks)` — resolve `[[wiki-links]]` to paths. `obsidian_frontmatter(path_str)` — get note metadata without reading the full file.
+
+**Key rules:**
+- `rg` searches both repo and vault; vault results appear under `[vault]` with absolute paths
+- Use `obsidian_resolve` before `read_file` when you have a wiki-link or note name but not the path
+- When writing notes: include YAML frontmatter (`tags`, `status`, `date_created`, `date_modified`), use `[[wiki-links]]` for cross-references, never touch `.obsidian/`
+- Auto-resolve: {auto_resolve_links} | Excluded: {exclude_folders}
+""",
 }
 
 
@@ -497,6 +510,19 @@ def build_system_prompt(mode: str, plan_type: str = None) -> str:
         BASE_SECTIONS["temp_folder"],
         MODE_SECTIONS[mode],
     ]
+
+    # Conditionally include Obsidian vault guidance
+    try:
+        from utils.settings import obsidian_settings
+        if obsidian_settings.is_active():
+            guidance = BASE_SECTIONS["obsidian_guidance"].format(
+                auto_resolve_links="ON" if obsidian_settings.auto_resolve_links else "OFF",
+                exclude_folders=obsidian_settings.exclude_folders,
+            )
+            sections.append(guidance)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).debug("Obsidian guidance not included: %s", e)
     
     # Add plan type section if in plan mode and plan_type is specified
     if mode == "plan" and plan_type:

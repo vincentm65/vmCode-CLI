@@ -318,10 +318,14 @@ def list_directory(
 
         # Format output
         if not items:
+            try:
+                rel_path = resolved.relative_to(repo_root)
+            except ValueError:
+                rel_path = resolved
             return format_file_result(
                 exit_code=0,
                 content="(empty directory)",
-                path=str(resolved.relative_to(repo_root)),
+                path=str(rel_path),
                 items_count=0
             )
 
@@ -351,10 +355,15 @@ def list_directory(
             truncation_info['hit_limit'] = True
             truncation_info['max_items'] = constants.MAX_TOTAL_ITEMS
 
+        try:
+            rel_path = resolved.relative_to(repo_root)
+        except ValueError:
+            rel_path = resolved
+
         return format_file_result(
             exit_code=0,
             content=content,
-            path=str(resolved.relative_to(repo_root)),
+            path=str(rel_path),
             items_count=truncation_info['total'] if truncation_info else len(items),
             truncated=(truncation_info is not None),
             truncation_info=truncation_info

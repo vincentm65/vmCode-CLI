@@ -64,6 +64,7 @@ def show_help_table(console):
     table.add_row("[bold cyan]/init[/bold cyan]", "Generate agents.md")
     table.add_row("[bold cyan]/edit[/bold cyan], [bold cyan]/e[/bold cyan]", "Open editor for multi-line input")
     table.add_row("[bold cyan]/review[/bold cyan] [args], [bold cyan]/r[/bold cyan]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
+    table.add_row("[bold cyan]/obsidian[/bold cyan] [set|enable|disable|status]", "Manage Obsidian vault integration")
 
 
     console.print(Panel(table, title="[bold cyan]Commands[/bold cyan]", border_style="grey23", padding=(0, 2)))

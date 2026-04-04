@@ -126,6 +126,61 @@ def _build_read_file_label(path, start_line=None, max_lines=None, with_colon=Fal
     return label
 
 
+def _parse_obsidian_resolve_feedback(tool_result, command=""):
+    """Extract obsidian_resolve display summary from tool result.
+
+    Returns:
+        str: Display message like "3 backlinks" or "No backlinks found" or empty
+    """
+    lines = tool_result.split('\n')
+    if any(re.search(r'Backlinks \((\d+)\)', line) for line in lines):
+        for line in lines:
+            m = re.search(r'Backlinks \((\d+)\)', line)
+            if m:
+                count = int(m.group(1))
+                return f"{count} backlink{'s' if count != 1 else ''}"
+    elif any("No backlinks found" in line for line in lines):
+        return "No backlinks found"
+    return ""
+
+
+def _parse_obsidian_frontmatter_feedback(tool_result):
+    """Extract obsidian_frontmatter display summary from tool result.
+
+    Returns:
+        tuple: (message, is_error) where message is the display string
+    """
+    lines = tool_result.split('\n')
+    exit_code = extract_exit_code(tool_result)
+
+    if exit_code == 1:
+        return "Error reading note", True
+
+    if any("No frontmatter found" in line for line in lines):
+        return "No frontmatter found", False
+
+    # Count metadata keys
+    key_count = 0
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("Frontmatter for:") and not stripped.startswith("Body lines:"):
+            key_count += 1
+
+    if key_count > 0:
+        body_lines = 0
+        for line in lines:
+            m = re.search(r'Body lines: (\d+)', line)
+            if m:
+                body_lines = int(m.group(1))
+                break
+        parts = [f"{key_count} field{'s' if key_count != 1 else ''}"]
+        if body_lines > 0:
+            parts.append(f"{body_lines} body lines")
+        return ', '.join(parts), False
+
+    return "", False
+
+
 def _build_tool_label(function_name, arguments):
     """Build tool label with arguments for display.
 
@@ -159,6 +214,14 @@ def _build_tool_label(function_name, arguments):
         command = arguments.get('command', '')
         # Truncate long commands for display
         return f"execute_command: {command[:80]}" if command else "execute_command"
+    elif function_name == "obsidian_resolve":
+        name = arguments.get('name', '')
+        backlinks = arguments.get('get_backlinks', False)
+        suffix = " (backlinks)" if backlinks else ""
+        return f"obsidian_resolve: {name}{suffix}" if name else "obsidian_resolve"
+    elif function_name == "obsidian_frontmatter":
+        path = arguments.get('path_str', '')
+        return f"obsidian_frontmatter: {path}" if path else "obsidian_frontmatter"
     else:
         return function_name
 
@@ -374,6 +437,10 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
             tool_name = "web_search"
         elif command.startswith("execute_command"):
             tool_name = "execute_command"
+        elif command.startswith("obsidian_resolve"):
+            tool_name = "obsidian_resolve"
+        elif command.startswith("obsidian_frontmatter"):
+            tool_name = "obsidian_frontmatter"
         else:
             tool_name = command.split()[0]
         
@@ -463,6 +530,26 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
     # For execute_command: display command output with line truncation
     if command.startswith("execute_command"):
         _handle_execute_command_feedback(tool_result, console, panel_updater)
+        return
+
+    # For obsidian_resolve: display backlink count
+    if command.startswith("obsidian_resolve"):
+        prefix = "╰─ " if not panel_updater else ""
+        msg = _parse_obsidian_resolve_feedback(tool_result, command)
+        if msg:
+            _print_or_append(f"{prefix}[dim]{msg}[/dim]", console, panel_updater)
+        if not panel_updater:
+            console.print()
+        return
+
+    # For obsidian_frontmatter: display parsed metadata summary
+    if command.startswith("obsidian_frontmatter"):
+        prefix = "╰─ " if not panel_updater else ""
+        msg, is_error = _parse_obsidian_frontmatter_feedback(tool_result)
+        if msg:
+            _print_or_append(f"{prefix}[dim]{msg}[/dim]", console, panel_updater)
+        if not panel_updater:
+            console.print()
         return
 
     # For web_search: display results count
@@ -847,6 +934,30 @@ class SubAgentPanel:
             else:
                 message = f"[grey]execute_command[/grey]\n[dim]╰─ Command executed[/dim]"
         
+        elif tool_name == "obsidian_resolve":
+            name = ""
+            if command:
+                match = re.search(r'obsidian_resolve:?\s+(.+?)(?:\s+\(backlinks\))?$', command)
+                if match:
+                    name = match.group(1).strip()
+            msg = _parse_obsidian_resolve_feedback(tool_result, command)
+            if msg:
+                message = f"[grey]obsidian_resolve {name}[/grey]\n[dim]╰─ {msg}[/dim]"
+            else:
+                message = f"[grey]obsidian_resolve {name}[/grey]"
+
+        elif tool_name == "obsidian_frontmatter":
+            path = ""
+            if command:
+                match = re.search(r'obsidian_frontmatter:?\s+(.+)', command)
+                if match:
+                    path = match.group(1).strip()
+            msg, _ = _parse_obsidian_frontmatter_feedback(tool_result)
+            if msg:
+                message = f"[grey]obsidian_frontmatter {path}[/grey]\n[dim]╰─ {msg}[/dim]"
+            else:
+                message = f"[grey]obsidian_frontmatter {path}[/grey]"
+
         elif tool_name in ("create_task_list", "complete_task", "show_task_list"):
             # Handle task list tools - show the task list content
             exit_code = extract_exit_code(tool_result)
@@ -960,6 +1071,23 @@ class AgenticOrchestrator:
         """
         # Check if we're in a parallel context with suppressed console
         return self._parallel_context.get('console', self.console)
+
+    @staticmethod
+    def _get_vault_root():
+        """Derive vault_root from obsidian_settings when active.
+
+        Delegates to obsidian._get_vault_root() which caches the result.
+
+        Returns:
+            Absolute vault path string, or None if vault is not configured.
+        """
+        try:
+            from tools.obsidian import _get_vault_root
+            root = _get_vault_root()
+            return str(root) if root else None
+        except Exception:
+            pass
+        return None
 
     def run(self, user_input, thinking_indicator=None, allowed_tools=None):
         """Main orchestration loop.
@@ -1347,6 +1475,8 @@ class AgenticOrchestrator:
                 'debug_mode': self.debug_mode,
                 'gitignore_spec': self.gitignore_spec,
                 'panel_updater': self.panel_updater,
+                'interaction_mode': self.chat_manager.interaction_mode,
+                'vault_root': self._get_vault_root(),
             }
 
             # Convert to ToolCall objects
@@ -1412,6 +1542,8 @@ class AgenticOrchestrator:
                         "create_task_list": lambda a: "create_task_list",
                         "complete_task": lambda a: "complete_task",
                         "show_task_list": lambda a: "show_task_list",
+                        "obsidian_resolve": lambda a: f"obsidian_resolve: {a.get('name', '')}" + (" (backlinks)" if a.get('get_backlinks') else ""),
+                        "obsidian_frontmatter": lambda a: f"obsidian_frontmatter: {a.get('path_str', '')}",
                     }
 
                     # Print the label first
@@ -1665,9 +1797,9 @@ class AgenticOrchestrator:
                     interaction_mode=self.chat_manager.interaction_mode,
                     chat_manager=self.chat_manager,
                     rg_exe_path=self.rg_exe_path,
-                    panel_updater=panel_to_use
+                    panel_updater=panel_to_use,
+                    vault_root=self._get_vault_root()
                 )
-
                 # Determine terminal policy for thinking indicator management
                 from tools.helpers.base import get_terminal_policy, TERMINAL_YIELD
                 policy = get_terminal_policy(function_name)

@@ -4,6 +4,10 @@ This package provides command execution, file editing, and result formatting
 capabilities for the vmCode AI assistant.
 """
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 # Command execution (now in shell.py)
 from .shell import (
     confirm_tool,
@@ -51,6 +55,17 @@ from . import sub_agent
 
 from . import task_list
 from . import select_option
+
+# Obsidian tools — conditional registration (register() pattern, NOT @tool at import)
+# Only imported and registered when vault is configured and enabled.
+# This ensures zero token cost when no vault is linked.
+try:
+    from utils.settings import obsidian_settings
+    if obsidian_settings.is_active():
+        from . import obsidian as _obsidian_mod
+        _obsidian_mod.register()
+except Exception as e:
+    _logger.debug("Obsidian tools not loaded: %s", e)
 
 # Tool schema exports (now in helpers/base.py, merged from definitions.py)
 from .helpers.base import TOOLS, _tools_for_mode

@@ -74,10 +74,14 @@ def create_file(
 
         # Check if already exists
         if resolved.exists():
+            try:
+                rel_path = resolved.relative_to(repo_root)
+            except ValueError:
+                rel_path = resolved
             return format_file_result(
                 exit_code=1,
                 error="File already exists",
-                path=str(resolved.relative_to(repo_root))
+                path=str(rel_path)
             )
 
         # Create parent directories if needed
@@ -95,7 +99,11 @@ def create_file(
         # Build result with content for display (truncate preview if needed)
         result_lines = []
         result_lines.append(f"exit_code=0")
-        result_lines.append(f"path={resolved.relative_to(repo_root)}")
+        try:
+            rel_path = resolved.relative_to(repo_root)
+        except ValueError:
+            rel_path = resolved
+        result_lines.append(f"path={rel_path}")
         result_lines.append(f"content=File created successfully")
         result_lines.append("")
         result_lines.append(f"=== FILE_CONTENT ===")

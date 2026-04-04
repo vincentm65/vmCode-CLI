@@ -1,12 +1,21 @@
 """Ripgrep search tool."""
 
+import logging
+import re
 import shlex
+import subprocess
 from pathlib import Path
 from typing import Optional
 
 from .helpers.base import tool
-from .shell import run_shell_command
+from .helpers.formatters import format_tool_result
+from .shell import _prepare_execution_environment, run_shell_command
 from .helpers.converters import coerce_bool, coerce_int
+
+logger = logging.getLogger(__name__)
+
+# Default match limit for vault searches (separate from repo limit)
+_VAULT_MAX_MATCHES = 20
 
 
 @tool(
@@ -69,6 +78,7 @@ def rg(
     path: Optional[str] = None,
     glob: Optional[str] = None,
     output_mode: str = "files_with_matches",
+    vault_root: Optional[str] = None,
     **kwargs
 ) -> str:
     """Search for patterns using ripgrep.
@@ -84,10 +94,12 @@ def rg(
         path: File or directory to search in (default: current directory)
         glob: Glob pattern to filter files
         output_mode: Output mode (content/files_with_matches/count)
+        vault_root: Obsidian vault root path (injected by context)
         **kwargs: Additional keyword arguments (type, multiline, context_lines, case_insensitive)
 
     Returns:
-        Search results with exit code
+        Search results with exit code. Vault results are included in a
+        separate section when vault_root is active.
     """
     if not isinstance(pattern, str) or not pattern.strip():
         return "exit_code=1\nrg requires a non-empty 'pattern' argument."
@@ -147,12 +159,200 @@ def rg(
     raw = coerce_int(kwargs.get("max_matches"))[0] if kwargs.get("max_matches") is not None else None
     max_matches = raw if raw is not None and raw >= 0 else 100
 
-    # Execute command
+    # Execute repo search
     try:
-        result = run_shell_command(
+        repo_result = run_shell_command(
             command, repo_root, rg_exe_path, console, debug_mode, gitignore_spec,
             max_matches=max_matches
         )
-        return result
     except Exception as e:
         return f"exit_code=1\nrg command failed: {str(e)}"
+
+    # If no vault configured, return repo results directly
+    if not vault_root:
+        return repo_result
+
+    # Run vault search and merge results
+    vault_output = _search_vault(
+        vault_root, rg_exe_path, output_mode, debug_mode, console,
+        pattern=pattern,
+        glob=glob,
+        file_type=kwargs.get("type"),
+        case_insensitive=case_insensitive,
+        multiline=multiline,
+        context_lines=context_lines,
+        max_matches=_VAULT_MAX_MATCHES,
+    )
+
+    if not vault_output:
+        return repo_result
+
+    # Merge results: repo section + vault section with absolute paths
+    return _merge_results(repo_result, vault_output, output_mode)
+
+
+def _search_vault(vault_root, rg_exe_path, output_mode, debug_mode, console,
+                   pattern, glob=None, file_type=None, case_insensitive=False,
+                   multiline=False, context_lines=None, max_matches=20):
+    """Run rg against the vault and return formatted output string (or None).
+
+    Builds its own command from explicit parameters to avoid mutating any
+    shared state. Uses direct subprocess with cwd=vault_root so that
+    any .gitignore in the vault doesn't filter searchable content.
+    """
+    vault_path = Path(vault_root).resolve()
+    if not vault_path.is_dir():
+        return None
+
+    try:
+        # Build exclude globs from obsidian_settings
+        exclude_folders = [".obsidian", ".trash"]
+        try:
+            from utils.settings import obsidian_settings
+            exclude_folders = obsidian_settings.exclude_folders_list
+        except Exception:
+            pass
+
+        # Build vault rg command from scratch (no shared state mutation)
+        vault_args = ["--no-ignore"]
+
+        # Add exclude folders first so they can't be overridden
+        for folder in exclude_folders:
+            vault_args.append(f"--glob=!{folder}")
+
+        # Add output-mode flags
+        if output_mode == "content":
+            vault_args.append("--line-number")
+        elif output_mode == "files_with_matches":
+            vault_args.append("--files-with-matches")
+        elif output_mode == "count":
+            vault_args.append("--count")
+
+        # Add search flags
+        if multiline:
+            vault_args.append("-U")
+            vault_args.append("--multiline-dotall")
+        if case_insensitive:
+            vault_args.append("--ignore-case")
+        if context_lines:
+            vault_args.append(f"--context={context_lines}")
+        if glob:
+            vault_args.append(f"--glob={glob}")
+        if file_type:
+            vault_args.append(f"--type={file_type}")
+
+        # Pattern and search path (always "." since cwd is vault root)
+        # No quoting needed — subprocess list args bypass the shell
+        vault_args.append(pattern)
+        vault_args.append(".")
+
+        # Prepare environment with rg on PATH
+        env = _prepare_execution_environment(vault_path, rg_exe_path)
+
+        if debug_mode and console:
+            console.print(f"[dim]→ Vault search: rg {' '.join(vault_args)}[/dim]")
+            console.print(f"[dim]→ Vault cwd: {vault_path}[/dim]")
+
+        result = subprocess.run(
+            [str(rg_exe_path)] + vault_args,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            cwd=str(vault_path),
+            env=env,
+        )
+
+        if debug_mode and console:
+            console.print(f"[dim]→ Vault exit code: {result.returncode}[/dim]")
+
+        # rg returns 1 for no matches — that's fine, just no vault results
+        if result.returncode == 2:
+            logger.debug("Vault rg error (exit 2): %s", result.stderr.strip())
+            return None
+
+        output = (result.stdout or "").strip()
+        if not output:
+            return None
+
+        # Format vault output with its own match limit
+        formatted = format_tool_result(
+            result,
+            command="rg " + " ".join(vault_args),
+            is_rg=True,
+            debug_mode=debug_mode,
+            max_matches=max_matches,
+        )
+
+        # Prefix vault paths with absolute vault root for clarity.
+        # Only rewrite lines that look like they start with an rg file path.
+        # rg output: "relative/path:linenum:match" or "relative/path-linenum-context"
+        # or "relative/path:count" (count mode).  Must contain / or . before any
+        # colon to avoid matching content-only lines or binary headers.
+        _path_line_re = re.compile(r"^[^\s:|].*[/.]")
+        vault_prefix = str(vault_path)
+
+        lines = formatted.split("\n")
+        rewritten = []
+        for line in lines:
+            # Skip metadata lines (exit_code, matches/files)
+            if line.startswith("exit_code=") or line.startswith("matches=") or line.startswith("files="):
+                rewritten.append(line)
+                continue
+            if not line.strip() or line.startswith("... ("):
+                rewritten.append(line)
+                continue
+            # Only rewrite lines that start with a relative path
+            m = _path_line_re.match(line)
+            if m:
+                rewritten.append(f"{vault_prefix}/{line}")
+            else:
+                rewritten.append(line)
+
+        return "\n".join(rewritten)
+
+    except Exception:
+        logger.debug("Vault search failed", exc_info=True)
+        return None
+
+
+def _merge_results(repo_result, vault_output, output_mode):
+    """Merge repo and vault results into a single response.
+
+    Both inputs are raw formatted strings from format_tool_result.
+    We extract the content sections and combine them under headers.
+    """
+    def _extract_content(formatted):
+        """Extract content lines (skip metadata header)."""
+        lines = formatted.split("\n")
+        content_lines = []
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("exit_code=") or stripped.startswith("matches=") or stripped.startswith("files="):
+                continue
+            if stripped.startswith("... ("):
+                continue
+            content_lines.append(line)
+        return "\n".join(content_lines).strip()
+
+    def _extract_exit_code(formatted):
+        for line in formatted.split("\n"):
+            if line.startswith("exit_code="):
+                return line.split("=", 1)[1]
+        return "0"
+
+    repo_exit_code = _extract_exit_code(repo_result)
+    repo_content = _extract_content(repo_result)
+    vault_content = _extract_content(vault_output)
+
+    if not vault_content:
+        return repo_result
+
+    if not repo_content:
+        # Only vault results — return with vault label
+        return f"exit_code=0\n[vault]\n{vault_content}\n\n"
+
+    # Both — present under labeled sections, preserve repo exit code
+    merged = f"exit_code={repo_exit_code}\n[repo]\n{repo_content}\n\n[vault]\n{vault_content}\n\n"
+    return merged

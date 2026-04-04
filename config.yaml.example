@@ -168,6 +168,17 @@ SUB_AGENT_SETTINGS:
 MODEL_PRICES: {}
 
 # =============================================================================
+# OBSIDIAN SETTINGS (Optional)
+# =============================================================================
+# Obsidian vault integration for wiki-link resolution, backlinks, and frontmatter.
+# Disabled by default — no tools registered, no token cost when off.
+OBSIDIAN_SETTINGS:
+  enabled: false            # Set to true to enable Obsidian tools
+  vault_path: ""            # Absolute path to your Obsidian vault root
+  auto_resolve_links: true  # LLM auto-resolves [[wiki-links]] before reading notes
+  exclude_folders: ".obsidian,.trash"  # Comma-separated folders to skip during vault scans
+
+# =============================================================================
 # NOTES
 # =============================================================================
 # - Keep this file private! Never commit it to version control

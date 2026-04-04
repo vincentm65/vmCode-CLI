@@ -1704,6 +1704,232 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
+def _persist_obsidian_config(console, **kwargs):
+    """Persist Obsidian settings to config file.
+
+    Args:
+        console: Rich console for output
+        **kwargs: OBSIDIAN_SETTINGS fields to persist
+    """
+    try:
+        config_data = config_manager.load(force_reload=True)
+        if "OBSIDIAN_SETTINGS" not in config_data:
+            config_data["OBSIDIAN_SETTINGS"] = {}
+        config_data["OBSIDIAN_SETTINGS"].update(kwargs)
+        config_manager.save(config_data)
+    except Exception as e:
+        console.print(f"[yellow]Saved to session but could not persist to config: {e}[/yellow]")
+        console.print("[dim]Settings will reset on restart.[/dim]")
+
+
+def _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes):
+    """Apply Obsidian setting changes, register/unregister tools, persist config.
+
+    Args:
+        chat_manager: ChatManager instance
+        console: Rich console for output
+        obsidian_settings: ObsidianSettings instance
+        changes: dict of {key: new_value} from SettingSelector
+
+    Returns:
+        list of change description strings
+    """
+    change_lines = []
+    was_active = obsidian_settings.is_active()
+
+    for key, value in changes.items():
+        if key == "vault_path":
+            old_path = obsidian_settings.vault_path
+            new_path = value.strip() if value else ""
+            if new_path and new_path != old_path:
+                # Validate path
+                vault_path = Path(new_path).resolve()
+                if not vault_path.is_dir():
+                    console.print(f"[red]Not a directory: {vault_path}[/red]")
+                    continue
+                if not (vault_path / ".obsidian").is_dir():
+                    console.print(f"[red]No .obsidian/ directory found in: {vault_path}[/red]")
+                    console.print("[dim]Make sure this is a valid Obsidian vault.[/dim]")
+                    continue
+                obsidian_settings.update(vault_path=str(vault_path))
+                change_lines.append(f"  Vault path: {vault_path}")
+            elif not new_path and old_path:
+                obsidian_settings.update(vault_path="")
+                change_lines.append("  Vault path: (cleared)")
+        elif key == "enabled":
+            obsidian_settings.update(enabled=value)
+            state = "enabled" if value else "disabled"
+            change_lines.append(f"  Integration: {state}")
+        elif key == "auto_resolve_links":
+            obsidian_settings.update(auto_resolve_links=value)
+            state = "ON" if value else "OFF"
+            change_lines.append(f"  Auto-resolve links: {state}")
+        elif key == "exclude_folders":
+            obsidian_settings.update(exclude_folders=value)
+            change_lines.append(f"  Exclude folders: {value}")
+
+    # Register/unregister tools based on new active state
+    is_active = obsidian_settings.is_active()
+    try:
+        from tools import obsidian as obsidian_mod
+        if is_active and not was_active:
+            obsidian_mod.register()
+            change_lines.append("  Tools: registered (obsidian_resolve, obsidian_frontmatter)")
+        elif not is_active and was_active:
+            obsidian_mod.unregister()
+            change_lines.append("  Tools: unregistered")
+    except Exception as e:
+        console.print(f"[yellow]Tool registration warning: {e}[/yellow]")
+
+    # Persist all settings to config
+    if changes:
+        _persist_obsidian_config(
+            console,
+            vault_path=obsidian_settings.vault_path,
+            enabled=obsidian_settings.enabled,
+            auto_resolve_links=obsidian_settings.auto_resolve_links,
+            exclude_folders=obsidian_settings.exclude_folders,
+        )
+
+    return change_lines
+
+
+def _handle_obsidian(chat_manager, console, debug_mode_container, args):
+    """Handle /obsidian command — manage vault integration.
+
+    No args: Launch interactive SettingSelector UI (same UX as /config).
+    Subcommands: set <path>, enable, disable, status — quick shortcuts.
+    """
+    from ui.setting_selector import SettingOption, SettingCategory, SettingSelector
+    from utils.settings import obsidian_settings
+
+    # Text subcommands (quick shortcuts)
+    if args:
+        args_clean = args.strip()
+
+        if args_clean.lower() == "status":
+            active = obsidian_settings.is_active()
+            configured = obsidian_settings.is_configured()
+            if active:
+                console.print("[green]Obsidian integration: ACTIVE[/green]")
+            elif configured:
+                console.print("[yellow]Obsidian integration: ENABLED but vault invalid[/yellow]")
+            else:
+                console.print("[dim]Obsidian integration: DISABLED[/dim]")
+            console.print(f"  Vault path: {obsidian_settings.vault_path or '(not set)'}")
+            console.print(f"  Enabled: {obsidian_settings.enabled}")
+            console.print(f"  Auto-resolve links: {obsidian_settings.auto_resolve_links}")
+            console.print(f"  Exclude folders: {obsidian_settings.exclude_folders}")
+            console.print()
+            console.print("[dim]Run [bold cyan]/obsidian[/bold cyan] (no args) for interactive settings.[/dim]")
+            return CommandResult(status="handled")
+
+        if args_clean.lower().startswith("set "):
+            path = args_clean[4:].strip().strip('"').strip("'")
+            if not path:
+                console.print("[red]Usage: [bold cyan]/obsidian set /path/to/your/vault[/bold cyan]")
+                return CommandResult(status="handled")
+            vault_path = Path(path).resolve()
+            if not vault_path.is_dir():
+                console.print(f"[red]Not a directory: {vault_path}[/red]")
+                return CommandResult(status="handled")
+            if not (vault_path / ".obsidian").is_dir():
+                console.print(f"[red]No .obsidian/ directory found in: {vault_path}[/red]")
+                return CommandResult(status="handled")
+            changes = {"vault_path": str(vault_path), "enabled": True}
+            change_lines = _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes)
+            console.print(f"[green]Obsidian vault set:[/green]")
+            for line in change_lines:
+                console.print(line)
+            return CommandResult(status="handled")
+
+        if args_clean.lower() == "enable":
+            if not obsidian_settings.vault_path:
+                console.print("[red]No vault path set. Use [bold cyan]/obsidian set <path>[/bold cyan] first.[/red]")
+                return CommandResult(status="handled")
+            changes = _apply_obsidian_changes(chat_manager, console, obsidian_settings, {"enabled": True})
+            console.print("[green]Obsidian integration enabled.[/green]")
+            return CommandResult(status="handled")
+
+        if args_clean.lower() == "disable":
+            _apply_obsidian_changes(chat_manager, console, obsidian_settings, {"enabled": False})
+            console.print("[yellow]Obsidian integration disabled. Tools unregistered.[/yellow]")
+            return CommandResult(status="handled")
+
+        console.print(f"[red]Unknown subcommand: {args}[/red]")
+        console.print("Usage: [bold cyan]/obsidian[/bold cyan] [set <path> | enable | disable | status]")
+        return CommandResult(status="handled")
+
+    # No args — launch interactive SettingSelector UI
+    vault_settings = [
+        SettingOption(
+            key="vault_path", text="Vault Path",
+            value=obsidian_settings.vault_path or "",
+            input_type="text",
+            description="Absolute path to your Obsidian vault (.obsidian/ must exist)",
+        ),
+        SettingOption(
+            key="enabled", text="Enable Integration",
+            value=obsidian_settings.enabled,
+            input_type="boolean",
+            on_text="ON", off_text="OFF",
+        ),
+    ]
+
+    behavior_settings = [
+        SettingOption(
+            key="auto_resolve_links", text="Auto-resolve Wiki Links",
+            value=obsidian_settings.auto_resolve_links,
+            input_type="boolean",
+            on_text="ON", off_text="OFF",
+            description="When ON, LLM automatically resolves [[links]] before reading notes",
+        ),
+        SettingOption(
+            key="exclude_folders", text="Exclude Folders",
+            value=obsidian_settings.exclude_folders,
+            input_type="text",
+            description="Comma-separated folder names to skip during vault scans",
+        ),
+    ]
+
+    categories = [
+        SettingCategory(title="Vault", settings=vault_settings),
+        SettingCategory(title="Behavior", settings=behavior_settings),
+    ]
+
+    selector = SettingSelector(
+        categories=categories,
+        title="Obsidian Integration",
+    )
+
+    changes = selector.run()
+
+    # Clear selector UI
+    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
+
+    if changes is None:
+        console.print("[dim]Cancelled.[/dim]")
+        return CommandResult(status="handled")
+
+    if not changes:
+        console.print("[dim]No changes made.[/dim]")
+        return CommandResult(status="handled")
+
+    change_lines = _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes)
+
+    if change_lines:
+        # Show active status after changes
+        is_active = obsidian_settings.is_active()
+        status_label = "[green]ACTIVE[/green]" if is_active else "[dim]inactive[/dim]"
+        console.print(f"[green]Obsidian settings updated:[/green] ({status_label})")
+        for line in change_lines:
+            console.print(line)
+    else:
+        console.print("[dim]No changes applied.[/dim]")
+
+    return CommandResult(status="handled")
+
+
 # Command registry - maps command names to their handlers
 _COMMAND_HANDLERS = {
     "/exit": _handle_exit,
@@ -1733,6 +1959,7 @@ _COMMAND_HANDLERS = {
     "/manage": _handle_manage,
     "/upgrade": _handle_upgrade,
     "/rotate-key": _handle_rotate_key,
+    "/obsidian": _handle_obsidian,
 }
 
 

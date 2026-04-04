@@ -160,6 +160,18 @@ class ToolRegistry:
         return [tool for tool in cls._tools.values() if tool.is_allowed_in_mode(mode)]
 
     @classmethod
+    def unregister(cls, name: str) -> bool:
+        """Remove a tool from the registry by name.
+
+        Args:
+            name: Tool name to remove
+
+        Returns:
+            True if tool was found and removed, False if not registered
+        """
+        return cls._tools.pop(name, None) is not None
+
+    @classmethod
     def clear(cls) -> None:
         """Clear all registered tools (mainly for testing)."""
         cls._tools.clear()
@@ -261,7 +273,8 @@ def build_context(
     interaction_mode: str = "edit",
     chat_manager: Any = None,
     rg_exe_path: str = None,
-    panel_updater: Any = None
+    panel_updater: Any = None,
+    vault_root: str = None
 ) -> Dict[str, Any]:
     """Build execution context for tool invocation.
 
@@ -274,6 +287,7 @@ def build_context(
         chat_manager: ChatManager instance
         rg_exe_path: Path to rg executable
         panel_updater: Optional SubAgentPanel for live updates
+        vault_root: Optional Obsidian vault root path
 
     Returns:
         Context dictionary
@@ -291,6 +305,8 @@ def build_context(
         context["rg_exe_path"] = rg_exe_path
     if panel_updater is not None:
         context["panel_updater"] = panel_updater
+    if vault_root is not None:
+        context["vault_root"] = vault_root
     return context
 
 

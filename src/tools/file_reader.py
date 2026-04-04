@@ -263,10 +263,14 @@ def read_file(
         try:
             start_line = _validate_start_line(start_line)
         except ValueError as e:
+            try:
+                rel_path = resolved.relative_to(repo_root)
+            except ValueError:
+                rel_path = resolved
             return format_file_result(
                 exit_code=1,
                 error=str(e),
-                path=str(resolved.relative_to(repo_root))
+                path=str(rel_path)
             )
 
         # Normalize max_lines
@@ -276,10 +280,15 @@ def read_file(
         # Read file content
         result = _read_file_content(resolved, start_line, max_lines)
 
+        try:
+            rel_path = resolved.relative_to(repo_root)
+        except ValueError:
+            rel_path = resolved
+
         return format_file_result(
             exit_code=0,
             content=result["content"],
-            path=str(resolved.relative_to(repo_root)),
+            path=str(rel_path),
             lines_read=result["lines_read"],
             start_line=start_line,
             truncated=result["truncated"]
