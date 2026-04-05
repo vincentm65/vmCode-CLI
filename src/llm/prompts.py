@@ -414,7 +414,7 @@ IMPORTANT: You are a research sub-agent focused on gathering information. Use re
 
     "review_mode": """# Current Mode: CODE REVIEW
 
-You are a code review agent. Analyze the provided git diff and provide structured feedback.
+You are a code review agent. Analyze the provided git diff and provide honest, useful feedback.
 Your output goes directly to the user — write clean, readable markdown.
 
 ## Workflow
@@ -432,22 +432,18 @@ Your output goes directly to the user — write clean, readable markdown.
 
 ## Output Format
 
-### Summary
-1-2 sentence overview of changes.
+Write a **Summary** (1-2 sentences), then include only the sections that have real findings:
 
-### Issues
-For each issue, use this format:
-- **SEVERITY** `file_path:line` — description
+- **Issues** — real problems found. For each: `- [severity] [path/to/file]:line — description`
+  Group by severity: critical, warning, info.
+- **Suggestions** — optional non-blocking improvements (same format).
+- **Verdict** — one of: `APPROVE` or `REQUEST CHANGES`.
+  - `APPROVE` — no critical issues. Warnings/info are acceptable.
+  - `REQUEST CHANGES` — critical issues found that should be addressed before merging.
+  - If nothing noteworthy was found, verdict is `APPROVE` and say so (e.g. "No issues found — looks good.").
 
-Group by severity: Critical issues first, then warnings, then info.
-
-### Suggestions
-Optional non-blocking improvements (same format as issues).
-
-### Verdict
-One of: **Approve** / **Request Changes** / **Needs Discussion**
-
-Keep it concise. Reference files as `path/to/file:line_number`. Do NOT use bracketed citation syntax.""",
+Do NOT manufacture issues. If the code is clean, say it's clean. Reference files using
+bracketed citation format: `[path/to/file]:line_number`.""",
 }
 
 
@@ -501,9 +497,7 @@ def _build_vault_section() -> str:
 
     lines.extend([
         "",
-        "**Tools:** `obsidian_resolve(name, get_backlinks)` — resolve `[[wiki-links]]` to paths. "
-        "`obsidian_frontmatter(path_str)` — note metadata. "
-        "`project_status` — aggregated issue counts.",
+        "**Tools:** `obsidian_resolve(name, get_backlinks)` — resolve `[[wiki-links]]` to paths.",
         "",
         "**File routing:** All project notes (bugs, tasks, initiatives, docs) MUST use the "
         "**full vault path** with `create_file`/`edit_file`/`read_file`/`list_directory`. "
@@ -593,6 +587,15 @@ def _build_vault_section() -> str:
             "---",
             "```",
         ])
+
+    lines.extend([
+        "",
+        "**Archiving done notes:** When you change a note's status to a terminal state "
+        "(bug: fixed/verified, task: done, initiative: done/review), move it to the "
+        "corresponding `Done/` subfolder (e.g. `Bugs/Done/`, `Tasks/Done/`, "
+        "`Initiatives/Done/`). Use `execute_command mv` to move the file. "
+        "If the user asks to sweep/archive, use `execute_command mv` for each done note.",
+    ])
 
     return "\n".join(lines)
 

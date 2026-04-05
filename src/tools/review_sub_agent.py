@@ -99,9 +99,8 @@ def review_changes(
     chat_manager,
     gitignore_spec=None,
     panel_updater=None,
-    skip_citation_injection=False,
     user_intent: str = None,
-) -> str:
+) -> dict:
     """Run review sub-agent on a git diff.
 
     Args:
@@ -112,15 +111,16 @@ def review_changes(
         chat_manager: ChatManager instance
         gitignore_spec: PathSpec for .gitignore filtering
         panel_updater: Optional SubAgentPanel for live updates
-        skip_citation_injection: If True, return raw result without
-            injecting file contents (useful when output goes to user)
         user_intent: Optional description of what the user was trying to do
 
     Returns:
-        Review result (with injected file contents unless skip_citation_injection)
+        Dict with keys:
+            display: Clean review text (no injected file contents)
+            history: Review text with file contents injected from citations
     """
     if not diff_output or not isinstance(diff_output, str) or not diff_output.strip():
-        return "exit_code=0\nNo changes to review."
+        result = "No changes to review."
+        return {"display": result, "history": result}
 
     # Build context (handles truncation and binary file notes)
     review_context, truncation_warning = _build_review_context(diff_output)
@@ -162,7 +162,8 @@ def review_changes(
         # Check for errors
         if sub_agent_data.get('error'):
             panel.set_error(sub_agent_data['error'])
-            return f"exit_code=1\n{sub_agent_data['error']}"
+            result = f"exit_code=1\n{sub_agent_data['error']}"
+            return {"display": result, "history": result}
 
         # Track usage
         usage = sub_agent_data.get('usage', {})
@@ -176,14 +177,9 @@ def review_changes(
 
         raw_result = sub_agent_data.get('result', '')
 
-        # Parse and inject file contents from citations
-        # (skip when output goes directly to user to avoid false positives
-        # from bracket syntax like [critical], [warning], etc.)
-        if skip_citation_injection:
-            return raw_result
-
+        # Always inject file contents from citations into the history version
         injected_result = inject_file_contents(
             raw_result, repo_root, gitignore_spec, console
         )
 
-        return injected_result
+        return {"display": raw_result, "history": injected_result}

@@ -11,9 +11,10 @@ from ui.banner import display_startup_banner
 from core.agentic import SubAgentPanel
 from ui.setting_selector import SettingSelector, SettingCategory, SettingOption
 from utils.settings import MonokaiDarkBGStyle, context_settings
-from utils.markdown import left_align_headings
+from utils.markdown import left_align_headings, colorize_review_severity
 from rich.markdown import Markdown
 from rich.table import Table
+from rich.text import Text
 from rich import box
 import json
 import logging
@@ -942,19 +943,25 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
         console=console,
         chat_manager=chat_manager,
         panel_updater=panel,
-        skip_citation_injection=True,
         user_intent=user_intent,
     )
 
-    # Display result as rendered Markdown
-    if review_result:
+    display_text = review_result["display"]
+    history_text = review_result["history"]
+
+    # Display clean result as rendered Markdown (no injected file contents)
+    if display_text:
         console.print()
-        md = Markdown(left_align_headings(review_result), code_theme=MonokaiDarkBGStyle, justify="left")
-        console.print(md)
+        md = Markdown(left_align_headings(display_text), code_theme=MonokaiDarkBGStyle, justify="left")
+        # Render Markdown to Text first so colorize_review_severity can apply highlights
+        rendered_text = Text("")
+        for seg in console.render(md):
+            rendered_text.append(seg.text, style=seg.style)
+        console.print(colorize_review_severity(rendered_text))
         console.print()
 
-    # Inject review into chat history so the agent has context for follow-up questions
-    if review_result:
+    # Inject review (with file contents) into chat history for follow-up context
+    if history_text:
         review_cmd = "/review"
         if user_intent:
             review_cmd += f"\n\nUser intent: {user_intent}"
@@ -964,8 +971,14 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
         })
         chat_manager.messages.append({
             "role": "assistant",
-            "content": f"Here is the code review of the current git diff:\n\n{review_result}"
+            "content": f"Here is the code review of the current git diff:\n\n{history_text}"
         })
+
+        # Update context token tracker so compaction timing stays accurate
+        injected_tokens = chat_manager.token_tracker.estimate_tokens(
+            f"{review_cmd}\n\n{history_text}"
+        )
+        chat_manager.token_tracker.current_context_tokens += injected_tokens
 
     return CommandResult(status="handled")
 
@@ -1747,7 +1760,7 @@ def _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes):
         from tools import obsidian as obsidian_mod
         if is_active and not was_active:
             obsidian_mod.register()
-            change_lines.append("  Tools: registered (obsidian_resolve, obsidian_frontmatter)")
+            change_lines.append("  Tools: registered (obsidian_resolve)")
         elif not is_active and was_active:
             obsidian_mod.unregister()
             change_lines.append("  Tools: unregistered")
@@ -2044,6 +2057,12 @@ def _handle_project(chat_manager, console, debug_mode_container, args):
                 content = template.format(date=today, title=title)
                 template_path.write_text(content, encoding="utf-8")
 
+        # Create Done/ subfolders for archiving completed notes
+        for folder_rel in ("Bugs", "Tasks", "Initiatives"):
+            done_path = project_folder / folder_rel / "Done"
+            done_path.mkdir(parents=True, exist_ok=True)
+            created_folders.append(f"{folder_rel}/Done")
+
         # Create Dashboard
         dashboard_path = project_folder / "Dashboard.md"
         repo_name = project_folder.name
@@ -2092,7 +2111,7 @@ def _handle_project(chat_manager, console, debug_mode_container, args):
             "# {title} Dashboard\n"
             "\n"
             "> [!summary] Project Overview\n"
-            "> Run `/project status` for live counts.\n"
+            "> Check the Bugs/, Tasks/, and Initiatives/ folders for issue tracking.\n"
             "\n"
             "## Active Initiatives\n"
             "\n"
@@ -2140,27 +2159,13 @@ def _handle_project(chat_manager, console, debug_mode_container, args):
             console.print("[dim]Or download from: https://github.com/blacksmithgu/obsidian-dataview[/dim]")
             console.print()
 
-        console.print("[dim]Create issues with [bold cyan]/project status[/bold cyan] to see the board.[/dim]")
-        console.print()
-        return CommandResult(status="handled")
-
-    elif subcmd == "status":
-        from tools.obsidian import _handle_project_status as _status_tool
-
-        result = _status_tool()
-        # Parse the exit_code= protocol used by tool handlers
-        if result.startswith("exit_code=0\n"):
-            console.print(f"[cyan]{result[len('exit_code=0\\n'):]}[/cyan]")
-        elif result.startswith("exit_code="):
-            console.print(f"[yellow]{result.split(chr(10), 1)[-1]}[/yellow]")
-        else:
-            console.print(result)
+        console.print("[dim]Create issues with [bold cyan]/project init[/bold cyan] to set up the project folder.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
     else:
         console.print(f"[red]Unknown subcommand: {subcmd}[/red]")
-        console.print("[dim]Usage: [bold cyan]/project[/bold cyan] [init | status][/dim]")
+        console.print("[dim]Usage: [bold cyan]/project[/bold cyan] init[/dim]")
         console.print()
         return CommandResult(status="handled")
 

@@ -373,113 +373,7 @@ def _handle_obsidian_resolve(
     return "exit_code=0\n" + "\n".join(lines)
 
 
-def _handle_obsidian_frontmatter(
-    path_str: str,
-    repo_root: Path = None,
-    console=None,
-    **kwargs,
-) -> str:
-    """Parse frontmatter from an Obsidian note."""
-    session = get_vault_session()
-    if not session:
-        return "exit_code=1\nObsidian vault is not configured or invalid. Use /obsidian set <path> to configure."
-    vault_root = session.vault_root
 
-    if not path_str or not path_str.strip():
-        return "exit_code=1\n'path_str' parameter is required."
-
-    # Resolve path relative to vault root
-    resolved = _resolve_path(path_str, vault_root)
-    if not resolved:
-        return "exit_code=1\nInvalid path or path traversal detected."
-
-    if not resolved.exists():
-        return f"exit_code=1\nNote not found: {path_str}"
-
-    if not resolved.is_file():
-        return f"exit_code=1\nNot a file: {path_str}"
-
-    try:
-        content = resolved.read_text(encoding="utf-8")
-    except OSError as e:
-        return f"exit_code=1\nFailed to read file: {e}"
-
-    metadata, body = parse_frontmatter(content)
-
-    if not metadata:
-        return f"exit_code=0\nNo frontmatter found in: {path_str}"
-
-    lines = [f"Frontmatter for: {path_str}"]
-    lines.append("")
-
-    # Format metadata as YAML-like output
-    for key, value in metadata.items():
-        if isinstance(value, list):
-            lines.append(f"{key}: [{', '.join(str(v) for v in value)}]")
-        elif isinstance(value, bool):
-            lines.append(f"{key}: {str(value).lower()}")
-        else:
-            lines.append(f"{key}: {value}")
-
-    # Body stats
-    body_lines = body.count("\n") + 1 if body else 0
-    lines.append("")
-    lines.append(f"Body lines: {body_lines}")
-
-    return "exit_code=0\n" + "\n".join(lines)
-
-
-def _handle_project_status(**kwargs) -> str:
-    """Scan project folders (Bugs, Tasks, Initiatives) and return aggregated status counts."""
-    session = get_vault_session()
-    if not session:
-        return "exit_code=1\nProject folder not found. Run /project init first."
-
-    project_folder = session.project_folder
-
-    if not project_folder.is_dir():
-        return (
-            f"exit_code=1\nProject folder does not exist: {project_folder}\n"
-            f"Run /project init to create it."
-        )
-
-    # Scan flat folders: Bugs, Tasks, Initiatives
-    type_folders = {
-        "Bugs": project_folder / "Bugs",
-        "Tasks": project_folder / "Tasks",
-        "Initiatives": project_folder / "Initiatives",
-    }
-
-    lines = [f"Project: {project_folder.name}", ""]
-
-    for type_name, folder in type_folders.items():
-        if not folder.is_dir():
-            lines.append(f"  {type_name}: (no folder)")
-            continue
-
-        # Count notes by status from frontmatter
-        status_counts: Dict[str, int] = {}
-        total = 0
-
-        for md_file in folder.rglob("*.md"):
-            if md_file.name.startswith("_"):
-                continue  # Skip templates
-            try:
-                content = md_file.read_text(encoding="utf-8", newline=None)
-                metadata, _ = parse_frontmatter(content)
-                status = str(metadata.get("status", "unknown")).lower()
-                status_counts[status] = status_counts.get(status, 0) + 1
-                total += 1
-            except OSError:
-                continue
-
-        if total == 0:
-            lines.append(f"  {type_name}: (empty)")
-        else:
-            counts_str = ", ".join(f"{s}: {c}" for s, c in sorted(status_counts.items()))
-            lines.append(f"  {type_name} ({total} total): {counts_str}")
-
-    return "exit_code=0\n" + "\n".join(lines)
 
 
 # =============================================================================
@@ -512,44 +406,6 @@ OBSIDIAN_RESOLVE_TOOL = ToolDefinition(
     allowed_modes=["edit", "plan"],
     requires_approval=False,
     handler=_handle_obsidian_resolve,
-)
-
-OBSIDIAN_FRONTMATTER_TOOL = ToolDefinition(
-    name="obsidian_frontmatter",
-    description=(
-        "Parse YAML frontmatter from an Obsidian note. "
-        "Returns structured metadata (tags, status, dates, etc.) and body line count. "
-        "Use instead of read_file when you only need metadata."
-    ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "path_str": {
-                "type": "string",
-                "description": "Path to the note, relative to vault root (e.g. 'Dev/myrepo/Bugs/Auth Bug.md')"
-            }
-        },
-        "required": ["path_str"]
-    },
-    allowed_modes=["edit", "plan"],
-    requires_approval=False,
-    handler=_handle_obsidian_frontmatter,
-)
-
-PROJECT_STATUS_TOOL = ToolDefinition(
-    name="project_status",
-    description=(
-        "Get aggregated status of project issues (bugs, tasks, initiatives). "
-        "Scans the project's Bugs/, Tasks/, and Initiatives/ folders and counts notes by type and status. "
-        "Returns a summary — no parameters needed."
-    ),
-    parameters={
-        "type": "object",
-        "properties": {},
-    },
-    allowed_modes=["edit", "plan"],
-    requires_approval=False,
-    handler=_handle_project_status,
 )
 
 
@@ -600,8 +456,6 @@ def register() -> bool:
         return False
 
     ToolRegistry.register(OBSIDIAN_RESOLVE_TOOL)
-    ToolRegistry.register(OBSIDIAN_FRONTMATTER_TOOL)
-    ToolRegistry.register(PROJECT_STATUS_TOOL)
     invalidate_vault_cache()
 
     logger.info(f"Obsidian tools registered. Vault: {session.vault_root}")
@@ -618,8 +472,7 @@ def unregister() -> bool:
     if not ToolRegistry.get("obsidian_resolve"):
         return False
 
-    for name in ("obsidian_resolve", "obsidian_frontmatter", "project_status"):
-        ToolRegistry.unregister(name)
+    ToolRegistry.unregister("obsidian_resolve")
 
     _session = None
     invalidate_vault_cache()
