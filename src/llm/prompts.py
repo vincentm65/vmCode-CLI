@@ -496,7 +496,6 @@ def _build_vault_section() -> str:
         and (session.project_folder / "Bugs").is_dir()
     )
 
-    auto_resolve = "ON" if obsidian_settings.auto_resolve_links else "OFF"
     excluded = obsidian_settings.exclude_folders
 
     lines = [
@@ -512,60 +511,42 @@ def _build_vault_section() -> str:
 
     lines.extend([
         "",
-        "**Tools:** `obsidian_resolve(name, get_backlinks)` — resolve `[[wiki-links]]` to paths.",
+        "**Path separation (CRITICAL):** Project folder is for **notes only**. "
+        "Code files use **relative paths** from repo root (e.g. `src/core/chat_manager.py`). "
+        "Never prepend vault/project paths to code paths.",
         "",
-        "**Path separation (CRITICAL):** The vault project folder above is for **notes only** "
-        "(bugs, tasks, initiatives, docs). Code files live at the **repo root** — always use "
-        "**relative paths** (e.g. `src/core/chat_manager.py`) for code files. "
-        "NEVER construct absolute paths by prepending the vault or project folder to a code path. "
-        "NEVER merge vault and repo paths together.",
-        "",
-        "**File routing:** All project notes (bugs, tasks, initiatives, docs) must use the "
-        "**absolute filesystem path** with `create_file`/`edit_file`/`read_file`/`list_directory`. "
-        "Do not create tracking files in the repo. Only create files in the repo for actual "
-        "code changes (source files, configs, tests).",
-        "",
-        "**Plan routing:** Write plans as **initiative notes** in the vault project folder. "
-        "Break them into tasks. Link tasks to the initiative via `parent_initiative`. "
-        "Use `.temp/` only for scratch/exploratory work.",
+        "**Content routing:** "
+        "Project notes (bugs, tasks, initiatives, docs) → absolute vault paths. "
+        "Code changes (source, configs, tests) → relative repo paths. "
+        "Plans → initiative notes with `parent_initiative` links. "
+        "Scratch work → `.temp/` at repo root.",
         "",
         f"**Search:** `rg` scans both repo and vault (vault results show `[vault]` prefix). "
-        f"Auto-resolve wiki-links: {auto_resolve}. Excluded folders: {excluded}.",
+        f"Excluded: {excluded}.",
         "",
-        "**Rules:** Use `[[wiki-links]]` for cross-references, include YAML frontmatter in all "
-        "notes, never touch `.obsidian/`, update `date_modified` on edits. "
-        "Code file references in notes: plain paths (e.g. `src/tools/obsidian.py`), not wiki-links.",
+        "**Rules:** `[[wiki-links]]` for cross-references, YAML frontmatter in all notes, "
+        "never touch `.obsidian/`, update `date_modified` on edits. "
+        "Code refs in notes: plain paths, not wiki-links.",
     ])
 
     if project_exists:
         lines.extend([
             "",
-            "**Project structure:** `Bugs/` (bug reports), `Tasks/` (action items), "
-            "`Initiatives/` (larger efforts), `Docs/` (documentation).",
+            "**Structure:** `Bugs/`, `Tasks/`, `Initiatives/`, `Docs/`.",
             "",
-            "**Note schemas:** YAML frontmatter holds only metadata (title, type, status, "
-            "priority, dates, tags). Everything else goes in the note body as markdown sections.",
-            "",
-            "**Bug note:** Frontmatter: title, type, status, priority, date_created, date_modified, tags.",
-            "Body sections: ## Related Files (bulleted list), ## Steps to Reproduce (numbered), "
-            "## Expected Behavior, ## Actual Behavior.",
-            "",
-            "**Task note:** Frontmatter: title, type, status, priority, date_created, date_modified, tags.",
-            "Body sections: ## Related Files (bulleted list), ## Parent Initiative (wiki-link).",
-            "",
-            "**Initiative note:** Frontmatter: title, type, status, date_created, date_modified, tags, description.",
-            "Body sections: ## Child Tasks (bulleted wiki-links), ## Child Bugs (bulleted wiki-links).",
-            "",
-            "**Doc note:** Frontmatter: title, type, date_created, date_modified, tags.",
+            "**Note schemas:** Frontmatter = metadata only (title, type, status, priority, dates, tags). "
+            "Body = markdown sections.",
+            "- **Bug:** adds no extra FM. Body: Related Files, Steps to Reproduce, Expected Behavior, Actual Behavior.",
+            "- **Task:** adds no extra FM. Body: Related Files, Parent Initiative (wiki-link).",
+            "- **Initiative:** adds `description` to FM. Body: Child Tasks, Child Bugs (bulleted wiki-links).",
+            "- **Doc:** minimal FM (title, type, dates, tags). No required body sections.",
         ])
 
     lines.extend([
         "",
-        "**Archiving done notes:** When you change a note's status to a terminal state "
-        "(bug: fixed/verified, task: done, initiative: done/review), move it to the "
-        "corresponding `Done/` subfolder (e.g. `Bugs/Done/`, `Tasks/Done/`, "
-        "`Initiatives/Done/`). Use `execute_command mv` to move the file. "
-        "If the user asks to sweep/archive, use `execute_command mv` for each done note.",
+        "**Archiving:** Terminal status (bug: fixed/verified, task: done, initiative: done/review) "
+        "→ move to `Done/` subfolder (e.g. `Bugs/Done/`) via `execute_command mv`. "
+        "User asks to sweep → `mv` each done note.",
     ])
 
     return "\n".join(lines)

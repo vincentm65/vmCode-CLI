@@ -1736,10 +1736,6 @@ def _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes):
             obsidian_settings.update(enabled=value)
             state = "enabled" if value else "disabled"
             change_lines.append(f"  Integration: {state}")
-        elif key == "auto_resolve_links":
-            obsidian_settings.update(auto_resolve_links=value)
-            state = "ON" if value else "OFF"
-            change_lines.append(f"  Auto-resolve links: {state}")
         elif key == "exclude_folders":
             obsidian_settings.update(exclude_folders=value)
             change_lines.append(f"  Exclude folders: {value}")
@@ -1747,18 +1743,8 @@ def _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes):
             obsidian_settings.update(project_base=value.strip() if value else "Dev")
             change_lines.append(f"  Project base: {obsidian_settings.project_base}")
 
-    # Register/unregister tools based on new active state
-    is_active = obsidian_settings.is_active()
-    try:
-        from tools import obsidian as obsidian_mod
-        if is_active and not was_active:
-            obsidian_mod.register()
-            change_lines.append("  Tools: registered (obsidian_resolve)")
-        elif not is_active and was_active:
-            obsidian_mod.unregister()
-            change_lines.append("  Tools: unregistered")
-    except Exception as e:
-        console.print(f"[yellow]Tool registration warning: {e}[/yellow]")
+    # Note: vault session is initialized lazily by init_session() in agentic.py
+    # No tool registration needed — vault utilities are used internally
 
     # Persist all settings to config
     if changes:
@@ -1766,7 +1752,6 @@ def _apply_obsidian_changes(chat_manager, console, obsidian_settings, changes):
             console,
             vault_path=obsidian_settings.vault_path,
             enabled=obsidian_settings.enabled,
-            auto_resolve_links=obsidian_settings.auto_resolve_links,
             exclude_folders=obsidian_settings.exclude_folders,
             project_base=obsidian_settings.project_base,
         )
@@ -1798,7 +1783,6 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
                 console.print("[dim]Obsidian integration: DISABLED[/dim]")
             console.print(f"  Vault path: {obsidian_settings.vault_path or '(not set)'}")
             console.print(f"  Enabled: {obsidian_settings.enabled}")
-            console.print(f"  Auto-resolve links: {obsidian_settings.auto_resolve_links}")
             console.print(f"  Exclude folders: {obsidian_settings.exclude_folders}")
             console.print(f"  Project base: {obsidian_settings.project_base}")
             console.print()
@@ -1858,13 +1842,6 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
     ]
 
     behavior_settings = [
-        SettingOption(
-            key="auto_resolve_links", text="Auto-resolve Wiki Links",
-            value=obsidian_settings.auto_resolve_links,
-            input_type="boolean",
-            on_text="ON", off_text="OFF",
-            description="When ON, LLM automatically resolves [[links]] before reading notes",
-        ),
         SettingOption(
             key="exclude_folders", text="Exclude Folders",
             value=obsidian_settings.exclude_folders,

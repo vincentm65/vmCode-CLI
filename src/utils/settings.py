@@ -102,7 +102,6 @@ class ObsidianSettings:
     """
     vault_path: str = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("vault_path", ""))
     enabled: bool = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("enabled", False))
-    auto_resolve_links: bool = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("auto_resolve_links", True))
     exclude_folders: str = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("exclude_folders", ".obsidian,.trash,node_modules,.git,__pycache__"))
     project_base: str = field(default_factory=lambda: _CONFIG.get("OBSIDIAN_SETTINGS", {}).get("project_base", "Dev"))
 

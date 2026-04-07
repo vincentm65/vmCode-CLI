@@ -6,6 +6,7 @@ import time
 import random
 import threading
 import warnings
+import atexit
 from pathlib import Path
 
 # Suppress prompt_toolkit RuntimeWarning about unawaited coroutines during cleanup
@@ -199,6 +200,7 @@ class ThinkingIndicator:
         self._stop_timer = threading.Event()
         self._elapsed_before_pause = 0.0
         self._has_been_started = False
+        self._saved_termios = None
 
     def _select_random_word(self):
         """Select a random word from weighted word lists."""
@@ -221,6 +223,36 @@ class ThinkingIndicator:
         else:
             return f"{int(seconds)}s"
 
+    @staticmethod
+    def _set_raw_mode():
+        """Switch stdin to raw mode to prevent keystroke echoes during spinner."""
+        if os.name == 'nt':
+            return
+        try:
+            import termios
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            new = old.copy()
+            # lflag: disable ECHO, ICANON (line buffering), IEXTEN
+            new[3] &= ~(termios.ECHO | termios.ICANON | termios.IEXTEN)
+            # iflag: disable ICRNL (map CR to NL) so Enter doesn't produce newline
+            new[0] &= ~(termios.ICRNL)
+            termios.tcsetattr(fd, termios.TCSANOW, new)
+            return old
+        except Exception:
+            return None
+
+    @staticmethod
+    def _restore_terminal_mode(saved):
+        """Restore terminal mode from saved termios attributes."""
+        if os.name == 'nt' or saved is None:
+            return
+        try:
+            import termios
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, saved)
+        except Exception:
+            pass
+
     def start(self):
         # Select initial word
         self.message = self._select_random_word()
@@ -237,6 +269,7 @@ class ThinkingIndicator:
         # Always recreate and restart status with new message
         if self._status and self._active:
             self._status.stop()
+        self._saved_termios = self._set_raw_mode()
         self._status = self.console.status(self.message, spinner=self.spinner, spinner_style="cyan")
         self._status.start()
         self._active = True
@@ -287,6 +320,11 @@ class ThinkingIndicator:
         if self._status:
             self._status.stop()
             self._status = None
+        
+        # Restore terminal mode (must happen after status.stop() so Rich
+        # cursor cleanup runs in raw mode, then we hand control back to ptk)
+        self._restore_terminal_mode(self._saved_termios)
+        self._saved_termios = None
         
         # Reset state for next use cycle
         if reset:
@@ -383,6 +421,10 @@ def main():
     
     chat_manager = ChatManager()
     thinking_indicator = ThinkingIndicator(console)
+    # Safety net: ensure terminal mode is restored even on unhandled exceptions
+    def _safety_restore():
+        ThinkingIndicator._restore_terminal_mode(thinking_indicator._saved_termios)
+    atexit.register(_safety_restore)
     # Start server if needed
     console.print("[yellow]Initializing...[/yellow]")
     chat_manager.server_process = chat_manager.start_server_if_needed()

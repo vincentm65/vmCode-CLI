@@ -49,6 +49,21 @@ class SelectionPanel:
         self._editing_custom_input = False
         self._custom_input_texts: Dict[int, str] = {}  # question_idx -> typed text
 
+        # Multi-select state: per-question set of checked option indices
+        self._checked_indices: Dict[int, set] = {
+            q_idx: set() for q_idx in range(len(questions))
+        }
+
+    def _is_multi_select(self, q_idx: int = None) -> bool:
+        """Check if a question is in multi-select mode.
+
+        Args:
+            q_idx: Question index, defaults to current_question_idx
+        """
+        if q_idx is None:
+            q_idx = self.current_question_idx
+        return bool(self.questions[q_idx].get("multi_select", False))
+
     def _is_custom_input_selected(self) -> bool:
         """Check if the custom input option is currently selected."""
         q_idx = self.current_question_idx
@@ -90,6 +105,67 @@ class SelectionPanel:
             lines.append(current)
         return lines
 
+    def _render_option(self, opt, o_idx, q_idx, is_focused, lines):
+        """Render a single option into the lines list.
+
+        Args:
+            opt: Option dict with value, text, optional description
+            o_idx: Option index
+            q_idx: Question index
+            is_focused: Whether this option has the cursor
+            lines: List to append rendered lines to
+        """
+        text = opt.get("text", "")
+        description = opt.get("description", "")
+        is_custom = opt.get("value") == CUSTOM_INPUT_SENTINEL
+        multi = self._is_multi_select(q_idx)
+        checked = o_idx in self._checked_indices.get(q_idx, set())
+
+        if is_focused:
+            if is_custom and self._editing_custom_input:
+                # Editing mode: show text field with user input
+                typed = self._custom_input_texts.get(q_idx, "")
+                lines.append(f'<style fg="white" bold="true">{self._CURSOR}{typed}</style>')
+                lines.append(f'<style fg="gray">   Type your answer, Enter to confirm, Esc to go back</style>')
+            else:
+                # Navigation mode
+                if is_custom:
+                    typed = self._custom_input_texts.get(q_idx, "")
+                    display = typed if typed else text
+                else:
+                    display = text
+
+                if multi and not is_custom:
+                    marker = "◉" if checked else "○"
+                    lines.append(f'<style fg="white" bold="true">{self._CURSOR}{marker} {display}</style>')
+                else:
+                    lines.append(f'<style fg="white" bold="true">{self._CURSOR}{display}</style>')
+
+                if description:
+                    for wl in self._wrap_description(description, "   "):
+                        lines.append(f'<style fg="white">   {wl}</style>')
+        else:
+            # Unfocused option
+            if is_custom:
+                typed = self._custom_input_texts.get(q_idx, "")
+                display = typed if typed else text
+            else:
+                display = text
+
+            if multi and not is_custom:
+                marker = "◉" if checked else "○"
+                if checked:
+                    lines.append(f'<style fg="cyan">  {marker} {display}</style>')
+                else:
+                    lines.append(f'<style fg="gray">  {marker} {display}</style>')
+            else:
+                lines.append(f'<style fg="gray">  {display}</style>')
+
+            if description:
+                color = "cyan" if (multi and checked) else "gray"
+                for wl in self._wrap_description(description, "   "):
+                    lines.append(f'<style fg="{color}">   {wl}</style>')
+
     def _get_display_text(self) -> HTML:
         """Get the formatted text to display.
 
@@ -97,79 +173,34 @@ class SelectionPanel:
             HTML formatted text with current selection state
         """
         lines = []
+        is_single = len(self.questions) == 1
 
-        # Single question mode (1 item in array)
-        if len(self.questions) == 1:
-            # Check if showing summary
-            if self._showing_summary:
+        # --- Summary view ---
+        if self._showing_summary:
+            if is_single:
                 lines.append("<b>Selection Summary</b>")
                 lines.append("")
 
                 question = self.questions[0].get("question", "")
-                selected_value = self.selections[0] if self.selections else None
+                selected_value = self.selections[0]
                 options = self.questions[0].get("options", [])
 
-                # Find the option text for the selected value
-                selected_opt = next((opt for opt in options if opt.get("value") == selected_value), None)
-                selected_text = selected_opt.get("text", selected_value) if selected_opt else selected_value
-
-                lines.append(f"<b>Question:</b> {question}")
-                lines.append(f'<style fg="gray">  Selected: {str(selected_text)}</style>')
+                if self._is_multi_select(0) and isinstance(selected_value, list):
+                    # Multi-select summary: show all checked items
+                    selected_texts = []
+                    for val in selected_value:
+                        opt = next((o for o in options if o.get("value") == val), None)
+                        selected_texts.append(opt.get("text", val) if opt else str(val))
+                    lines.append(f"<b>Question:</b> {question}")
+                    lines.append(f'<style fg="gray">  Selected: {", ".join(selected_texts)}</style>')
+                else:
+                    # Single-select summary
+                    selected_opt = next((opt for opt in options if opt.get("value") == selected_value), None)
+                    selected_text = selected_opt.get("text", selected_value) if selected_opt else selected_value
+                    lines.append(f"<b>Question:</b> {question}")
+                    lines.append(f'<style fg="gray">  Selected: {str(selected_text)}</style>')
                 lines.append("")
             else:
-                question = self.questions[0]
-                question_text = question.get("question", "")
-                options = question.get("options", [])
-
-                # Show single question
-                lines.append(f"<b>{question_text}</b>")
-                lines.append("")
-
-                # Render options
-                for o_idx, opt in enumerate(options):
-                    text = opt.get("text", "")
-                    description = opt.get("description", "")
-
-                    if o_idx == self.selected_indices[0]:
-                        # Selected option - show cursor and highlight
-                        if opt.get("value") == CUSTOM_INPUT_SENTINEL and self._editing_custom_input:
-                            # Editing mode: show text field with user input
-                            typed = self._custom_input_texts.get(0, "")
-                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}{typed}</style>')
-                            lines.append(f'<style fg="gray">   Type your answer, Enter to confirm, Esc to go back</style>')
-                        else:
-                            # Navigation mode
-                            if opt.get("value") == CUSTOM_INPUT_SENTINEL:
-                                typed = self._custom_input_texts.get(0, "")
-                                display = typed if typed else text
-                            else:
-                                display = text
-                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}{display}</style>')
-                            if description:
-                                for i, wl in enumerate(self._wrap_description(description, "   ")):
-                                    lines.append(f'<style fg="white">   {wl}</style>')
-                    else:
-                        # Unselected option - dark grey
-                        if opt.get("value") == CUSTOM_INPUT_SENTINEL:
-                            typed = self._custom_input_texts.get(0, "")
-                            display = typed if typed else text
-                        else:
-                            display = text
-                        lines.append(f'<style fg="gray">  {display}</style>')
-                        if description:
-                            for i, wl in enumerate(self._wrap_description(description, "   ")):
-                                lines.append(f'<style fg="gray">   {wl}</style>')
-
-                # Add help text
-                lines.append("")
-                if self._editing_custom_input:
-                    lines.append('<style fg="gray">Type your answer. Enter to confirm, Esc to go back</style>')
-                else:
-                    lines.append('<style fg="gray">Use ↑↓ to navigate, Enter to confirm, Esc to cancel</style>')
-        # Multi-question mode (multiple items in array)
-        else:
-            # Check if showing summary
-            if self._showing_summary:
                 lines.append("<b>Selections Summary</b>")
                 lines.append("")
 
@@ -178,65 +209,48 @@ class SelectionPanel:
                     selected_value = self.selections[q_idx] if q_idx < len(self.selections) else None
                     options = q.get("options", [])
 
-                    # Find the option text for the selected value
-                    selected_opt = next((opt for opt in options if opt.get("value") == selected_value), None)
-                    selected_text = selected_opt.get("text", selected_value) if selected_opt else selected_value
-
-                    lines.append(f"<b>Question {q_idx + 1}:</b> {question}")
-                    lines.append(f'<style fg="gray">  Selected: {str(selected_text)}</style>')
-                    lines.append("")
-            else:
-                question = self.questions[self.current_question_idx]
-                question_text = question.get("question", "")
-                options = question.get("options", [])
-                q_num = self.current_question_idx + 1
-                q_total = len(self.questions)
-
-                # Show only current question
-                lines.append(f"<b>Question {q_num}/{q_total}: {question_text}</b>")
-                lines.append("")
-
-                # Render options for current question only
-                for o_idx, opt in enumerate(options):
-                    text = opt.get("text", "")
-                    description = opt.get("description", "")
-
-                    if o_idx == self.selected_indices[self.current_question_idx]:
-                        # Selected option - show cursor and highlight
-                        if opt.get("value") == CUSTOM_INPUT_SENTINEL and self._editing_custom_input:
-                            # Editing mode: show text field with user input
-                            typed = self._custom_input_texts.get(self.current_question_idx, "")
-                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}{typed}</style>')
-                            lines.append(f'<style fg="gray">   Type your answer, Enter to confirm, Esc to go back</style>')
-                        else:
-                            # Navigation mode
-                            if opt.get("value") == CUSTOM_INPUT_SENTINEL:
-                                typed = self._custom_input_texts.get(self.current_question_idx, "")
-                                display = typed if typed else text
-                            else:
-                                display = text
-                            lines.append(f'<style fg="white" bold="true">{self._CURSOR}{display}</style>')
-                            if description:
-                                for i, wl in enumerate(self._wrap_description(description, "   ")):
-                                    lines.append(f'<style fg="white">   {wl}</style>')
+                    if self._is_multi_select(q_idx) and isinstance(selected_value, list):
+                        selected_texts = []
+                        for val in selected_value:
+                            opt = next((o for o in options if o.get("value") == val), None)
+                            selected_texts.append(opt.get("text", val) if opt else str(val))
+                        lines.append(f"<b>Question {q_idx + 1}:</b> {question}")
+                        lines.append(f'<style fg="gray">  Selected: {", ".join(selected_texts)}</style>')
                     else:
-                        # Unselected option - dark grey
-                        if opt.get("value") == CUSTOM_INPUT_SENTINEL:
-                            typed = self._custom_input_texts.get(self.current_question_idx, "")
-                            display = typed if typed else text
-                        else:
-                            display = text
-                        lines.append(f'<style fg="gray">  {display}</style>')
-                        if description:
-                            for i, wl in enumerate(self._wrap_description(description, "   ")):
-                                lines.append(f'<style fg="gray">   {wl}</style>')
-
-                # Add help text
+                        selected_opt = next((opt for opt in options if opt.get("value") == selected_value), None)
+                        selected_text = selected_opt.get("text", selected_value) if selected_opt else selected_value
+                        lines.append(f"<b>Question {q_idx + 1}:</b> {question}")
+                        lines.append(f'<style fg="gray">  Selected: {str(selected_text)}</style>')
+                    lines.append("")
+        # --- Option list view ---
+        else:
+            if is_single:
+                q_idx = 0
+                question = self.questions[0]
+                lines.append(f"<b>{question.get('question', '')}</b>")
                 lines.append("")
-                if self._editing_custom_input:
-                    lines.append('<style fg="gray">Type your answer. Enter to confirm, Esc to go back</style>')
-                else:
-                    lines.append('<style fg="gray">Use ↑↓ to navigate options, ←→ for questions, Enter to confirm, Esc to cancel</style>')
+            else:
+                q_idx = self.current_question_idx
+                question = self.questions[q_idx]
+                q_num = q_idx + 1
+                q_total = len(self.questions)
+                lines.append(f"<b>Question {q_num}/{q_total}: {question.get('question', '')}</b>")
+                lines.append("")
+
+            options = question.get("options", [])
+            for o_idx, opt in enumerate(options):
+                self._render_option(opt, o_idx, q_idx, o_idx == self.selected_indices[q_idx], lines)
+
+            # Add help text
+            lines.append("")
+            if self._editing_custom_input:
+                lines.append('<style fg="gray">Type your answer. Enter to confirm, Esc to go back</style>')
+            elif self._is_multi_select(q_idx):
+                lines.append('<style fg="gray">Use ↑↓ to navigate, Space to toggle, Enter to confirm, Esc to cancel</style>')
+            elif is_single:
+                lines.append('<style fg="gray">Use ↑↓ to navigate, Enter to confirm, Esc to cancel</style>')
+            else:
+                lines.append('<style fg="gray">Use ↑↓ to navigate options, ←→ for questions, Enter to confirm, Esc to cancel</style>')
 
         return HTML("\n".join(lines))
 
@@ -331,12 +345,46 @@ class SelectionPanel:
                     self._editing_custom_input = True
                     event.app.cursor_position = (0, 0)  # Reset cursor
                     event.app.invalidate()
+                elif self._is_multi_select():
+                    # Multi-select mode: only advance if at least one option is checked
+                    q_idx = self.current_question_idx
+                    checked = self._checked_indices.get(q_idx, set())
+                    if not checked:
+                        # Nothing checked yet — ignore Enter, user must toggle with Space
+                        return
+                    options = self.questions[q_idx].get("options", [])
+                    checked_values = [
+                        options[i].get("value")
+                        for i in checked
+                        if i < len(options)
+                    ]
+                    self.selections[q_idx] = checked_values
+                    self._advance_question(event)
                 else:
-                    # Regular option - store and advance
+                    # Single-select: store and advance
                     current_options = self.questions[self.current_question_idx].get("options", [])
                     if current_options and self.selected_indices[self.current_question_idx] < len(current_options):
                         self.selections[self.current_question_idx] = current_options[self.selected_indices[self.current_question_idx]].get("value")
                     self._advance_question(event)
+
+        @bindings.add(' ')
+        def toggle_check(event):
+            """Toggle checkbox for multi-select questions."""
+            if self._showing_summary or self._editing_custom_input:
+                return
+            if not self._is_multi_select():
+                return
+            q_idx = self.current_question_idx
+            opt_idx = self.selected_indices[q_idx]
+            options = self.questions[q_idx].get("options", [])
+            # Don't allow toggling the custom input sentinel via Space
+            if opt_idx < len(options) and options[opt_idx].get("value") != CUSTOM_INPUT_SENTINEL:
+                checked = self._checked_indices.get(q_idx, set())
+                if opt_idx in checked:
+                    checked.discard(opt_idx)
+                else:
+                    checked.add(opt_idx)
+                event.app.invalidate()
 
         @bindings.add(Keys.Escape)
         def cancel(event):
@@ -419,7 +467,7 @@ class SelectionPanel:
 
 @tool(
     name="select_option",
-    description="Ask the user a question with selectable options using arrow keys. An inline panel shows options navigable with arrow keys. A 'Type your own input...' option is auto-appended for free-form answers. Supports single and multi-question forms (single = array with 1 item).",
+    description="Ask the user a question with selectable options using arrow keys. An inline panel shows options navigable with arrow keys. A 'Type your own input...' option is auto-appended for free-form answers. Supports single and multi-question forms (single = array with 1 item). Set 'multi_select': true on a question to allow the user to check multiple options with Space and confirm with Enter.",
     parameters={
         "type": "object",
         "properties": {
@@ -430,6 +478,7 @@ class SelectionPanel:
                     "type": "object",
                     "properties": {
                         "question": {"type": "string", "description": "The question text"},
+                        "multi_select": {"type": "boolean", "description": "If true, user can select multiple options using Space. Defaults to false (single-select)."},
                         "options": {
                             "type": "array",
                             "description": "List of options for this question",
@@ -467,12 +516,13 @@ def select_option(
         questions: List of question objects, each containing:
             - question: The question text
             - options: List of option objects with value, text, and optional description
+            - multi_select: (optional) If true, user can toggle multiple options with Space
         context: Tool execution context (contains chat_manager)
 
     Returns:
         str: Formatted tool result with exit_code and selected value(s):
             - "exit_code=0\\n{value}" for single question (1 item in array)
-            - "exit_code=0\\n{value1, value2, ...}" for multi-question (comma-separated list)
+            - "exit_code=0\\n{value1, value2, ...}" for multi-question or multi-select
             - "exit_code=1\\n{error_message}" for user cancellation or validation errors
     """
     try:
@@ -524,7 +574,15 @@ def select_option(
         if isinstance(result, str):
             return f"exit_code=0\n{result}"
         else:
-            return f"exit_code=0\n{', '.join(str(r) for r in result)}"
+            # Result is a list (multi-question mode or multi-select)
+            formatted = []
+            for r in result:
+                if isinstance(r, list):
+                    # Multi-select question: comma-separated values
+                    formatted.append(', '.join(str(v) for v in r))
+                else:
+                    formatted.append(str(r))
+            return f"exit_code=0\n{', '.join(formatted)}"
 
     except Exception as e:
         return f"exit_code=1\nError displaying selection panel: {str(e)}"

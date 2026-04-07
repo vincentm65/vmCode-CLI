@@ -1,13 +1,7 @@
-"""Obsidian vault integration tools.
+"""Obsidian vault integration utilities.
 
-Provides wiki-link resolution, backlink discovery, and frontmatter parsing.
-Uses register() pattern — tools only register when called explicitly,
-NOT on import. This ensures zero cost when no vault is configured.
-
-Usage (from __init__.py):
-    from tools import obsidian
-    if obsidian_settings.is_active():
-        obsidian.register()
+Provides wiki-link resolution, backlink discovery, frontmatter parsing,
+and vault session management for project note routing.
 """
 
 import logging
@@ -318,101 +312,6 @@ def _find_backlinks(note_path: Path, vault_root: Path, rg_exe_path: str = None) 
         return []
 
 
-# =============================================================================
-# Tool handlers
-# =============================================================================
-
-def _handle_obsidian_resolve(
-    name: str,
-    get_backlinks: bool = False,
-    repo_root: Path = None,
-    rg_exe_path: str = None,
-    console=None,
-    **kwargs,
-) -> str:
-    """Resolve a wiki-link or note name to filesystem path(s)."""
-    session = get_vault_session()
-    if not session:
-        return "exit_code=1\nObsidian vault is not configured or invalid. Use /obsidian set <path> to configure."
-    vault_root = session.vault_root
-
-    if not name or not name.strip():
-        return "exit_code=1\n'name' parameter is required."
-
-    matches = resolve_wiki_link(name, vault_root)
-
-    if not matches:
-        return f"exit_code=0\nNo notes found matching '{name}' in vault."
-
-    lines = []
-
-    if len(matches) == 1:
-        path, stem = matches[0]
-        rel_path = str(path.relative_to(vault_root))
-        lines.append(f"Resolved: {stem}")
-        lines.append(f"Vault root: {vault_root}")
-        lines.append(f"Relative path: {rel_path}")
-        lines.append(f"Absolute path: {path}")
-    else:
-        lines.append(f"Ambiguous match for '{name}' — {len(matches)} candidates:")
-        for path, stem in matches:
-            rel_path = str(path.relative_to(vault_root))
-            lines.append(f"  - {stem} -> {rel_path}")
-
-    if get_backlinks and matches:
-        # Use first match for backlinks
-        target_path = matches[0][0]
-        backlinks = _find_backlinks(target_path, vault_root, rg_exe_path=rg_exe_path)
-        if backlinks:
-            lines.append(f"\nBacklinks ({len(backlinks)}):")
-            for bl in backlinks:
-                lines.append(f"  <- {bl}")
-        else:
-            lines.append("\nNo backlinks found.")
-
-    return "exit_code=0\n" + "\n".join(lines)
-
-
-
-
-
-# =============================================================================
-# Tool definitions (not registered until register() is called)
-# =============================================================================
-
-OBSIDIAN_RESOLVE_TOOL = ToolDefinition(
-    name="obsidian_resolve",
-    description=(
-        "Resolve an Obsidian wiki-link or note name to a filesystem path. "
-        "Optionally find backlinks (notes that link TO this note). "
-        "Use before read_file to turn note names into file paths. "
-        "When auto_resolve_links is enabled, resolve [[links]] automatically."
-    ),
-    parameters={
-        "type": "object",
-        "properties": {
-            "name": {
-                "type": "string",
-                "description": "Note name or wiki-link (e.g. 'Auth System', '[[Auth System|Auth]]')"
-            },
-            "get_backlinks": {
-                "type": "boolean",
-                "description": "If true, find notes linking TO this note (vault-wide scan)",
-                "default": False
-            }
-        },
-        "required": ["name"]
-    },
-    allowed_modes=["edit", "plan"],
-    requires_approval=False,
-    handler=_handle_obsidian_resolve,
-)
-
-
-# =============================================================================
-# Registration function
-# =============================================================================
-
 def init_session(repo_root: Path = None) -> Optional[VaultSession]:
     """Build and cache the VaultSession.
 
@@ -434,47 +333,4 @@ def init_session(repo_root: Path = None) -> Optional[VaultSession]:
     return _session
 
 
-def register() -> bool:
-    """Register Obsidian tools with the global tool registry.
 
-    Should only be called when obsidian_settings.is_active() is True.
-    Safe to call multiple times — tools are only registered once.
-    Also initializes the VaultSession if not already done.
-
-    Returns:
-        True if tools were registered, False if already registered
-    """
-    # Use ToolRegistry as source of truth (no separate _registered flag)
-    if ToolRegistry.get("obsidian_resolve"):
-        logger.debug("Obsidian tools already registered, skipping.")
-        return False
-
-    # Ensure session exists (builds one if needed, validates via ObsidianSettings.is_active())
-    session = get_vault_session() or init_session()
-    if not session:
-        logger.warning("Cannot register Obsidian tools: vault is not configured or invalid.")
-        return False
-
-    ToolRegistry.register(OBSIDIAN_RESOLVE_TOOL)
-    invalidate_vault_cache()
-
-    logger.info(f"Obsidian tools registered. Vault: {session.vault_root}")
-    return True
-
-
-def unregister() -> bool:
-    """Remove Obsidian tools from the global tool registry and clear the session.
-
-    Returns:
-        True if tools were unregistered, False if not registered
-    """
-    global _session
-    if not ToolRegistry.get("obsidian_resolve"):
-        return False
-
-    ToolRegistry.unregister("obsidian_resolve")
-
-    _session = None
-    invalidate_vault_cache()
-    logger.info("Obsidian tools unregistered.")
-    return True

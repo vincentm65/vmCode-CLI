@@ -140,22 +140,7 @@ def _build_read_file_label(path, start_line=None, max_lines=None, with_colon=Fal
     return label
 
 
-def _parse_obsidian_resolve_feedback(tool_result, command=""):
-    """Extract obsidian_resolve display summary from tool result.
 
-    Returns:
-        str: Display message like "3 backlinks" or "No backlinks found" or empty
-    """
-    lines = tool_result.split('\n')
-    if any(re.search(r'Backlinks \((\d+)\)', line) for line in lines):
-        for line in lines:
-            m = re.search(r'Backlinks \((\d+)\)', line)
-            if m:
-                count = int(m.group(1))
-                return f"{count} backlink{'s' if count != 1 else ''}"
-    elif any("No backlinks found" in line for line in lines):
-        return "No backlinks found"
-    return ""
 
 
 
@@ -194,11 +179,6 @@ def _build_tool_label(function_name, arguments):
         command = arguments.get('command', '')
         # Truncate long commands for display
         return f"execute_command: {command[:80]}" if command else "execute_command"
-    elif function_name == "obsidian_resolve":
-        name = arguments.get('name', '')
-        backlinks = arguments.get('get_backlinks', False)
-        suffix = " (backlinks)" if backlinks else ""
-        return f"obsidian_resolve: {name}{suffix}" if name else "obsidian_resolve"
     else:
         return function_name
 
@@ -414,8 +394,6 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
             tool_name = "web_search"
         elif command.startswith("execute_command"):
             tool_name = "execute_command"
-        elif command.startswith("obsidian_resolve"):
-            tool_name = "obsidian_resolve"
         else:
             tool_name = command.split()[0]
         
@@ -505,16 +483,6 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
     # For execute_command: display command output with line truncation
     if command.startswith("execute_command"):
         _handle_execute_command_feedback(tool_result, console, panel_updater)
-        return
-
-    # For obsidian_resolve: display backlink count
-    if command.startswith("obsidian_resolve"):
-        prefix = "╰─ " if not panel_updater else ""
-        msg = _parse_obsidian_resolve_feedback(tool_result, command)
-        if msg:
-            _print_or_append(f"{prefix}[dim]{msg}[/dim]", console, panel_updater)
-        if not panel_updater:
-            console.print()
         return
 
     # For web_search: display results count
@@ -679,6 +647,7 @@ class SubAgentPanel:
         self._show_spinner = True
         self._spinner_thread = None
         self._stop_spinner = threading.Event()
+        self._saved_termios = None
 
     def _get_title(self):
         """Get panel title with optional spinner and tool call counter.
@@ -726,12 +695,51 @@ class SubAgentPanel:
                 self._live.update(self._render_panel())
             time.sleep(0.1)  # 10 updates per second = smooth animation
 
+    @staticmethod
+    def _set_raw_mode():
+        """Switch stdin to raw mode to prevent keystroke echoes during spinner."""
+        import os
+        import sys
+        if os.name == 'nt':
+            return
+        try:
+            import termios
+            fd = sys.stdin.fileno()
+            old = termios.tcgetattr(fd)
+            new = old.copy()
+            new[3] &= ~(termios.ECHO | termios.ICANON | termios.IEXTEN)
+            new[0] &= ~(termios.ICRNL)
+            termios.tcsetattr(fd, termios.TCSANOW, new)
+            return old
+        except Exception:
+            return None
+
+    @staticmethod
+    def _restore_terminal_mode(saved):
+        """Restore terminal mode from saved termios attributes."""
+        import os
+        import sys
+        if saved is None:
+            return
+        try:
+            import os as _os
+            if _os.name == 'nt':
+                return
+        except Exception:
+            pass
+        try:
+            import termios
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, saved)
+        except Exception:
+            pass
+
     def __enter__(self):
         """Start Live display context.
 
         Returns:
             self for use in with statement
         """
+        self._saved_termios = self._set_raw_mode()
         panel = self._render_panel()
         self._live = Live(panel, console=self.console, refresh_per_second=10)
         self._live.__enter__()
@@ -749,6 +757,8 @@ class SubAgentPanel:
             self._spinner_thread.join(timeout=0.5)
         if self._live:
             self._live.__exit__(*args)
+        self._restore_terminal_mode(self._saved_termios)
+        self._saved_termios = None
 
     def add_tool_call(self, tool_name, tool_result=None, command=None):
         """Add a tool call message to the panel and refresh display.
@@ -899,18 +909,6 @@ class SubAgentPanel:
             else:
                 message = f"[grey]execute_command[/grey]\n[dim]╰─ Command executed[/dim]"
         
-        elif tool_name == "obsidian_resolve":
-            name = ""
-            if command:
-                match = re.search(r'obsidian_resolve:?\s+(.+?)(?:\s+\(backlinks\))?$', command)
-                if match:
-                    name = match.group(1).strip()
-            msg = _parse_obsidian_resolve_feedback(tool_result, command)
-            if msg:
-                message = f"[grey]obsidian_resolve {name}[/grey]\n[dim]╰─ {msg}[/dim]"
-            else:
-                message = f"[grey]obsidian_resolve {name}[/grey]"
-
         elif tool_name in ("create_task_list", "complete_task", "show_task_list"):
             # Handle task list tools - show the task list content
             exit_code = extract_exit_code(tool_result)
@@ -1492,7 +1490,6 @@ class AgenticOrchestrator:
                         "create_task_list": lambda a: "create_task_list",
                         "complete_task": lambda a: "complete_task",
                         "show_task_list": lambda a: "show_task_list",
-                        "obsidian_resolve": lambda a: f"obsidian_resolve: {a.get('name', '')}" + (" (backlinks)" if a.get('get_backlinks') else ""),
                     }
 
                     # Print the label first (staggered output: label → feedback)
@@ -1596,7 +1593,7 @@ class AgenticOrchestrator:
                     if self.panel_updater:
                         self.panel_updater.append(error_text)
                     else:
-                        self.console.print(error_text, markup=False)
+                        self.console.print(error_text)
                         self.console.file.flush()
 
             # Display summary
