@@ -327,7 +327,7 @@ class ChatManager:
             if m.get('role') == 'user':
                 content = m.get('content', '')
                 if content and not content.startswith("The codebase map"):
-                    user_queries.append(content[:200])  # Truncate long queries
+                    user_queries.append(content)
 
         # Extract tool calls
         tool_calls = []

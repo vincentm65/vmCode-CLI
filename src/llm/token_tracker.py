@@ -183,9 +183,9 @@ class TokenTracker:
     def get_usage_for_prompt(self, context_limit: int = 200_000) -> str:
         """Get formatted usage information for inclusion in agent prompts.
 
-        This provides agents with awareness of their token consumption to help
-        them work within context limits. Shows total tokens burned (cumulative
-        across all LLM calls), not just conversation context length.
+        This provides agents with awareness of their current context window
+        usage to help them work within context limits. Urgency is based on
+        actual context length (current_context_tokens), not cumulative billing.
 
         Args:
             context_limit: The context window limit to compare against (default: 200k)
@@ -193,9 +193,10 @@ class TokenTracker:
         Returns:
             Formatted string with usage statistics and guidance
         """
+        context_used = self.current_context_tokens
         total_burned = self.total_tokens
-        remaining = context_limit - total_burned
-        percentage = (total_burned / context_limit) * 100
+        remaining = context_limit - context_used
+        percentage = (context_used / context_limit) * 100
 
         # Determine urgency level
         if percentage >= 90:
@@ -213,11 +214,10 @@ class TokenTracker:
 
         return (
             f"## Token Usage Awareness\n\n"
-            f"**Status:** {urgency} | **Total Burned:** {total_burned:,} / {context_limit:,} ({percentage:.1f}%)\n"
-            f"**Remaining:** {remaining:,} tokens\n\n"
+            f"**Status:** {urgency} | **Context:** {context_used:,} / {context_limit:,} ({percentage:.1f}%)\n"
+            f"**Remaining:** {remaining:,} tokens | **Session total burned:** {total_burned:,}\n\n"
             f"**Guidance:** {guidance}\n\n"
-            f"**Note:** This count includes ALL tokens burned across the session "
-            f"(all LLM calls, tool results, etc.), not just current conversation context."
+            f"**Note:** Context shows current conversation length; session total is cumulative across all LLM calls."
         )
 
     def get_context_summary(self) -> str:
