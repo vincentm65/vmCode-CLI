@@ -1151,7 +1151,9 @@ class AgenticOrchestrator:
             getattr(self.chat_manager, "task_list_title", None),
         )
         # Strip leading "Assistant: " prefix that some models may output
-        content = content.lstrip("Assistant: ").lstrip()
+        if content.startswith("Assistant: "):
+            content = content[len("Assistant: "):]
+        content = content.lstrip()
         if content and content.strip():
             # Clear thinking indicator before printing response to avoid flash
             if thinking_indicator:

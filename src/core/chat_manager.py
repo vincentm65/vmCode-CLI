@@ -873,7 +873,8 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         3. Layer 2 — AI-based history compaction (slower, more effective)
         4. Layer 3 — emergency truncation (drop oldest messages)
 
-        If _compaction_locked, skip layers 1 & 2 and go straight to truncation.
+        If _compaction_locked, skip all layers (including truncation) and return
+        "locked" — the message list is in intermediate state during tool execution.
 
         Args:
             console: Optional Rich console for debug notifications.
@@ -936,6 +937,17 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
                     return result
 
         # Layer 3: Emergency truncation — drop oldest messages
+        # Skip if compaction is locked (tool execution in progress) to avoid
+        # corrupting tool_call_id pairing on incomplete message state
+        if self._compaction_locked:
+            self._update_context_tokens()
+            current_tokens = self.token_tracker.current_context_tokens
+            return {
+                "action": "locked",
+                "tokens": current_tokens,
+                "reduction": tokens_before - current_tokens,
+            }
+
         self._emergency_truncate(hard_limit)
         self._update_context_tokens()
         current_tokens = self.token_tracker.current_context_tokens
@@ -955,6 +967,10 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         - Index 0: system prompt (always kept)
         - Any "Previous conversation context" system messages (compaction summaries)
         - Last 6 messages minimum (recent context)
+        - Tool-call integrity: if an assistant message with tool_calls is in the
+          protected tail, all its corresponding tool result messages must also be
+          in the tail (and vice versa). The protected region is expanded to
+          include complete tool blocks.
 
         Args:
             target_tokens: Target token count to get under.
@@ -965,15 +981,78 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             """Check if a message should never be dropped."""
             return msg.get("role", "") == "system"
 
+        def _compute_protected_tail(messages):
+            """Compute the minimum protected tail index that preserves tool_call pairs.
+
+            Start from MIN_TAIL from the end and expand backward if a tool block
+            straddles the boundary.
+            """
+            n = len(messages)
+            if n <= MIN_TAIL + 1:
+                return 1  # Nothing to drop anyway
+
+            tail_start = n - MIN_TAIL
+
+            # Scan backward from tail_start to find tool blocks that straddle
+            # the boundary and expand to include them.
+            changed = True
+            while changed:
+                changed = False
+                # Build set of tool_call_ids that appear in tool messages within
+                # the protected tail region
+                tool_ids_in_tail = set()
+                for i in range(tail_start, n):
+                    msg = messages[i]
+                    if msg.get("role") == "tool":
+                        tcid = msg.get("tool_call_id")
+                        if tcid:
+                            tool_ids_in_tail.add(tcid)
+
+                # Check if any message just before tail_start has tool_calls
+                # that reference those tool_call_ids
+                scan = tail_start - 1
+                while scan > 0:
+                    msg = messages[scan]
+                    if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                        msg_tool_ids = {
+                            tc.get("id") for tc in msg["tool_calls"] if tc.get("id")
+                        }
+                        if msg_tool_ids & tool_ids_in_tail:
+                            # This assistant message must be in the protected tail
+                            tail_start = scan
+                            changed = True
+                            # Also add any of its tool_call_ids to the set
+                            tool_ids_in_tail |= msg_tool_ids
+                        else:
+                            break  # No overlap, stop scanning backward
+                    elif msg.get("role") == "tool":
+                        # A tool message before the assistant — check if its
+                        # tool_call_id belongs to an assistant in the tail
+                        tcid = msg.get("tool_call_id")
+                        if tcid and tcid in tool_ids_in_tail:
+                            tail_start = scan
+                            changed = True
+                        else:
+                            break
+                    else:
+                        break
+                    scan -= 1
+
+            return tail_start
+
         # Drop oldest non-protected messages until under target
-        while len(self.messages) > MIN_TAIL + 1:
+        while True:
             self._update_context_tokens()
             if self.token_tracker.current_context_tokens < target_tokens:
                 break
 
-            # Find the oldest droppable message (skip index 0 and tail)
+            tail_start = _compute_protected_tail(self.messages)
+            if tail_start <= 1:
+                break  # Nothing droppable remains
+
+            # Find the oldest droppable message (skip index 0 and protected tail)
             dropped = False
-            for i in range(1, len(self.messages) - MIN_TAIL):
+            for i in range(1, tail_start):
                 if not _is_protected(self.messages[i]):
                     self.messages.pop(i)
                     dropped = True

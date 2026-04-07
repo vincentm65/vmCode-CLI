@@ -287,16 +287,6 @@ class ThinkingIndicator:
         if self._status:
             self._status.stop()
             self._status = None
-            # Bypass Rich's console infrastructure entirely for cleanup.
-            # After status.stop(), Rich's internal buffer may be out of sync with
-            # the actual terminal state. Writing directly to stdout ensures we
-            # have a clean cursor position before the next UI element renders.
-            # \r = move to column 0, \033[K = clear to EOL
-            try:
-                sys.stdout.write("\r\033[K")
-                sys.stdout.flush()
-            except Exception:
-                pass
         
         # Reset state for next use cycle
         if reset:
