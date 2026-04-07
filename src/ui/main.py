@@ -47,6 +47,14 @@ console = Console(theme=Theme({
     "markdown.h4": "default",
     "markdown.h5": "default",
     "markdown.h6": "default",
+    "markdown.paragraph_text": "default",
+    "markdown.text": "default",
+    "markdown.item": "default",
+    "markdown.list_item": "default",
+    "markdown.code": "default",
+    "markdown.code_block": "default",
+    "markdown.link": "default",
+    "markdown.link_url": "default",
 }))
 
 # Debug mode container (used as mutable reference)
@@ -392,7 +400,7 @@ def main():
         console.print("[red]Failed to start local server![/red]")
         return
 
-    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
+    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode, clear_screen=True)
 
     # First-run onboarding: check if active provider needs an API key but has none
     try:

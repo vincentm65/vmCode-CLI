@@ -32,7 +32,7 @@ from utils.result_parsers import (
     extract_all_metadata,
     extract_multiple_metadata,
 )
-from tools.task_list import _format_task_list
+from tools.task_list import _format_task_list, _strip_rich_markup
 from exceptions import (
     LLMError,
     LLMConnectionError,
@@ -111,7 +111,7 @@ def _strip_leading_task_list_echo(content, task_list, title=None):
     if not content or not isinstance(content, str) or not task_list:
         return content or ""
 
-    expected = _format_task_list(task_list, title).strip()
+    expected = _strip_rich_markup(_format_task_list(task_list, title)).strip()
     if not expected:
         return content
 
@@ -426,11 +426,11 @@ def _display_tool_feedback(command, tool_result, console, indent=False, panel_up
     if command.startswith(("create_task_list", "complete_task", "show_task_list")):
         exit_code = extract_exit_code(tool_result)
         if exit_code == 0 or exit_code is None:
-            # Successful task list - display without exit_code line and without Rich markup parsing.
+            # Successful task list - display without exit_code line, with Rich markup parsing.
             rendered = tool_result
             if rendered.startswith("exit_code="):
                 rendered = "\n".join(rendered.splitlines()[1:])
-            _print_or_append(rendered.strip(), console, panel_updater, markup=False)
+            _print_or_append(rendered.strip(), console, panel_updater, markup=True)
         else:
             # Show single-line error if present
             first_two = "\n".join(tool_result.splitlines()[:2]).strip()
@@ -1077,6 +1077,9 @@ class AgenticOrchestrator:
         Returns:
             Response dict from LLM, or None if error occurred
         """
+        # Pre-send guard: ensure context fits before the LLM call
+        self.chat_manager.ensure_context_fits(console=self.console)
+
         # Use allowed_tools if provided, otherwise use mode-based filtering
         if allowed_tools is not None:
             # Validate that allowed_tools is not empty
@@ -1385,6 +1388,9 @@ class AgenticOrchestrator:
         tools_for_mode = _tools_for_mode(self.chat_manager.interaction_mode)
         self.chat_manager._update_context_tokens(tools_for_mode)
 
+        # Pre-send guard: ensure context fits before next LLM call
+        self.chat_manager.ensure_context_fits(console=self.console)
+
         return end_loop
 
     def _execute_tools_parallel(self, response, thinking_indicator):
@@ -1487,28 +1493,52 @@ class AgenticOrchestrator:
                         "obsidian_resolve": lambda a: f"obsidian_resolve: {a.get('name', '')}" + (" (backlinks)" if a.get('get_backlinks') else ""),
                     }
 
-                    # Print the label first
+                    # Print the label first (staggered output: label → feedback)
                     label_builder = label_builders.get(function_name, lambda a: function_name)
                     try:
                         label = label_builder(args_dict)
-                        if function_name == "web_search":
-                            label_text = f"[bold cyan]{label}[/bold cyan]"
-                        else:
-                            label_text = f"[grey]{label}[/grey]"
                         
-                        # Route to panel_updater for sub-agent, otherwise console
-                        # For panel_updater, _display_tool_feedback will handle the complete display
-                        if not self.panel_updater:
+                        # Print the label before feedback (matches sequential path)
+                        if not self.panel_updater and function_name not in ("create_task_list", "complete_task", "show_task_list"):
+                            label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold cyan]{label}[/bold cyan]"
                             self.console.print(label_text, highlight=False)
-                            # Force flush to ensure label appears immediately
                             self.console.file.flush()
+                        
+                        # For task list tools: only show the task list, no label duplication
+                        # Skip the feedback display below since we already showed it
+                        continue_flag = False
+                        if function_name in ("create_task_list", "complete_task", "show_task_list"):
+                            exit_code = extract_exit_code(result.result)
+                            if exit_code == 0 or exit_code is None:
+                                rendered = result.result
+                                if rendered.startswith("exit_code="):
+                                    rendered = "\n".join(rendered.splitlines()[1:])
+                                if self.panel_updater:
+                                    self.panel_updater.append(rendered.strip())
+                                else:
+                                    self.console.print(rendered.strip(), markup=True)
+                                    self.console.print()
+                            else:
+                                first_two = "\n".join(result.result.splitlines()[:2]).strip()
+                                if self.panel_updater:
+                                    self.panel_updater.append(first_two or result.result.strip())
+                                else:
+                                    self.console.print(first_two or result.result.strip(), markup=False)
+                                    self.console.print()
+                            continue_flag = True
+                            label = function_name
                     except Exception:
                         label_text = f"[grey]{function_name}[/grey]"
                         if not self.panel_updater:
                             self.console.print(label_text, highlight=False)
                             self.console.file.flush()
+                        label = function_name  # Fallback for error path
+                        continue_flag = False
 
                     # Display feedback immediately after label (no buffering)
+                    # Skip for task list tools since they handled their own display
+                    if continue_flag:
+                        continue
                     try:
                         if function_name == "edit_file" and result.requires_approval:
                             # Handle approval workflow for edit_file in parallel mode
@@ -1611,6 +1641,9 @@ class AgenticOrchestrator:
             # Update context tokens with current mode's tools
             tools_for_mode = _tools_for_mode(self.chat_manager.interaction_mode)
             self.chat_manager._update_context_tokens(tools_for_mode)
+
+            # Pre-send guard: ensure context fits before next LLM call
+            self.chat_manager.ensure_context_fits(console=self.console)
 
             return end_loop
         finally:
@@ -1846,14 +1879,29 @@ class AgenticOrchestrator:
                         # Build label with arguments for better display
                         label = _build_tool_label(function_name, arguments)
 
-                        # Print label first (like parallel mode)
-                        label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold cyan]{label}[/bold cyan]"
-                        if not self.panel_updater:
-                            console.print(label_text, highlight=False)
-                            console.file.flush()
+                        # For task list tools: only show the task list, no label duplication
+                        if function_name in ("create_task_list", "complete_task", "show_task_list"):
+                            # Extract and format task list directly
+                            exit_code = extract_exit_code(result)
+                            if exit_code == 0 or exit_code is None:
+                                rendered = result
+                                if rendered.startswith("exit_code="):
+                                    rendered = "\n".join(rendered.splitlines()[1:])
+                                _print_or_append(rendered.strip(), console, self.panel_updater, markup=True)
+                            else:
+                                first_two = "\n".join(result.splitlines()[:2]).strip()
+                                _print_or_append(first_two or result.strip(), console, self.panel_updater, markup=False)
+                            if not self.panel_updater:
+                                console.print()
+                        else:
+                            # Print label first (like parallel mode)
+                            label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold cyan]{label}[/bold cyan]"
+                            if not self.panel_updater:
+                                console.print(label_text, highlight=False)
+                                console.file.flush()
 
-                        # Then display feedback
-                        _display_tool_feedback(label, result, console, indent=self.is_sub_agent, panel_updater=self.panel_updater)
+                            # Then display feedback
+                            _display_tool_feedback(label, result, console, indent=self.is_sub_agent, panel_updater=self.panel_updater)
 
                 return False, str(result)
             except Exception as e:

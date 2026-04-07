@@ -20,6 +20,13 @@ from utils.result_parsers import extract_exit_code, extract_metadata_from_result
 MESSAGE_OVERHEAD_TOKENS = 4  # Approximate tokens for JSON structure: braces, quotes, colons, commas
 CHAR_BASED_OVERHEAD = 20    # Character overhead for JSON structure in character-based estimation
 
+# Action labels for context management notifications (used by ensure_context_fits)
+_ACTION_LABELS = {
+    "tool_compaction": "compacted tool results",
+    "history_compaction": "compacted history",
+    "emergency_truncation": "emergency truncation (oldest messages dropped)",
+}
+
 class ChatManager:
     """Manages chat state, messages, and provider switching."""
 
@@ -300,7 +307,7 @@ class ChatManager:
         return total
 
 
-    def _generate_compact_summary(self, messages) -> str:
+    def _build_summary_prompt(self, messages) -> str:
         """Generate a comprehensive summary of messages.
 
         Captures:
@@ -646,7 +653,8 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
                 # Add final assistant answer
                 new_messages.append(self.messages[block_start['end']])
 
-                # Mark all indices as processed
+                # Mark all indices as processed (including user question)
+                processed_indices.add(block_start['user_idx'])
                 for idx in range(block_start['start'], block_start['end'] + 1):
                     processed_indices.add(idx)
             else:
@@ -655,10 +663,6 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
 
         self.messages = new_messages
         self._update_context_tokens()
-
-        # Track token counts after
-        tokens_after = self._count_tokens(self.messages)
-        reduction = tokens_before - tokens_after
 
     # ===== AI-Based History Compaction =====
 
@@ -687,12 +691,14 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             return None
 
         # In aggressive mode, pre-compact tool results first (for older blocks)
-        if aggressive and trigger == "manual":
+        if aggressive:
             # Temporarily reduce keep_recent_tool_blocks to 1 for aggressive compaction
             original_keep = context_settings.tool_compaction.keep_recent_tool_blocks
-            context_settings.tool_compaction.keep_recent_tool_blocks = 1
-            self.compact_tool_results()
-            context_settings.tool_compaction.keep_recent_tool_blocks = original_keep
+            try:
+                context_settings.tool_compaction.keep_recent_tool_blocks = 1
+                self.compact_tool_results()
+            finally:
+                context_settings.tool_compaction.keep_recent_tool_blocks = original_keep
 
         # Find the last user message (start from end, skip system/tool messages)
         last_user_idx = None
@@ -733,30 +739,20 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             messages_to_summarize = self.messages[1:last_user_idx]
         else:
             # Case 2: There are tool interactions between last user and last assistant
-            #         Keep: last user message + assistant tool_calls + last assistant answer
-            #         Summarize: everything before last user + all tool results
-            messages_to_keep = [self.messages[last_user_idx]]  # User message
-
-            # Find the assistant message with tool_calls (should be right after user)
-            # This preserves context about what tools were executed
-            for i in range(last_user_idx + 1, last_assistant_without_tools_idx):
-                if self.messages[i].get('role') == 'assistant' and self.messages[i].get('tool_calls'):
-                    messages_to_keep.append(self.messages[i])
-                    break
-
-            messages_to_keep.append(self.messages[last_assistant_without_tools_idx])  # Final answer
-
-            # Summarize: everything before last user + all tool result messages
-            messages_to_summarize = (
-                self.messages[1:last_user_idx] +  # History before last user
-                self._get_tool_result_messages(last_user_idx, last_assistant_without_tools_idx)  # Tool results only
-            )
+            #         Keep: last user message + entire tool exchange + final answer
+            #         Summarize: everything before last user message
+            #
+            # The tail from last_user_idx through last_assistant_without_tools_idx
+            # is a valid message sequence (user → assistant(tool_calls) → tool results → assistant(answer))
+            # and must be kept intact to avoid consecutive assistant messages or orphaned tool_call_ids.
+            messages_to_keep = self.messages[last_user_idx:]
+            messages_to_summarize = self.messages[1:last_user_idx]
 
         if not messages_to_summarize:
             return None
 
         # Generate comprehensive summary using extracted context
-        summary_prompt_content = self._generate_compact_summary(messages_to_summarize)
+        summary_prompt_content = self._build_summary_prompt(messages_to_summarize)
 
         # Track token counts before (total tokens including system prompt + messages + tools)
         self._update_context_tokens()
@@ -777,7 +773,16 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             },
         ]
 
-        response = self.client.chat_completion(summary_prompt, stream=False, tools=None)
+        try:
+            response = self.client.chat_completion(summary_prompt, stream=False, tools=None)
+        except Exception as e:
+            if console and trigger == "manual":
+                console.print(f"Compaction failed: {e}", style="red")
+            return None
+
+        if response is None:
+            return None
+
         if isinstance(response, str):
             if console and trigger == "manual":
                 console.print(f"Compaction failed: {response}", style="red")
@@ -849,8 +854,152 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         )
 
         if total_tokens >= trigger_threshold:
-            # Auto-compact silently (no notification)
-            self.compact_history(console=None, trigger="auto")
+            # Auto-compact with optional notification
+            result = self.compact_history(console=None, trigger="auto")
+            if result and context_settings.notify_auto_compaction and console:
+                self._notify_compaction(
+                    console,
+                    result["before_tokens"],
+                    result["after_tokens"],
+                    "compacted history",
+                )
+
+    def ensure_context_fits(self, console=None):
+        """Ensure context fits within hard_limit_tokens before sending to LLM.
+
+        Three-layer escalation strategy:
+        1. Check — if under hard_limit, return immediately (no action)
+        2. Layer 1 — aggressive tool result compaction (non-LLM, fast)
+        3. Layer 2 — AI-based history compaction (slower, more effective)
+        4. Layer 3 — emergency truncation (drop oldest messages)
+
+        If _compaction_locked, skip layers 1 & 2 and go straight to truncation.
+
+        Args:
+            console: Optional Rich console for debug notifications.
+
+        Returns:
+            dict with action taken and details, e.g.:
+            {"action": "none", "tokens": 120000}
+            {"action": "tool_compaction", "tokens": 90000, "reduction": 30000}
+            {"action": "history_compaction", "tokens": 70000, "reduction": 50000}
+            {"action": "emergency_truncation", "tokens": 150000, "dropped": 5}
+        """
+        self._update_context_tokens()
+        current_tokens = self.token_tracker.current_context_tokens
+        hard_limit = context_settings.hard_limit_tokens
+
+        # Layer 0: Under limit — no action needed
+        if current_tokens < hard_limit:
+            return {"action": "none", "tokens": current_tokens}
+
+        tokens_before = current_tokens
+
+        # If compaction is NOT locked, try layers 1 and 2
+        if not self._compaction_locked:
+            # Layer 1: Aggressive tool result compaction (non-LLM, fast)
+            # Temporarily reduce keep_recent_tool_blocks to 1
+            original_keep = context_settings.tool_compaction.keep_recent_tool_blocks
+            try:
+                context_settings.tool_compaction.keep_recent_tool_blocks = 1
+                self.compact_tool_results()
+            finally:
+                context_settings.tool_compaction.keep_recent_tool_blocks = original_keep
+
+            self._update_context_tokens()
+            current_tokens = self.token_tracker.current_context_tokens
+            if current_tokens < hard_limit:
+                result = {
+                    "action": "tool_compaction",
+                    "tokens": current_tokens,
+                    "reduction": tokens_before - current_tokens,
+                }
+                self._notify_compaction(console, tokens_before, current_tokens, _ACTION_LABELS["tool_compaction"])
+                return result
+
+            # Layer 2: AI-based history compaction
+            try:
+                result = self.compact_history(console=None, trigger="auto", aggressive=True)
+            except Exception:
+                result = None  # Compaction failed, fall through to truncation
+
+            if result is not None:
+                self._update_context_tokens()
+                current_tokens = self.token_tracker.current_context_tokens
+                if current_tokens < hard_limit:
+                    result = {
+                        "action": "history_compaction",
+                        "tokens": current_tokens,
+                        "reduction": tokens_before - current_tokens,
+                    }
+                    self._notify_compaction(console, tokens_before, current_tokens, _ACTION_LABELS["history_compaction"])
+                    return result
+
+        # Layer 3: Emergency truncation — drop oldest messages
+        self._emergency_truncate(hard_limit)
+        self._update_context_tokens()
+        current_tokens = self.token_tracker.current_context_tokens
+
+        result = {
+            "action": "emergency_truncation",
+            "tokens": current_tokens,
+            "reduction": tokens_before - current_tokens,
+        }
+        self._notify_compaction(console, tokens_before, current_tokens, _ACTION_LABELS["emergency_truncation"])
+        return result
+
+    def _emergency_truncate(self, target_tokens):
+        """Drop oldest non-system messages until context is under target.
+
+        Preservation rules:
+        - Index 0: system prompt (always kept)
+        - Any "Previous conversation context" system messages (compaction summaries)
+        - Last 6 messages minimum (recent context)
+
+        Args:
+            target_tokens: Target token count to get under.
+        """
+        MIN_TAIL = 6  # Minimum recent messages to preserve
+
+        def _is_protected(msg):
+            """Check if a message should never be dropped."""
+            return msg.get("role", "") == "system"
+
+        # Drop oldest non-protected messages until under target
+        while len(self.messages) > MIN_TAIL + 1:
+            self._update_context_tokens()
+            if self.token_tracker.current_context_tokens < target_tokens:
+                break
+
+            # Find the oldest droppable message (skip index 0 and tail)
+            dropped = False
+            for i in range(1, len(self.messages) - MIN_TAIL):
+                if not _is_protected(self.messages[i]):
+                    self.messages.pop(i)
+                    dropped = True
+                    break
+
+            if not dropped:
+                break  # Only protected messages remain in droppable zone
+
+        self.sync_log()
+
+    def _notify_compaction(self, console, tokens_before, tokens_after, action_label):
+        """Show dim notification when auto-compaction takes action.
+
+        Args:
+            console: Rich console (or None to suppress)
+            tokens_before: Token count before compaction
+            tokens_after: Token count after compaction
+            action_label: Human-readable description of the action taken
+        """
+        if not context_settings.notify_auto_compaction or not console:
+            return
+        reduction = tokens_before - tokens_after
+        console.print(
+            f"[dim]Auto-compacted: {tokens_before:,} → {tokens_after:,} tokens "
+            f"({action_label})[/dim]"
+        )
 
     def get_gitignore_spec(self, repo_root: Path):
         """Get cached or load PathSpec object for .gitignore filtering.

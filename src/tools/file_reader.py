@@ -13,7 +13,8 @@ from . import constants
 def _validate_read_path(
     path_str: str,
     repo_root: Path,
-    gitignore_spec
+    gitignore_spec,
+    vault_root: str = None,
 ) -> Tuple[Optional[Path], Optional[str]]:
     """Validate and resolve path for reading.
 
@@ -21,16 +22,19 @@ def _validate_read_path(
         path_str: Path string to validate
         repo_root: Repository root directory
         gitignore_spec: Optional PathSpec for .gitignore filtering
+        vault_root: Optional Obsidian vault root path
 
     Returns:
         (resolved_path, error_message) - error_message is None if valid
     """
-    resolver = PathResolver(repo_root=repo_root, gitignore_spec=gitignore_spec)
+    vault_path = Path(vault_root) if vault_root else None
+    resolver = PathResolver(repo_root=repo_root, gitignore_spec=gitignore_spec, vault_path=vault_path)
     return resolver.resolve_and_validate(
         path_str,
         check_gitignore=True,
         must_exist=True,
-        must_be_file=True
+        must_be_file=True,
+        enforce_boundary=vault_path is not None,
     )
 
 
@@ -235,7 +239,8 @@ def read_file(
     repo_root: Path,
     max_lines: Optional[int] = None,
     start_line: Optional[int] = None,
-    gitignore_spec = None
+    gitignore_spec = None,
+    vault_root: str = None,
 ) -> str:
     """Read a file's contents.
 
@@ -248,13 +253,14 @@ def read_file(
         max_lines: Optional limit on number of lines to read
         start_line: Optional 1-based starting line number (default: 1)
         gitignore_spec: Optional PathSpec for .gitignore filtering
+        vault_root: Optional Obsidian vault root path
 
     Returns:
         str: Formatted result with exit_code, lines_read, and file content
     """
     try:
         # Validate path
-        resolved, error = _validate_read_path(path_str, repo_root, gitignore_spec)
+        resolved, error = _validate_read_path(path_str, repo_root, gitignore_spec, vault_root=vault_root)
         if error:
             return format_file_result(
                 exit_code=1,

@@ -18,7 +18,7 @@ def _configure_compaction():
         ChatManager: A new ChatManager instance with compaction configured
     """
     if sub_agent_settings.enable_compaction:
-        return ChatManager()
+        return ChatManager(compact_trigger_tokens=sub_agent_settings.compact_trigger_tokens)
     else:
         return ChatManager(compact_trigger_tokens=None)
 
@@ -69,7 +69,7 @@ def _configure_isolation(chat_manager):
     Args:
         chat_manager: ChatManager instance to configure
     """
-    chat_manager.conversation_logger = None
+    chat_manager.markdown_logger = None
     chat_manager.interaction_mode = sub_agent_settings.interaction_mode
 
 

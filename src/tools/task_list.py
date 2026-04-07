@@ -3,6 +3,7 @@
 These tools provide in-session task tracking for long EDIT workflows.
 """
 
+import textwrap
 from pathlib import Path
 from typing import Optional, List
 
@@ -11,15 +12,34 @@ from .helpers.converters import coerce_int
 from . import constants
 
 
+def _escape_rich(text):
+    """Escape square brackets in text so Rich renders them literally."""
+    return text.replace("[", "\\[").replace("]", "\\]")
+def _strip_rich_markup(text):
+    """Remove Rich console markup tags from text for plain-text comparison.
+
+    Handles [tag]...[/tag], [/tag], and standalone [tag] forms.
+    Also un-escapes literal bracket sequences (\\[ \\]).
+    """
+    import re
+    # Un-escape literal brackets first
+    text = text.replace("\\[", "[").replace("\\]", "]")
+    # Remove [/tag] closing tags
+    text = re.sub(r'\[/\w+\]', '', text)
+    # Remove [tag] opening tags (but not [x], [ ], or [N] patterns)
+    text = re.sub(r'\[(?!x\]|\s?\]|\d+\])/?\w+\]', '', text)
+    return text
+
+
 def _format_task_list(task_list, title=None):
-    """Format task list for display.
+    """Format task list for display with Rich markup.
 
     Args:
         task_list: List of task dicts with 'description' and 'completed' keys
         title: Optional title for the task list
 
     Returns:
-        Formatted task list string
+        Formatted task list string with Rich markup
     """
     if not task_list:
         return "exit_code=1\nerror: No task list exists. Use create_task_list first.\n\n"
@@ -27,21 +47,60 @@ def _format_task_list(task_list, title=None):
     safe_title = (title or "").strip() if isinstance(title, str) else ""
     safe_title = safe_title[:constants.MAX_TASK_TITLE_LEN] if safe_title else "untitled"
 
-    done_count = 0
-    lines = [f"Task list: {safe_title} (done={done_count} total={len(task_list)})"]
+    done_count = sum(1 for t in task_list if t.get("completed"))
+    total = len(task_list)
+    all_done = done_count == total
+
+    # Escape user-provided text to prevent Rich markup injection
+    escaped_title = _escape_rich(safe_title)
+
+    # Header with progress
+    if all_done:
+        header = f"[bold green]\u2713[/bold green] [bold]{escaped_title}[/bold] [green]({done_count}/{total} done)[/green]"
+    else:
+        header = f"[bold]{escaped_title}[/bold] [dim]({done_count}/{total} done)[/dim]"
+
+    lines = [header]
+
+    # Indent for task lines: 2 spaces + bullet + space = 4 visible chars before description
+    TASK_INDENT = "  "
+    BULLET_DONE = "[dim green]\u2713[/dim green]"
+    BULLET_PENDING = "[dim white]\u25cb[/dim white]"
+    # Visible width of bullet prefix: "  ✓ " = 4 chars
+    # Continuation indent must match for alignment
+    DESC_INDENT = "    "  # 4 spaces, aligns with description after bullet
+    TASK_WRAP_WIDTH = 60  # Reasonable width for wrapped task descriptions
 
     for i, task in enumerate(task_list):
         is_done = bool(task.get("completed"))
-        if is_done:
-            done_count += 1
-        checkbox = "[x]" if is_done else "[ ]"
         desc = str(task.get("description", ""))
         if len(desc) > constants.MAX_TASK_LEN:
             desc = desc[:constants.MAX_TASK_LEN - 3] + "..."
-        lines.append(f"{i}: {checkbox} {desc}")
+        escaped_desc = _escape_rich(desc)
 
-    # Update header with final done_count
-    lines[0] = f"Task list: {safe_title} (done={done_count} total={len(task_list)})"
+        if is_done:
+            bullet = BULLET_DONE
+            # Wrap description text only (no bullet), apply markup separately
+            desc_lines = textwrap.wrap(escaped_desc, width=TASK_WRAP_WIDTH - 4, break_long_words=True, break_on_hyphens=True)
+            if not desc_lines:
+                desc_lines = [escaped_desc]
+            # First line: bullet + struck-through description
+            first_line = f"{TASK_INDENT}{bullet} [dim strike]{desc_lines[0]}[/dim strike]"
+            lines.append(first_line)
+            # Continuation lines: indent + struck-through text (no bullet)
+            for dline in desc_lines[1:]:
+                lines.append(f"{DESC_INDENT}[dim strike]{dline}[/dim strike]")
+        else:
+            bullet = BULLET_PENDING
+            # Wrap long pending descriptions with proper indentation
+            desc_lines = textwrap.wrap(escaped_desc, width=TASK_WRAP_WIDTH - 4, break_long_words=True, break_on_hyphens=True)
+            if not desc_lines:
+                desc_lines = [escaped_desc]
+            first_line = f"{TASK_INDENT}{bullet} {desc_lines[0]}"
+            lines.append(first_line)
+            for dline in desc_lines[1:]:
+                lines.append(f"{DESC_INDENT}{dline}")
+
     return "\n".join(lines) + "\n\n"
 
 

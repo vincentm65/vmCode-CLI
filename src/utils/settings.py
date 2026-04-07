@@ -68,7 +68,8 @@ class SubAgentSettings:
     """Sub-agent token limits and behavior configuration."""
     soft_limit_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("soft_limit_tokens", 75_000))
     hard_limit_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("hard_limit_tokens", 300_000))
-    enable_compaction: bool = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("enable_compaction", False))
+    enable_compaction: bool = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("enable_compaction", True))
+    compact_trigger_tokens: int = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("compact_trigger_tokens", 50_000))
     allowed_tools: list = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("allowed_tools", ["rg", "read_file", "list_directory", "web_search"]))
     interaction_mode: str = field(default_factory=lambda: _CONFIG.get("SUB_AGENT_SETTINGS", {}).get("interaction_mode", "plan"))
 
@@ -78,9 +79,19 @@ class SubAgentSettings:
 class ContextSettings:
     """Context compaction thresholds and defaults."""
     compact_trigger_tokens: int = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("compact_trigger_tokens", 80_000))
+    max_context_window: int = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("max_context_window", 200_000))
     log_conversations: bool = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("log_conversations", False))
     conversations_dir: str = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("conversations_dir", "conversations"))
+    notify_auto_compaction: bool = field(default_factory=lambda: _CONFIG.get("CONTEXT_SETTINGS", {}).get("notify_auto_compaction", True))
     tool_compaction: ToolCompactionSettings = field(default_factory=ToolCompactionSettings)
+    hard_limit_tokens: int = field(init=False, repr=False)
+
+    def __post_init__(self):
+        _ctx = _CONFIG.get("CONTEXT_SETTINGS", {})
+        if "hard_limit_tokens" in _ctx:
+            self.hard_limit_tokens = _ctx["hard_limit_tokens"]
+        else:
+            self.hard_limit_tokens = int(self.max_context_window * 0.9)
 
 
 @dataclass

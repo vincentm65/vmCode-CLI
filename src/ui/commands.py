@@ -11,10 +11,10 @@ from ui.banner import display_startup_banner
 from core.agentic import SubAgentPanel
 from ui.setting_selector import SettingSelector, SettingCategory, SettingOption
 from utils.settings import MonokaiDarkBGStyle, context_settings
-from utils.markdown import left_align_headings, colorize_review_severity
+from utils.markdown import left_align_headings
 from rich.markdown import Markdown
 from rich.table import Table
-from rich.text import Text
+
 from rich import box
 import json
 import logging
@@ -191,8 +191,8 @@ def _handle_config(chat_manager, console, debug_mode_container, args):
 
     changes = selector.run()
 
-    # Clear the selector UI from the screen
-    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
+    # Selector manages its own rendering; just print a separator on dismissal
+    console.print()
 
     if changes is None:
         console.print("[dim]Cancelled.[/dim]")
@@ -276,9 +276,6 @@ def _handle_config(chat_manager, console, debug_mode_container, args):
         except Exception as e:
             console.print(f"[red]Failed to save status bar settings: {e}[/red]")
 
-    # Refresh banner with updated modes
-    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
-
     # Display summary
     console.print(f"[green]Settings updated:[/green]")
     for line in change_lines:
@@ -316,7 +313,7 @@ def _handle_clear(chat_manager, console, debug_mode_container, args):
     console.print()
 
     chat_manager.reset_session()
-    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode)
+    display_startup_banner(chat_manager.approve_mode, chat_manager.interaction_mode, clear_screen=True)
     return CommandResult(status="handled")
 
 
@@ -953,11 +950,7 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
     if display_text:
         console.print()
         md = Markdown(left_align_headings(display_text), code_theme=MonokaiDarkBGStyle, justify="left")
-        # Render Markdown to Text first so colorize_review_severity can apply highlights
-        rendered_text = Text("")
-        for seg in console.render(md):
-            rendered_text.append(seg.text, style=seg.style)
-        console.print(colorize_review_severity(rendered_text))
+        console.print(md)
         console.print()
 
     # Inject review (with file contents) into chat history for follow-up context

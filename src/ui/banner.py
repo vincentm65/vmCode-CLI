@@ -35,15 +35,16 @@ def format_directory_path(path: str) -> str:
     return path
 
 
-def display_startup_banner(approve_mode: str, interaction_mode: str = "edit"):
+def display_startup_banner(approve_mode: str, interaction_mode: str = "edit", *, clear_screen: bool = False):
     """Ultra-minimalist startup screen for vmCode.
 
     Args:
         approve_mode: Current approval mode setting.
         interaction_mode: Current interaction mode ('plan' or 'edit').
+        clear_screen: If True, clear the terminal before rendering.
     """
-    console.clear()
-
+    if clear_screen:
+        console.clear()
     # Get model name based on provider
     provider_config = config.get_provider_config(config.LLM_PROVIDER)
     if config.LLM_PROVIDER == "local":
