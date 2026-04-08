@@ -370,7 +370,12 @@ class SelectionPanel:
         @bindings.add(' ')
         def toggle_check(event):
             """Toggle checkbox for multi-select questions."""
-            if self._showing_summary or self._editing_custom_input:
+            if self._showing_summary:
+                return
+            if self._editing_custom_input:
+                q_idx = self.current_question_idx
+                self._custom_input_texts[q_idx] += ' '
+                event.app.invalidate()
                 return
             if not self._is_multi_select():
                 return
