@@ -43,54 +43,6 @@ def normalize_command(command, rg_exe_path):
     return None, command, True
 
 
-# Git subcommands that are safe (read-only) - everything else requires approval
-_SAFE_GIT_SUBCOMMANDS = frozenset({
-    "status", "log", "diff", "show", "branch",
-    "remote", "tag", "config",
-    "rev-parse", "shortlog", "describe", "symbolic-ref",
-    "reflog", "name-rev", "blame", "annotate",
-    "for-each-ref", "ls-files", "ls-tree", "ls-remote",
-})
-
-
-def _is_safe_git_command(command: str) -> bool:
-    """Check if a git command is read-only (safe to auto-approve).
-
-    Returns True only for known-safe read-only git commands with no chaining.
-    Any shell operators (&&, ||, ;, |, >, <, backticks, $(), ${}) force approval.
-    Non-git commands return False.
-    """
-    command = command.strip()
-    if not command:
-        return False
-
-    # Strip "powershell " prefix if present
-    if command.lower().startswith("powershell "):
-        command = command[len("powershell "):].strip()
-
-    # Reject any command containing chaining/redirection operators
-    if CHAINING_OPERATORS.search(command):
-        return False
-
-    # Tokenize
-    use_posix = os.name != "nt"
-    try:
-        tokens = shlex.split(command, posix=use_posix)
-    except ValueError:
-        tokens = command.split()
-
-    if not tokens or len(tokens) < 2:
-        return False
-
-    # Check for git command (including "git.exe" on Windows)
-    cmd_name = tokens[0].lower()
-    if cmd_name not in ("git", "git.exe"):
-        return False
-
-    subcmd = tokens[1].lower().strip("-")
-    return subcmd in _SAFE_GIT_SUBCOMMANDS
-
-
 def confirm_tool(command, console, reason=None, requires_approval=True, approve_mode="safe", use_panel=True, is_edit_tool=False, cycle_approve_mode=None):
     """Prompt user for tool execution confirmation.
 
@@ -112,15 +64,17 @@ def confirm_tool(command, console, reason=None, requires_approval=True, approve_
     if not TOOLS_REQUIRE_CONFIRMATION and not requires_approval:
         return ("accept", None)
 
-    # In danger mode, auto-approve everything except git commands.
-    # Git commands require approval unless they are read-only (safe).
+    # In danger mode, auto-approve everything except unsafe commands.
+    # Safe commands (per SAFE_COMMAND_RULES) auto-approve.
+    # Unsafe commands (e.g., git push) still require confirmation.
     if approve_mode == "danger":
-        if _is_safe_git_command(command):
+        from utils.safe_commands import is_safe_command
+        if is_safe_command(command):
             return ("accept", None)
         # Auto-accept all edit operations in danger mode
         if is_edit_tool or (requires_approval and "edit_file" in command):
             return ("accept", None)
-        # Fall through to normal confirmation for non-safe git commands
+        # Fall through to normal confirmation for unsafe commands
 
     # Skip confirmation for edit operations in accept_edits mode
     # This only applies to file edits, not execute_command

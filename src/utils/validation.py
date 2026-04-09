@@ -4,14 +4,13 @@ import os
 import re
 import shlex
 from urllib.parse import urlparse
-from llm.config import ALLOWED_COMMANDS
 
 # Shell operators that indicate command chaining or redirection.
 # Shared between validation.py and shell.py — keep in one place to avoid drift.
-# Matches: &&, ||, ;, |, >, <, backticks, $(), ${}
+# Matches: &&, ||, ;, |, >, <, backticks, $(), ${}, newlines
 # NOTE: Alternations are sorted longest-first so that '&&' and '||' match
 # before '|' — reordering the raw list is safe because we sort at runtime.
-_RAW_CHAINING_PATTERNS = ["&&", "||", ";", "|", ">", "<", "`", "$(", "${"]
+_RAW_CHAINING_PATTERNS = ["&&", "||", ";", "|", ">", "<", "`", "$(", "${", "\n", "\r"]
 CHAINING_OPERATORS = re.compile(
     "|".join(re.escape(p) for p in sorted(_RAW_CHAINING_PATTERNS, key=len, reverse=True))
 )
@@ -180,37 +179,13 @@ def check_command(command):
 def is_auto_approved_command(command):
     """Check if a command should be auto-approved (safe, read-only commands).
 
-    Auto-approval is only granted when the command is a single, unchained
-    invocation of a command in ALLOWED_COMMANDS. Any shell chaining operators
-    (&&, ||, ;, |, >, <, backticks, $(), ${}) force the command to require
-    user approval.
+    Delegates to the structured safety system in utils.safe_commands.
 
     Args:
         command: Command string to validate
 
     Returns:
-        bool: True if command is in ALLOWED_COMMANDS list and not chained
+        bool: True if command is safe to auto-approve
     """
-    command = command.strip()
-    if not command:
-        return False
-
-    # Strip "powershell " prefix if present (legacy support for Windows users)
-    if command.lower().startswith("powershell "):
-        command = command[len("powershell "):].strip()
-
-    # Reject any command containing chaining/redirection operators
-    # This catches &&, ||, ;, |, >, <, backticks, $(), ${} even inside quoted
-    # strings — conservative by design, since auto-approval skips user review
-    if CHAINING_OPERATORS.search(command):
-        return False
-
-    # Tokenize and get command name
-    tokens = _tokenize_segment(command)
-    if not tokens:
-        return False
-
-    cmd_name = tokens[0].lower()
-
-    # Check if command is in the auto-approved list
-    return cmd_name in ALLOWED_COMMANDS
+    from utils.safe_commands import is_safe_command
+    return is_safe_command(command)

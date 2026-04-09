@@ -376,7 +376,6 @@ __all__ = [
 
     "PLAN_TYPES",
     "PLAN_TYPE_LABELS",
-    "ALLOWED_COMMANDS",
     "get_provider_config",
     "generate_config_template",
     "reload_config",
@@ -425,39 +424,6 @@ PLAN_TYPE_LABELS = {
     "debug": "Debug",
     "optimize": "Optimize"
 }
-
-# Commands that do NOT require approval (safe, read-only commands)
-ALLOWED_COMMANDS = [
-    # System queries
-    "which", "whereis", "pwd",
-    
-    # System info (read-only)
-    "ps", "pgrep", "pidof",               # Process info
-    "df", "du", "free",                    # Resource info
-    "uname", "hostname", "uptime",         # System info
-    "env", "printenv", "export",          # Environment (read operations)
-    "lscpu", "lsblk", "lsof",              # Hardware info
-    "date", "cal", "uptime",               # Time/date
-    
-    # Network query (read-only)
-    "ping", "nslookup", "dig", "ss", "ip", "ifconfig",
-    
-    # Package query (read-only only - install/upgrade requires approval)
-    "pacman", "dpkg", "apt-cache", "rpm", "dnf", "yum",
-    
-    # Development queries
-    "python", "python3", "node", "npm", "pip",  # When used for queries (version, help, etc.)
-    
-    # Computer agent debugging tools
-    "file", "stat",                           # File inspection
-    "md5sum", "sha256sum",                    # File checksums
-    "systemctl", "service",                   # Service management
-    "journalctl", "dmesg",                    # System logs
-    "ltrace",                                 # Library call tracer
-    "netstat",                                # Network connections (legacy)
-    "apt-show", "dpkg-query",                 # Package info queries
-]
-
 
 def get_provider_config(provider: str):
     """Retrieve the configuration dictionary for a given provider.
