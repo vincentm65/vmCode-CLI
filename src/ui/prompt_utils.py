@@ -47,42 +47,42 @@ def get_bottom_toolbar_text(chat_manager):
     if chat_manager.interaction_mode == "plan":
         mode_label = "Plan"
         val = PLAN_TYPE_LABELS.get(chat_manager.plan_type, chat_manager.plan_type.upper())
-        colors = {"feature": "cyan", "refactor": "green", "debug": "red", "optimize": "yellow"}
+        colors = {"feature": "#5F9EA0", "refactor": "#6B8E23", "debug": "#CD5C5C", "optimize": "#DAA520"}
         mode_val_colored = f'<style fg="{colors.get(chat_manager.plan_type, "white")}">{val}</style>'
     else:
         mode_label = "Approval"
         val = APPROVE_MODE_LABELS.get(chat_manager.approve_mode, chat_manager.approve_mode.upper())
-        colors = {"safe": "green", "accept_edits": "yellow", "danger": "red"}
+        colors = {"safe": "#6B8E23", "accept_edits": "#DAA520", "danger": "#CD5C5C"}
         mode_val_colored = f'<style fg="{colors.get(chat_manager.approve_mode, "white")}">{val}</style>'
 
     # Build toolbar string based on configuration
     # Model and mode are always shown
-    parts = [f'<style fg="white">Model: {model_display or provider_name} - {mode_label}: </style>{mode_val_colored}']
+    parts = [f'<style fg="#606060">Model: {model_display or provider_name} - {mode_label}: </style>{mode_val_colored}']
     
     # Conditionally add token counts
     if STATUS_BAR_SETTINGS.get("show_curr_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="grey">curr</style><style fg="white">: {tokens_curr:,}</style>')
+        parts.append(f'<style fg="#606060"> | </style><style fg="#808080">curr</style><style fg="#606060">: {tokens_curr:,}</style>')
     if STATUS_BAR_SETTINGS.get("show_in_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="grey">in</style><style fg="white">: {tokens_in:,}</style>')
+        parts.append(f'<style fg="#606060"> | </style><style fg="#808080">in</style><style fg="#606060">: {tokens_in:,}</style>')
     if STATUS_BAR_SETTINGS.get("show_out_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="grey">out</style><style fg="white">: {tokens_out:,}</style>')
+        parts.append(f'<style fg="#606060"> | </style><style fg="#808080">out</style><style fg="#606060">: {tokens_out:,}</style>')
     if STATUS_BAR_SETTINGS.get("show_total_tokens", True):
-        parts.append(f'<style fg="white"> | </style><style fg="grey">total</style><style fg="white">: {tokens_total:,}</style>')
+        parts.append(f'<style fg="#606060"> | </style><style fg="#808080">total</style><style fg="#606060">: {tokens_total:,}</style>')
     
     # Conditionally add cost
     if STATUS_BAR_SETTINGS.get("show_cost", True):
-        parts.append(f'<style fg="white"> | </style><style fg="grey">cost</style><style fg="white">: ${total_cost:.4f}</style>')
+        parts.append(f'<style fg="#606060"> | </style><style fg="#808080">cost</style><style fg="#606060">: ${total_cost:.4f}</style>')
     
     # Conditionally add completion time
     if STATUS_BAR_SETTINGS.get("show_completed", True) and last_completion is not None:
-        parts.append(f'<style fg="white"> | </style><style fg="green">completed</style><style fg="white">: {format_time(last_completion)}</style>')
+        parts.append(f'<style fg="#606060"> | </style><style fg="#6B8E23">completed</style><style fg="#606060">: {format_time(last_completion)}</style>')
     
     return HTML('\n' + ''.join(parts))
 
 
 TOOLBAR_STYLE = Style.from_dict({
-    "bottom-toolbar": "bg:default fg:white noreverse",
-    "bottom-toolbar.text": "bg:default fg:white noreverse",
+    "bottom-toolbar": "bg:default fg:#FFFFFF noreverse",
+    "bottom-toolbar.text": "bg:default fg:#FFFFFF noreverse",
 })
 
 

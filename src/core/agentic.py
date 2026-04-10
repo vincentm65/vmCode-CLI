@@ -453,7 +453,7 @@ class AgenticOrchestrator:
                     break
 
         if use_parallel and self.debug_mode:
-            self.console.print(f"[cyan]Executing {len(tool_calls)} tools in parallel[/cyan]")
+            self.console.print(f"[#5F9EA0]Executing {len(tool_calls)} tools in parallel[/#5F9EA0]")
 
         # Lock compaction during tool execution to prevent orphaning tool_call_ids
         self.chat_manager.set_compaction_lock(True)
@@ -633,7 +633,7 @@ class AgenticOrchestrator:
                         
                         # Print the label before feedback (matches sequential path)
                         if not self.panel_updater and function_name not in ("create_task_list", "complete_task", "show_task_list"):
-                            label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold cyan]{label}[/bold cyan]"
+                            label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold #5F9EA0]{label}[/bold #5F9EA0]"
                             self.console.print(label_text, highlight=False)
                             self.console.file.flush()
                         
@@ -907,7 +907,7 @@ class AgenticOrchestrator:
                                 console.print()
                         else:
                             # Print label first (like parallel mode)
-                            label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold cyan]{label}[/bold cyan]"
+                            label_text = f"[grey]{label}[/grey]" if not function_name.startswith("web search") else f"[bold #5F9EA0]{label}[/bold #5F9EA0]"
                             if not self.panel_updater:
                                 console.print(label_text, highlight=False)
                                 console.file.flush()

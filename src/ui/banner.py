@@ -71,7 +71,7 @@ def display_startup_banner(approve_mode: str, interaction_mode: str = "edit", *,
     )
 
     model_info = Text.assemble(
-        (f"{config.LLM_PROVIDER.upper()} ", "bold cyan"),
+        (f"{config.LLM_PROVIDER.upper()} ", "bold #5F9EA0"),
         (f"{model_name}", "grey70")
     )
 

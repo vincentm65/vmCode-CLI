@@ -145,7 +145,7 @@ class SettingSelector:
                 lines.append("")
 
             if show_headers:
-                lines.append(f"<b><style fg='cyan'>{cat.title}</style></b>")
+                lines.append(f"<b><style fg='#5F9EA0'>{cat.title}</style></b>")
 
             for s_idx, setting in enumerate(cat.settings):
                 is_selected = (is_active_cat
@@ -177,7 +177,7 @@ class SettingSelector:
                     if is_selected:
                         if tag and tag not in ("ON", "OFF"):
                             lines.append(
-                                f"> <style fg='cyan' bold='true'>{tag}</style>"
+                                f"> <style fg='#5F9EA0' bold='true'>{tag}</style>"
                                 f"  <b>{label}</b>"
                             )
                         else:
@@ -219,7 +219,7 @@ class SettingSelector:
                     label = setting.text
                     if is_selected:
                         lines.append(
-                            f"> <style fg='cyan' bold='true'>{tag}</style>"
+                            f"> <style fg='#5F9EA0' bold='true'>{tag}</style>"
                             f"  <b>{label}</b>"
                         )
                     else:
@@ -241,7 +241,7 @@ class SettingSelector:
                         marker = "◉" if is_current else "○"
                         desc = opt.get("description", "")
                         if is_current:
-                            color = "cyan"
+                            color = "#5F9EA0"
                             lines.append(
                                 f'{indent}<style fg="{color}">{marker}</style> '
                                 f'<style fg="{color}" bold="true">{opt_text}</style>'
@@ -259,7 +259,7 @@ class SettingSelector:
                     if is_selected:
                         lines.append(
                             f"> <b>{label}:</b>"
-                            f"  <style fg='cyan'>{val}</style>"
+                            f"  <style fg='#5F9EA0'>{val}</style>"
                         )
                     else:
                         lines.append(

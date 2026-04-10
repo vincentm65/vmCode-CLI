@@ -86,7 +86,7 @@ def _handle_compact(chat_manager, console, debug_mode_container, args):
     # Show the compacted summary in debug mode
     if debug_mode_container.get('debug') and 'summary' in result:
         console.print()
-        console.print("[cyan]Compacted summary:[/cyan]")
+        console.print("[#5F9EA0]Compacted summary:[/#5F9EA0]")
         console.print(f"[dim]{result['summary']}[/dim]")
     return CommandResult(status="handled")
 
@@ -575,8 +575,8 @@ def _handle_model(chat_manager, console, debug_mode_container, args):
         # Show current model for current provider
         cfg = config.get_provider_config(current_provider)
         model = cfg.get('model') or cfg.get('api_model') or 'Not set'
-        console.print(f"[bold cyan]Current provider:[/bold cyan] {current_provider}")
-        console.print(f"[bold cyan]Current model:[/bold cyan] {model}")
+        console.print(f"[bold #5F9EA0]Current provider:[/bold #5F9EA0] {current_provider}")
+        console.print(f"[bold #5F9EA0]Current model:[/bold #5F9EA0] {model}")
         return CommandResult(status="handled")
     else:
         model = args.strip()
@@ -612,10 +612,10 @@ def _handle_key(chat_manager, console, debug_mode_container, args):
             if api_key:
                 # Show masked API key
                 masked = api_key[:8] + "..." if len(api_key) > 8 else "***"
-                console.print(f"[bold cyan]Current provider:[/bold cyan] {current_provider}")
-                console.print(f"[bold cyan]API key:[/bold cyan] {masked}")
+                console.print(f"[bold #5F9EA0]Current provider:[/bold #5F9EA0] {current_provider}")
+                console.print(f"[bold #5F9EA0]API key:[/bold #5F9EA0] {masked}")
             else:
-                console.print(f"[bold cyan]Current provider:[/bold cyan] {current_provider}")
+                console.print(f"[bold #5F9EA0]Current provider:[/bold #5F9EA0] {current_provider}")
                 console.print("[yellow]API key not set[/yellow]")
         return CommandResult(status="handled")
 
@@ -771,7 +771,7 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
             return CommandResult(status="handled")
 
         plan_label = usage.get("plan", "unknown").capitalize()
-        console.print(f"[bold cyan]Usage -- {plan_label} Plan[/bold cyan]")
+        console.print(f"[bold #5F9EA0]Usage -- {plan_label} Plan[/bold #5F9EA0]")
         console.print()
 
         for period in ("daily", "weekly"):
@@ -798,7 +798,7 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
     tracker = chat_manager.token_tracker
 
     # Display token counts
-    console.print(f"[cyan]Session Token Usage ({current_model}):[/cyan]")
+    console.print(f"[#5F9EA0]Session Token Usage ({current_model}):[/#5F9EA0]")
     console.print(f"  Input tokens:  {tracker.total_prompt_tokens:,}")
     console.print(f"  Output tokens: {tracker.total_completion_tokens:,}")
     console.print(f"  Total tokens:  {tracker.total_tokens:,}")
@@ -808,7 +808,7 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
     # Display costs — combined upstream-reported + estimated
     display_cost = tracker.get_display_cost(current_model)
     if display_cost > 0:
-        console.print(f"[cyan]Session Cost ({current_model}):[/cyan]")
+        console.print(f"[#5F9EA0]Session Cost ({current_model}):[/#5F9EA0]")
         console.print(f"  Total:  ${display_cost:.6f}")
         console.print()
         if tracker.has_actual_cost():
@@ -824,9 +824,9 @@ def _handle_usage(chat_manager, console, debug_mode_container, args):
             console.print()
         else:
             console.print(f"[yellow]Cost not configured for model '{current_model}'. Set with:[/yellow]")
-            console.print(f"  [bold cyan]/usage[/bold cyan] in <cost>   - Set input token cost per 1M tokens")
-            console.print(f"  [bold cyan]/usage[/bold cyan] out <cost>  - Set output token cost per 1M tokens")
-            console.print(f"[dim]Example: [bold cyan]/usage[/bold cyan] in 2.50[/dim]")
+            console.print(f"  [bold #5F9EA0]/usage[/bold #5F9EA0] in <cost>   - Set input token cost per 1M tokens")
+            console.print(f"  [bold #5F9EA0]/usage[/bold #5F9EA0] out <cost>  - Set output token cost per 1M tokens")
+            console.print(f"[dim]Example: [bold #5F9EA0]/usage[/bold #5F9EA0] in 2.50[/dim]")
             console.print()
 
     return CommandResult(status="handled")
@@ -884,10 +884,10 @@ def _handle_review(chat_manager, console, debug_mode_container, args):
             return CommandResult(status="handled")
 
     if user_intent:
-        console.print(f"[cyan]Running: {' '.join(git_argv)}[/cyan]")
+        console.print(f"[#5F9EA0]Running: {' '.join(git_argv)}[/#5F9EA0]")
         console.print(f"[dim]Intent: {user_intent}[/dim]")
     else:
-        console.print(f"[cyan]Running: {' '.join(git_argv)}[/cyan]")
+        console.print(f"[#5F9EA0]Running: {' '.join(git_argv)}[/#5F9EA0]")
 
     # Run git diff
     result = subprocess.run(
@@ -1039,7 +1039,7 @@ def _require_proxy_provider(chat_manager, console):
         console.print(
             "[yellow]This command requires the vmcode provider.[/yellow]"
         )
-        console.print("[dim]Run [bold cyan]/provider vmcode[/bold cyan] first.[/dim]")
+        console.print("[dim]Run [bold #5F9EA0]/provider vmcode[/bold #5F9EA0] first.[/dim]")
         console.print()
         return False
     return True
@@ -1089,7 +1089,7 @@ def _handle_plan(chat_manager, console, debug_mode_container, args):
         table.add_row(name, price, rate)
 
     console.print(table)
-    console.print("[dim]Upgrade: [bold cyan]/upgrade pro[/bold cyan]  |  Manage: [bold cyan]/account[/bold cyan][/dim]")
+    console.print("[dim]Upgrade: [bold #5F9EA0]/upgrade pro[/bold #5F9EA0]  |  Manage: [bold #5F9EA0]/account[/bold #5F9EA0][/dim]")
     console.print()
     return CommandResult(status="handled")
 
@@ -1111,13 +1111,13 @@ def _handle_signup(chat_manager, console, debug_mode_container, args):
         return CommandResult(status="handled")
 
     _, api_base = _get_proxy_config(chat_manager)
-    console.print(f"[cyan]Creating account for {email}...[/cyan]")
+    console.print(f"[#5F9EA0]Creating account for {email}...[/#5F9EA0]")
 
     status, data = _call_proxy_api("POST", "/v1/auth/signup", api_base, body={"email": email})
 
     if status == 409:
         console.print("[yellow]Account already exists for that email.[/yellow]")
-        console.print("[dim]Use [bold cyan]/login {email}[/bold cyan] to log in on this device.[/dim]")
+        console.print("[dim]Use [bold #5F9EA0]/login {email}[/bold #5F9EA0] to log in on this device.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1137,9 +1137,9 @@ def _handle_signup(chat_manager, console, debug_mode_container, args):
     # Display the API key prominently
     console.print()
     console.print("[bold green]Account created successfully![/bold green]")
-    console.print("[dim]Check your inbox for a verification email. Use [bold cyan]/resend[/bold cyan] if it doesn't arrive.[/dim]")
+    console.print("[dim]Check your inbox for a verification email. Use [bold #5F9EA0]/resend[/bold #5F9EA0] if it doesn't arrive.[/dim]")
     console.print()
-    console.print("[bold cyan]Your API key (save this — it won't be shown again):[/bold cyan]")
+    console.print("[bold #5F9EA0]Your API key (save this — it won't be shown again):[/bold #5F9EA0]")
     console.print(f"[bold white on grey23]  {api_key}  [/bold white on grey23]")
     console.print()
 
@@ -1158,7 +1158,7 @@ def _handle_signup(chat_manager, console, debug_mode_container, args):
         config_manager.set_api_key("vmcode", api_key)
     except Exception as e:
         console.print(f"[yellow]Could not save API key to config: {e}[/yellow]")
-        console.print("[dim]Use [bold cyan]/key {api_key}[/bold cyan] to set it manually.[/dim]")
+        console.print("[dim]Use [bold #5F9EA0]/key {api_key}[/bold #5F9EA0] to set it manually.[/dim]")
 
     # Switch to vmcode provider (best-effort)
     try:
@@ -1168,7 +1168,7 @@ def _handle_signup(chat_manager, console, debug_mode_container, args):
         console.print("[green]Switched to vmcode provider.[/green]")
     except Exception as e:
         console.print(f"[yellow]Could not auto-switch to vmcode: {e}[/yellow]")
-        console.print("[dim]Run [bold cyan]/provider vmcode[/bold cyan] to switch manually.[/dim]")
+        console.print("[dim]Run [bold #5F9EA0]/provider vmcode[/bold #5F9EA0] to switch manually.[/dim]")
 
     console.print()
     return CommandResult(status="handled")
@@ -1185,7 +1185,7 @@ def _handle_account(chat_manager, console, debug_mode_container, args):
         console.print()
         return CommandResult(status="handled")
 
-    console.print("[cyan]Fetching account info...[/cyan]")
+    console.print("[#5F9EA0]Fetching account info...[/#5F9EA0]")
     status, data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
 
     if status != 200 or not data:
@@ -1195,26 +1195,26 @@ def _handle_account(chat_manager, console, debug_mode_container, args):
         return CommandResult(status="handled")
 
     console.print()
-    console.print(f"[bold cyan]Account:[/bold cyan]  {data.get('email', 'N/A')}")
+    console.print(f"[bold #5F9EA0]Account:[/bold #5F9EA0]  {data.get('email', 'N/A')}")
     plan = data.get("plan", "lite").capitalize()
     sub_status = data.get("subscription_status", "none")
-    console.print(f"[bold cyan]Plan:[/bold cyan]      {plan}")
+    console.print(f"[bold #5F9EA0]Plan:[/bold #5F9EA0]      {plan}")
 
     if sub_status and sub_status != "none":
-        console.print(f"[bold cyan]Status:[/bold cyan]    {sub_status}")
+        console.print(f"[bold #5F9EA0]Status:[/bold #5F9EA0]    {sub_status}")
         period_end = data.get("current_period_end")
         if period_end:
-            console.print(f"[bold cyan]Renews:[/bold cyan]    {period_end}")
+            console.print(f"[bold #5F9EA0]Renews:[/bold #5F9EA0]    {period_end}")
     else:
         console.print("[dim]No active subscription[/dim]")
 
     prefix = data.get("api_key_prefix")
     if prefix:
-        console.print(f"[bold cyan]API key:[/bold cyan]   {prefix}...")
+        console.print(f"[bold #5F9EA0]API key:[/bold #5F9EA0]   {prefix}...")
     key_count = len(data.get("keys", []))
-    console.print(f"[bold cyan]Keys:[/bold cyan]      {key_count}")
+    console.print(f"[bold #5F9EA0]Keys:[/bold #5F9EA0]      {key_count}")
     console.print()
-    console.print("[dim]Manage subscription: [bold cyan]/upgrade[/bold cyan] or [bold cyan]/manage[/bold cyan][/dim]")
+    console.print("[dim]Manage subscription: [bold #5F9EA0]/upgrade[/bold #5F9EA0] or [bold #5F9EA0]/manage[/bold #5F9EA0][/dim]")
     console.print()
     return CommandResult(status="handled")
 
@@ -1225,7 +1225,7 @@ def _send_reset_key_email(console, api_base, email):
     Used by both /login (path 2: user lost key) and /reset-key.
     Returns CommandResult.
     """
-    console.print(f"[cyan]Sending new API key to {email}...[/cyan]")
+    console.print(f"[#5F9EA0]Sending new API key to {email}...[/#5F9EA0]")
     console.print("[dim]This will create a new key and email it to you. Old keys remain valid.[/dim]")
     console.print()
 
@@ -1251,7 +1251,7 @@ def _send_reset_key_email(console, api_base, email):
 
     message = (data or {}).get("message", "Check your email for the new API key.")
     console.print(f"[green]{message}[/green]")
-    console.print("[dim]Once you receive the key, run: [bold cyan]/key <your-new-key>[/bold cyan][/dim]")
+    console.print("[dim]Once you receive the key, run: [bold #5F9EA0]/key <your-new-key>[/bold #5F9EA0][/dim]")
     console.print()
     return CommandResult(status="handled")
 
@@ -1298,7 +1298,7 @@ def _handle_login(chat_manager, console, debug_mode_container, args):
             pass  # If we can't check, just proceed
 
     console.print()
-    console.print(f"[bold cyan]vmCode Login[/bold cyan]")
+    console.print(f"[bold #5F9EA0]vmCode Login[/bold #5F9EA0]")
     console.print(f"[dim]Logging in as {email}[/dim]")
     console.print()
 
@@ -1315,7 +1315,7 @@ def _handle_login(chat_manager, console, debug_mode_container, args):
 
         raw_key = raw_key.strip()
 
-        console.print("[cyan]Validating API key...[/cyan]")
+        console.print("[#5F9EA0]Validating API key...[/#5F9EA0]")
         status, data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=raw_key)
 
         if status == 200 and data and data.get("email", "").lower() == email.lower():
@@ -1324,7 +1324,7 @@ def _handle_login(chat_manager, console, debug_mode_container, args):
                 config_manager.set_api_key("vmcode", raw_key)
             except Exception as e:
                 console.print(f"[yellow]Could not save API key to config: {e}[/yellow]")
-                console.print(f"[dim]Use [bold cyan]/key {raw_key}[/bold cyan] to set it manually.[/dim]")
+                console.print(f"[dim]Use [bold #5F9EA0]/key {raw_key}[/bold #5F9EA0] to set it manually.[/dim]")
 
             try:
                 config_manager.set_provider("vmcode")
@@ -1333,7 +1333,7 @@ def _handle_login(chat_manager, console, debug_mode_container, args):
                 console.print("[green]Switched to vmcode provider.[/green]")
             except Exception as e:
                 console.print(f"[yellow]Could not auto-switch to vmcode: {e}[/yellow]")
-                console.print("[dim]Run [bold cyan]/provider vmcode[/bold cyan] to switch manually.[/dim]")
+                console.print("[dim]Run [bold #5F9EA0]/provider vmcode[/bold #5F9EA0] to switch manually.[/dim]")
 
             plan = data.get("plan", "free")
             verified = "yes" if data.get("verified") else "no"
@@ -1385,7 +1385,7 @@ def _handle_resend(chat_manager, console, debug_mode_container, args):
         console.print()
         return CommandResult(status="handled")
 
-    console.print(f"[cyan]Sending verification email to {email}...[/cyan]")
+    console.print(f"[#5F9EA0]Sending verification email to {email}...[/#5F9EA0]")
     status, data = _call_proxy_api("POST", "/v1/auth/resend", api_base, body={"email": email})
 
     if status == 429:
@@ -1443,7 +1443,7 @@ def _handle_manage(chat_manager, console, debug_mode_container, args):
         console.print()
         return CommandResult(status="handled")
 
-    console.print("[cyan]Opening billing portal...[/cyan]")
+    console.print("[#5F9EA0]Opening billing portal...[/#5F9EA0]")
     status, data = _call_proxy_api(
         "POST", "/v1/billing/portal", api_base,
         body={"return_url": "https://vmcode.dev"},
@@ -1453,7 +1453,7 @@ def _handle_manage(chat_manager, console, debug_mode_container, args):
     if status == 400:
         detail = (data or {}).get("detail", "No subscription found.") if data else "No subscription found."
         console.print(f"[yellow]{detail}[/yellow]")
-        console.print("[dim]Subscribe to a plan first with [bold cyan]/upgrade[/bold cyan].[/dim]")
+        console.print("[dim]Subscribe to a plan first with [bold #5F9EA0]/upgrade[/bold #5F9EA0].[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1473,7 +1473,7 @@ def _handle_manage(chat_manager, console, debug_mode_container, args):
         pass
 
     console.print()
-    console.print("[cyan]Or copy this link:[/cyan]")
+    console.print("[#5F9EA0]Or copy this link:[/#5F9EA0]")
     console.print(f"  [bold]{url}[/bold]")
     console.print()
     return CommandResult(status="handled")
@@ -1522,7 +1522,7 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
         # Pro user — no upgrades available
         console.print()
         console.print(f"[bold green]You're on the {current_plan.capitalize()} plan — the highest tier.[/bold green]")
-        console.print("[dim]Use [bold cyan]/manage[/bold cyan] to cancel or change your subscription.[/dim]")
+        console.print("[dim]Use [bold #5F9EA0]/manage[/bold #5F9EA0] to cancel or change your subscription.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1569,7 +1569,7 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
     target = result.get("plan", first_upgrade)
 
     # Upgrade: open Stripe Checkout
-    console.print(f"[cyan]Opening checkout for {target.capitalize()}...[/cyan]")
+    console.print(f"[#5F9EA0]Opening checkout for {target.capitalize()}...[/#5F9EA0]")
 
     status, data = _call_proxy_api(
         "POST", "/v1/billing/checkout", api_base,
@@ -1599,7 +1599,7 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args):
         pass
 
     console.print()
-    console.print("[cyan]Or copy this link:[/cyan]")
+    console.print("[#5F9EA0]Or copy this link:[/#5F9EA0]")
     console.print(f"  [bold]{url}[/bold]")
     console.print()
     return CommandResult(status="handled")
@@ -1627,7 +1627,7 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args):
         console.print()
         return CommandResult(status="handled")
 
-    console.print("[cyan]Rotating API key...[/cyan]")
+    console.print("[#5F9EA0]Rotating API key...[/#5F9EA0]")
     status, data = _call_proxy_api(
         "POST", "/v1/auth/rotate-key", api_base,
         body={},
@@ -1647,7 +1647,7 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args):
     console.print("[bold green]API key rotated successfully.[/bold green]")
     console.print("[bold red]Your old key is no longer valid.[/bold red]")
     console.print()
-    console.print("[bold cyan]Your new API key (save this — it won't be shown again):[/bold cyan]")
+    console.print("[bold #5F9EA0]Your new API key (save this — it won't be shown again):[/bold #5F9EA0]")
     console.print(f"[bold white on grey23]  {new_key}  [/bold white on grey23]")
     console.print()
 
@@ -1657,7 +1657,7 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args):
         console.print("[green]New key saved to config.[/green]")
     except Exception as e:
         console.print(f"[yellow]Could not save to config: {e}[/yellow]")
-        console.print(f"[dim]Use [bold cyan]/key {new_key}[/bold cyan] to set it manually.[/dim]")
+        console.print(f"[dim]Use [bold #5F9EA0]/key {new_key}[/bold #5F9EA0] to set it manually.[/dim]")
 
     # Backup to file
     try:
@@ -1779,13 +1779,13 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
             console.print(f"  Exclude folders: {obsidian_settings.exclude_folders}")
             console.print(f"  Project base: {obsidian_settings.project_base}")
             console.print()
-            console.print("[dim]Run [bold cyan]/obsidian[/bold cyan] (no args) for interactive settings.[/dim]")
+            console.print("[dim]Run [bold #5F9EA0]/obsidian[/bold #5F9EA0] (no args) for interactive settings.[/dim]")
             return CommandResult(status="handled")
 
         if args_clean.lower().startswith("set "):
             path = args_clean[4:].strip().strip('"').strip("'")
             if not path:
-                console.print("[red]Usage: [bold cyan]/obsidian set /path/to/your/vault[/bold cyan]")
+                console.print("[red]Usage: [bold #5F9EA0]/obsidian set /path/to/your/vault[/bold #5F9EA0]")
                 return CommandResult(status="handled")
             vault_path = Path(path).resolve()
             if not vault_path.is_dir():
@@ -1803,7 +1803,7 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
 
         if args_clean.lower() == "enable":
             if not obsidian_settings.vault_path:
-                console.print("[red]No vault path set. Use [bold cyan]/obsidian set <path>[/bold cyan] first.[/red]")
+                console.print("[red]No vault path set. Use [bold #5F9EA0]/obsidian set <path>[/bold #5F9EA0] first.[/red]")
                 return CommandResult(status="handled")
             changes = _apply_obsidian_changes(chat_manager, console, obsidian_settings, {"enabled": True})
             console.print("[green]Obsidian integration enabled.[/green]")
@@ -1815,7 +1815,7 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
             return CommandResult(status="handled")
 
         console.print(f"[red]Unknown subcommand: {args}[/red]")
-        console.print("Usage: [bold cyan]/obsidian[/bold cyan] [set <path> | enable | disable | status]")
+        console.print("Usage: [bold #5F9EA0]/obsidian[/bold #5F9EA0] [set <path> | enable | disable | status]")
         return CommandResult(status="handled")
 
     # No args — launch interactive SettingSelector UI
@@ -1894,12 +1894,12 @@ def _handle_project(chat_manager, console, debug_mode_container, args):
 
     if not obsidian_settings.is_active():
         console.print("[yellow]Obsidian vault is not configured or inactive.[/yellow]")
-        console.print("[dim]Run [bold cyan]/obsidian set <path>[/bold cyan] to configure your vault.[/dim]")
+        console.print("[dim]Run [bold #5F9EA0]/obsidian set <path>[/bold #5F9EA0] to configure your vault.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
     if not args or not args.strip():
-        console.print("[red]Usage: [bold cyan]/project[/bold cyan] init[/red]")
+        console.print("[red]Usage: [bold #5F9EA0]/project[/bold #5F9EA0] init[/red]")
         console.print("[dim]  init — scaffold project folder structure in vault[/dim]")
         console.print()
         return CommandResult(status="handled")
@@ -2088,13 +2088,13 @@ def _handle_project(chat_manager, console, debug_mode_container, args):
             console.print("[dim]Or download from: https://github.com/blacksmithgu/obsidian-dataview[/dim]")
             console.print()
 
-        console.print("[dim]Create issues with [bold cyan]/project init[/bold cyan] to set up the project folder.[/dim]")
+        console.print("[dim]Create issues with [bold #5F9EA0]/project init[/bold #5F9EA0] to set up the project folder.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
     else:
         console.print(f"[red]Unknown subcommand: {subcmd}[/red]")
-        console.print("[dim]Usage: [bold cyan]/project[/bold cyan] init[/dim]")
+        console.print("[dim]Usage: [bold #5F9EA0]/project[/bold #5F9EA0] init[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -2159,7 +2159,7 @@ def process_command(chat_manager, user_input, console, debug_mode_container):
         return (result.status, result.replacement_input)
     elif cmd.startswith('/'):
         console.print(f"[red]Unknown command: {user_input}[/red]")
-        console.print("[dim]Type [bold cyan]/help[/bold cyan] for available commands[/dim]")
+        console.print("[dim]Type [bold #5F9EA0]/help[/bold #5F9EA0] for available commands[/dim]")
         return ("handled", None)
 
     return (None, None)

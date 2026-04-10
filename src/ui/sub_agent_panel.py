@@ -48,20 +48,20 @@ class SubAgentPanel:
         """Get panel title with optional spinner and tool call counter."""
         if self._show_spinner:
             spinner = self._SPINNER_FRAMES[self._spinner_index % len(self._SPINNER_FRAMES)]
-            return f"[cyan]{spinner} Sub-Agent ({self.total_tool_calls})[/cyan]"
-        return f"[cyan]Sub-Agent ({self.total_tool_calls})[/cyan]"
+            return f"[#5F9EA0]{spinner} Sub-Agent ({self.total_tool_calls})[/#5F9EA0]"
+        return f"[#5F9EA0]Sub-Agent ({self.total_tool_calls})[/#5F9EA0]"
 
-    def _render_panel(self, title=None, border_style="cyan"):
+    def _render_panel(self, title=None, border_style="#5F9EA0"):
         """Render the current panel state.
 
         Args:
             title: Optional title override. If None, uses _get_title().
-            border_style: Border style (default: "cyan")
+            border_style: Border style (default: "#5F9EA0")
 
         Returns:
             Rich Panel object with current content and title
         """
-        lines = [f"[bold cyan]Query:[/bold cyan] {self.query}", ""]
+        lines = [f"[bold #5F9EA0]Query:[/bold #5F9EA0] {self.query}", ""]
 
         if self.tool_calls:
             content = "\n".join(self.tool_calls)

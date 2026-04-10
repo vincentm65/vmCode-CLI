@@ -268,7 +268,7 @@ class ThinkingIndicator:
         if self._status and self._active:
             self._status.stop()
         self._saved_termios = self._set_raw_mode()
-        self._status = self.console.status(self.message, spinner=self.spinner, spinner_style="cyan")
+        self._status = self.console.status(self.message, spinner=self.spinner, spinner_style="#5F9EA0")
         self._status.start()
         self._active = True
         
@@ -401,7 +401,7 @@ def main():
     
     if not config_path.exists():
         console.print("\n[yellow]No config.yaml found![/yellow]")
-        console.print("\n[cyan]Getting Started:[/cyan]\n")
+        console.print("\n[#5F9EA0]Getting Started:[/#5F9EA0]\n")
         
         if config_example.exists():
             console.print(f"1. Copy the example config:")
@@ -410,12 +410,12 @@ def main():
             console.print(f"3. Or set environment variables:")
             console.print(f"   [dim]export OPENAI_API_KEY='sk-your-key'[/dim]\n")
             console.print(f"4. Then run: [green]vmcode[/green]\n")
-            console.print(f"[dim]You can also set keys interactively with: [bold cyan]/key[/bold cyan] <your-key>[/dim]\n")
+            console.print(f"[dim]You can also set keys interactively with: [bold #5F9EA0]/key[/bold #5F9EA0] <your-key>[/dim]\n")
         else:
             console.print("[red]config.yaml.example not found. Please reinstall vmcode.[/red]\n")
         
         # Continue anyway - user can set keys via /key command
-        console.print("[yellow]Continuing... You can set API keys with the [bold cyan]/key[/bold cyan] command.[/yellow]\n")
+        console.print("[yellow]Continuing... You can set API keys with the [bold #5F9EA0]/key[/bold #5F9EA0] command.[/yellow]\n")
     
     chat_manager = ChatManager()
     thinking_indicator = ThinkingIndicator(console)
@@ -442,12 +442,12 @@ def main():
             and not provider_cfg.get("api_key")
         ):
             console.print()
-            console.print("[bold cyan]Welcome! Get started in two steps:[/bold cyan]")
+            console.print("[bold #5F9EA0]Welcome! Get started in two steps:[/bold #5F9EA0]")
             console.print()
             console.print("  [bold]1.[/bold] [bold white on grey23] /signup <email> [/bold white on grey23]  [dim]— create a free account & API key[/dim]")
             console.print("  [bold]2.[/bold] [bold white on grey23] /provider[/bold white on grey23]          [dim]— or pick another provider (OpenAI, Anthropic, ...)[/dim]")
             console.print()
-            console.print("[dim]Tip: use [bold cyan]/key <your-key>[/bold cyan] to set a key for any provider.[/dim]")
+            console.print("[dim]Tip: use [bold #5F9EA0]/key <your-key>[/bold #5F9EA0] to set a key for any provider.[/dim]")
             console.print()
     except Exception:
         pass  # Best-effort; don't block startup on failure
@@ -459,12 +459,12 @@ def main():
         """Return colored prompt based on current mode."""
         if chat_manager.interaction_mode == "plan":
             prompt_text = Text.assemble(
-                (" Plan", "bold cyan"),
+                (" Plan", "bold #5F9EA0"),
                 (" > ", "white")
             )
         elif chat_manager.interaction_mode == "edit":
             prompt_text = Text.assemble(
-                (" Edit", "green"),
+                (" Edit", "#6B8E23"),
                 (" > ", "white")
             )
         else:

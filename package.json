@@ -1,6 +1,6 @@
 {
   "name": "vmcode-cli",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A terminal-based AI coding assistant powered by OpenAI-style function calling",
   "main": "src/ui/main.py",
   "bin": {
@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vincentm65/vmCode-CLI"
+    "url": "git+https://github.com/vincentm65/vmCode-CLI.git"
   },
   "bugs": {
     "url": "https://github.com/vincentm65/vmCode-CLI/issues"

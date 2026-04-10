@@ -591,10 +591,10 @@ def build_panel_tool_message(tool_name, tool_result, command):
         if query:
             if results_count is not None:
                 if results_count == 0:
-                    return f"[bold cyan]web search | {query}[/bold cyan]\n[dim]╰─ No results found[/dim]"
-                return f"[bold cyan]web search | {query}[/bold cyan]\n[dim]╰─ Found {results_count} result{'s' if results_count != 1 else ''}[/dim]"
-            return f"[bold cyan]web search | {query}[/bold cyan]\n[dim]╰─ Search completed[/dim]"
-        return f"[bold cyan]web_search[/bold cyan]\n[dim]╰─ Search completed[/dim]"
+                    return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ No results found[/dim]"
+                return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ Found {results_count} result{'s' if results_count != 1 else ''}[/dim]"
+            return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ Search completed[/dim]"
+        return f"[bold #5F9EA0]web_search[/bold #5F9EA0]\n[dim]╰─ Search completed[/dim]"
 
     if tool_name == "execute_command":
         cmd_display = ""

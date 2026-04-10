@@ -140,9 +140,9 @@ class TokenTracker:
     def get_session_summary(self):
         """Return formatted session usage summary string."""
         parts = (
-            f"Session Input: [cyan]{self.total_prompt_tokens:,}[/cyan] | "
-            f"Session Output: [cyan]{self.total_completion_tokens:,}[/cyan] | "
-            f"Session Total: [cyan]{self.total_tokens:,}[/cyan]"
+            f"Session Input: [#5F9EA0]{self.total_prompt_tokens:,}[/#5F9EA0] | "
+            f"Session Output: [#5F9EA0]{self.total_completion_tokens:,}[/#5F9EA0] | "
+            f"Session Total: [#5F9EA0]{self.total_tokens:,}[/#5F9EA0]"
         )
         total_cost = self.total_actual_cost + self.total_estimated_cost
         if total_cost > 0:

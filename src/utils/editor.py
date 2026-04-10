@@ -98,7 +98,7 @@ def open_editor_for_input(console, debug_mode: bool = False) -> Tuple[bool, Opti
             console.print(f"[dim]Temp file: {temp_path}[/dim]")
             console.print(f"[dim]Editor: {editor_cmd}[/dim]")
 
-        console.print("[cyan]Opening editor...[/cyan]")
+        console.print("[#5F9EA0]Opening editor...[/#5F9EA0]")
         console.print("[dim]Save and close the editor when done[/dim]")
 
         # Launch editor and wait for it to close

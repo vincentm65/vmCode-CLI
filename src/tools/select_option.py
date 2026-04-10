@@ -155,14 +155,14 @@ class SelectionPanel:
             if multi and not is_custom:
                 marker = "◉" if checked else "○"
                 if checked:
-                    lines.append(f'<style fg="cyan">  {marker} {display}</style>')
+                    lines.append(f'<style fg="#5F9EA0">  {marker} {display}</style>')
                 else:
                     lines.append(f'<style fg="gray">  {marker} {display}</style>')
             else:
                 lines.append(f'<style fg="gray">  {display}</style>')
 
             if description:
-                color = "cyan" if (multi and checked) else "gray"
+                color = "#5F9EA0" if (multi and checked) else "gray"
                 for wl in self._wrap_description(description, "   "):
                     lines.append(f'<style fg="{color}">   {wl}</style>')
 

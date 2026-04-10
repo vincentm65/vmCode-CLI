@@ -38,7 +38,7 @@ Examples:
   /provider minimax
   /provider anthropic
   /provider kimi"""
-    console.print(Panel(help_text, title="[bold cyan]Provider Settings[/bold cyan]", border_style="grey23", padding=(0, 2)))
+    console.print(Panel(help_text, title="[bold #5F9EA0]Provider Settings[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))
     console.print("")
 
 
@@ -53,22 +53,22 @@ def show_help_table(console):
     table.add_column("Command", no_wrap=True)
     table.add_column("Description")
 
-    table.add_row("[bold cyan]/help[/bold cyan]", "Show help")
-    table.add_row("[bold cyan]/exit[/bold cyan]", "Exit chat")
-    table.add_row("[bold cyan]/config[/bold cyan]", "Show all configuration settings")
-    table.add_row("[bold cyan]/provider[/bold cyan] [name]", "Configure provider settings (model, key, costs)")
-    table.add_row("[bold cyan]/key[/bold cyan] <key>", "Set API key for current provider")
-    table.add_row("[bold cyan]/model[/bold cyan] <name>", "Set model for current provider")
-    table.add_row("[bold cyan]/usage[/bold cyan] [provider] [in|out] <cost>", "Set/view provider-specific token cost")
-    table.add_row("[bold cyan]/compact[/bold cyan] [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
-    table.add_row("[bold cyan]/init[/bold cyan]", "Generate agents.md")
-    table.add_row("[bold cyan]/edit[/bold cyan], [bold cyan]/e[/bold cyan]", "Open editor for multi-line input")
-    table.add_row("[bold cyan]/review[/bold cyan] [args], [bold cyan]/r[/bold cyan]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
-    table.add_row("[bold cyan]/obsidian[/bold cyan] [set|enable|disable|status]", "Manage Obsidian vault integration")
-    table.add_row("[bold cyan]/project[/bold cyan] [init|status]", "Scaffold project folders or view issue status in vault")
+    table.add_row("[bold #5F9EA0]/help[/bold #5F9EA0]", "Show help")
+    table.add_row("[bold #5F9EA0]/exit[/bold #5F9EA0]", "Exit chat")
+    table.add_row("[bold #5F9EA0]/config[/bold #5F9EA0]", "Show all configuration settings")
+    table.add_row("[bold #5F9EA0]/provider[/bold #5F9EA0] [name]", "Configure provider settings (model, key, costs)")
+    table.add_row("[bold #5F9EA0]/key[/bold #5F9EA0] <key>", "Set API key for current provider")
+    table.add_row("[bold #5F9EA0]/model[/bold #5F9EA0] <name>", "Set model for current provider")
+    table.add_row("[bold #5F9EA0]/usage[/bold #5F9EA0] [provider] [in|out] <cost>", "Set/view provider-specific token cost")
+    table.add_row("[bold #5F9EA0]/compact[/bold #5F9EA0] [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
+    table.add_row("[bold #5F9EA0]/init[/bold #5F9EA0]", "Generate agents.md")
+    table.add_row("[bold #5F9EA0]/edit[/bold #5F9EA0], [bold #5F9EA0]/e[/bold #5F9EA0]", "Open editor for multi-line input")
+    table.add_row("[bold #5F9EA0]/review[/bold #5F9EA0] [args], [bold #5F9EA0]/r[/bold #5F9EA0]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
+    table.add_row("[bold #5F9EA0]/obsidian[/bold #5F9EA0] [set|enable|disable|status]", "Manage Obsidian vault integration")
+    table.add_row("[bold #5F9EA0]/project[/bold #5F9EA0] [init|status]", "Scaffold project folders or view issue status in vault")
 
 
-    console.print(Panel(table, title="[bold cyan]Commands[/bold cyan]", border_style="grey23", padding=(0, 2)))
+    console.print(Panel(table, title="[bold #5F9EA0]Commands[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))
 
     # Account management section
     console.print()
@@ -76,16 +76,16 @@ def show_help_table(console):
     acct_table.add_column("Command", no_wrap=True)
     acct_table.add_column("Description")
 
-    acct_table.add_row("[bold cyan]/signup[/bold cyan] <email>", "Create vmcode account and get API key")
-    acct_table.add_row("[bold cyan]/login[/bold cyan]", "Log in to an existing vmcode account")
-    acct_table.add_row("[bold cyan]/account[/bold cyan]", "View account info and subscription status")
-    acct_table.add_row("[bold cyan]/plan[/bold cyan]", "View available plans and pricing")
-    acct_table.add_row("[bold cyan]/upgrade[/bold cyan]", "Upgrade or change your plan")
-    acct_table.add_row("[bold cyan]/manage[/bold cyan]", "Cancel subscription or update payment (Stripe portal)")
-    acct_table.add_row("[bold cyan]/rotate-key[/bold cyan]", "Invalidate current API key and generate a new one")
-    acct_table.add_row("[bold cyan]/reset-key[/bold cyan]", "Get a new API key emailed to you (lost key recovery)")
+    acct_table.add_row("[bold #5F9EA0]/signup[/bold #5F9EA0] <email>", "Create vmcode account and get API key")
+    acct_table.add_row("[bold #5F9EA0]/login[/bold #5F9EA0]", "Log in to an existing vmcode account")
+    acct_table.add_row("[bold #5F9EA0]/account[/bold #5F9EA0]", "View account info and subscription status")
+    acct_table.add_row("[bold #5F9EA0]/plan[/bold #5F9EA0]", "View available plans and pricing")
+    acct_table.add_row("[bold #5F9EA0]/upgrade[/bold #5F9EA0]", "Upgrade or change your plan")
+    acct_table.add_row("[bold #5F9EA0]/manage[/bold #5F9EA0]", "Cancel subscription or update payment (Stripe portal)")
+    acct_table.add_row("[bold #5F9EA0]/rotate-key[/bold #5F9EA0]", "Invalidate current API key and generate a new one")
+    acct_table.add_row("[bold #5F9EA0]/reset-key[/bold #5F9EA0]", "Get a new API key emailed to you (lost key recovery)")
 
-    console.print(Panel(acct_table, title="[bold cyan]Account[/bold cyan]", border_style="grey23", padding=(0, 2)))
+    console.print(Panel(acct_table, title="[bold #5F9EA0]Account[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))
 
     # Keybinds section
     console.print()
@@ -98,7 +98,7 @@ def show_help_table(console):
     keybinds.add_row("Ctrl+C", "Interrupt response")
     keybinds.add_row("Ctrl+C (2x)", "Exit program")
 
-    console.print(Panel(keybinds, title="[bold cyan]Keybinds[/bold cyan]", border_style="grey23", padding=(0, 2)))
+    console.print(Panel(keybinds, title="[bold #5F9EA0]Keybinds[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))
     console.print("")
 
 
@@ -124,7 +124,7 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
     logging_status = "[green]ON[/green]" if chat_manager.markdown_logger else "[dim]OFF[/dim]"
     runtime_table.add_row("Conversation Logging", logging_status)
     mode_labels = {"edit": "EDIT", "plan": "PLAN"}
-    mode_colors = {"edit": "green", "plan": "cyan"}
+    mode_colors = {"edit": "green", "plan": "#5F9EA0"}
     mode = chat_manager.interaction_mode
     mode_color = mode_colors.get(mode, "white")
     runtime_table.add_row("Interaction Mode", f"[{mode_color}]{mode_labels.get(mode, mode.upper())}[/{mode_color}]")
@@ -173,7 +173,7 @@ def show_config_overview(chat_manager, console, debug_mode_container, current_pr
 
     # ===== Quick Commands Reference =====
     console.print()
-    help_text = """[bold cyan]Commands:[/bold cyan] [bold cyan]/provider[/bold cyan] <name>  [bold cyan]/model[/bold cyan] <path>  [bold cyan]/key[/bold cyan] <key>
-[cyan]         :[/cyan] [bold cyan]/usage[/bold cyan] [provider] [in|out] <$>  [bold cyan]/config[/bold cyan]"""
-    console.print(Panel(help_text, title="[cyan]Quick Reference[/cyan]"))
+    help_text = """[bold #5F9EA0]Commands:[/bold #5F9EA0] [bold #5F9EA0]/provider[/bold #5F9EA0] <name>  [bold #5F9EA0]/model[/bold #5F9EA0] <path>  [bold #5F9EA0]/key[/bold #5F9EA0] <key>
+[#5F9EA0]         :[/#5F9EA0] [bold #5F9EA0]/usage[/bold #5F9EA0] [provider] [in|out] <$>  [bold #5F9EA0]/config[/bold #5F9EA0]"""
+    console.print(Panel(help_text, title="[#5F9EA0]Quick Reference[/#5F9EA0]"))
     console.print()
