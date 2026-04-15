@@ -396,8 +396,14 @@ def main():
     load_all_tools()
 
     # Check for config.yaml and provide helpful message if missing
-    config_path = Path(__file__).resolve().parents[1].parent / "config.yaml"
-    config_example = Path(__file__).resolve().parents[1].parent / "config.yaml.example"
+    # Use same resolution as llm.config for consistency
+    _inst_dir = os.environ.get('VMCODE_CONFIG_DIR')
+    if _inst_dir:
+        _cfg_base = Path(_inst_dir).resolve().parents[1]
+    else:
+        _cfg_base = Path(__file__).resolve().parents[1].parent
+    config_path = _cfg_base / "config.yaml"
+    config_example = _cfg_base / "config.yaml.example"
     
     if not config_path.exists():
         console.print("\n[yellow]No config.yaml found![/yellow]")

@@ -1,53 +1,39 @@
-# =============================================================================
-# vmCode Configuration Example
-# =============================================================================
-#
-# Copy this file to config.yaml and add your API keys
-#
-# API keys can also be set via environment variables (they take precedence):
-#   export OPENAI_API_KEY="sk-your-key-here"
-#   export ANTHROPIC_API_KEY="sk-ant-your-key-here"
-#   export GLM_API_KEY="your-glm-key-here"
-#   export GEMINI_API_KEY="your-gemini-key-here"
-#   export OPENROUTER_API_KEY="sk-or-your-key-here"
-#   export KIMI_API_KEY="your-kimi-key-here"
-#   export MINIMAX_API_KEY="your-minimax-key-here"
-#   export VMCODE_PROXY_API_KEY="vmp_live_your-key-here"
-#
-# Or set interactively in the app:
-#   /key sk-your-api-key-here
-#   /provider openai
-#
-# =============================================================================
+# vmCode Configuration
+# Copy to config.yaml and add your API keys.
+# Keys can also be set via environment variables or: /key <api-key>  /provider <name>
 
-# Last selected provider (saved automatically)
+# -- General ------------------------------------------------------------------
+
 LAST_PROVIDER: vmcode
 
-# =============================================================================
-# API KEYS
-# =============================================================================
+# -- Provider API Keys --------------------------------------------------------
 
-# OpenAI (GPT models)
+# OpenAI
 OPENAI_API_KEY: "sk-your-openai-key-here"
 OPENAI_MODEL: gpt-4o-mini
 OPENAI_API_BASE: "https://api.openai.com/v1"
 
-# Anthropic (Claude models)
+# Anthropic
 ANTHROPIC_API_KEY: "sk-ant-your-anthropic-key-here"
 ANTHROPIC_MODEL: claude-3-5-sonnet-20241022
 ANTHROPIC_API_BASE: "https://api.anthropic.com/v1"
 
-# Google (Gemini models)
+# Google Gemini
 GEMINI_API_KEY: "your-gemini-key-here"
 GEMINI_MODEL: gemini-1.5-flash
 GEMINI_API_BASE: "https://generativelanguage.googleapis.com/v1beta"
 
-# Zhipu AI (GLM models)
+# Zhipu AI (GLM) - Coding plan
+GLM_PLAN_API_KEY: "your-glm-key-here"
+GLM_PLAN_MODEL: glm-4-flash
+GLM_PLAN_API_BASE: "https://open.bigmodel.cn/api/paas/v4"
+
+# Zhipu AI (GLM) - API plan
 GLM_API_KEY: "your-glm-key-here"
 GLM_MODEL: glm-4-flash
 GLM_API_BASE: "https://open.bigmodel.cn/api/paas/v4"
 
-# OpenRouter (multi-provider API)
+# OpenRouter
 OPENROUTER_API_KEY: "sk-or-your-openrouter-key-here"
 OPENROUTER_MODEL: openai/gpt-4o-mini
 OPENROUTER_API_BASE: "https://openrouter.ai/api/v1"
@@ -57,64 +43,50 @@ KIMI_API_KEY: "your-kimi-key-here"
 KIMI_MODEL: moonshot-v1-8k
 KIMI_API_BASE: "https://api.moonshot.cn/v1"
 
-# MiniMax (Uses Anthropic-compatible API for Coding Plan)
-# Endpoint: https://api.minimax.io/anthropic/v1 (or https://api.minimaxi.com/anthropic/v1 for China)
+# MiniMax (Anthropic-compatible API) - Coding plan
+MINIMAX_PLAN_API_KEY: "your-minimax-key-here"
+MINIMAX_PLAN_MODEL: "MiniMax-M2"
+MINIMAX_PLAN_API_BASE: "https://api.minimax.io/anthropic/v1"
+
+# MiniMax - API plan
 MINIMAX_API_KEY: "your-minimax-key-here"
 MINIMAX_MODEL: "MiniMax-M2"
 MINIMAX_API_BASE: "https://api.minimax.io/anthropic/v1"
 
-# vmCode Proxy (subscription — API key from billing portal)
+# vmCode Proxy (subscription — key from billing portal)
 VMCODE_PROXY_API_KEY: ""
 VMCODE_PROXY_MODEL: "openai/gpt-4o-mini"
 VMCODE_PROXY_API_BASE: "https://api.vmcode.dev"
 
-# =============================================================================
-# LOCAL MODEL SETTINGS (Optional)
-# =============================================================================
-# Uncomment to use local models via llama.cpp
+# -- Local Models (llama.cpp) -------------------------------------------------
 
 LOCAL_MODEL_PATH: "/path/to/your/model.gguf"
 LOCAL_SERVER_PATH: "/path/to/llama.cpp/build/bin/llama-server"
 
-# =============================================================================
-# SETTINGS
-# =============================================================================
+SERVER_SETTINGS:
+  ngl_layers: 30
+  ctx_size: 8192
+  n_predict: 8192
+  rope_scale: 1.0
+  health_check_timeout_sec: 120
+  health_check_interval_sec: 1.0
 
-# =============================================================================
-# STATUS BAR SETTINGS
-# =============================================================================
+# -- Tool Settings ------------------------------------------------------------
 
-# Status bar visibility settings (model and mode are always shown)
-STATUS_BAR_SETTINGS:
-  show_curr_tokens: true   # Show current context tokens
-  show_in_tokens: true      # Show total prompt tokens
-  show_out_tokens: true     # Show total completion tokens
-  show_total_tokens: true  # Show total session tokens
-  show_cost: true          # Show session cost
-  show_completed: true     # Show last completion time
-
-# =============================================================================
-# TOOL SETTINGS
-# =============================================================================
-
-# Tool execution limits and defaults
 TOOL_SETTINGS:
-  max_tool_calls: 100           # Maximum number of tool calls per interaction
-  command_timeout_sec: 30       # Timeout for shell commands in seconds
-  enable_parallel_execution: true  # Enable parallel tool execution
-  max_parallel_workers: 10      # Maximum number of parallel tool workers
-  max_command_output_lines: 100 # Maximum lines to show from command output
-  max_file_preview_lines: 200   # Maximum lines to show in file creation previews
+  max_tool_calls: 100
+  command_timeout_sec: 30
+  enable_parallel_execution: true
+  max_parallel_workers: 10
+  max_command_output_lines: 100
+  max_file_preview_lines: 200
 
-# =============================================================================
-# FILE SETTINGS
-# =============================================================================
+# -- File Settings ------------------------------------------------------------
 
-# File scanning and reading limits
 FILE_SETTINGS:
-  max_file_bytes: 200000        # Maximum bytes to read from a single file (~200KB)
-  max_total_bytes: 1500000     # Maximum total bytes across all file reads (~1.5MB)
-  exclude_dirs:                # Directories to exclude from file operations
+  max_file_bytes: 200000
+  max_total_bytes: 1500000
+  exclude_dirs:
     - .git
     - .venv
     - __pycache__
@@ -122,75 +94,49 @@ FILE_SETTINGS:
     - venv
     - env
 
-# =============================================================================
-# SERVER SETTINGS (Optional)
-# =============================================================================
-# Local llama-server configuration (only used for local models)
-SERVER_SETTINGS:
-  ngl_layers: 30                  # Number of GPU layers for llama.cpp
-  ctx_size: 8192                  # Context size for local model
-  n_predict: 8192                 # Maximum tokens to predict
-  rope_scale: 1.0                 # RoPE scaling factor
-  health_check_timeout_sec: 120   # Timeout for server health check
-  health_check_interval_sec: 1.0  # Interval between health checks
+# -- Context Settings ---------------------------------------------------------
+# compact_trigger_tokens: reactive post-response compaction
+# hard_limit_tokens: proactive pre-send guard (defaults to 90% of max_context_window)
 
-# =============================================================================
-# CONTEXT SETTINGS
-# =============================================================================
-# Two-tier compaction system:
-#   compact_trigger_tokens — reactive, post-response compaction (AI summarizes history)
-#   hard_limit_tokens      — proactive, pre-send guard (ensures context fits before LLM calls)
 CONTEXT_SETTINGS:
-  compact_trigger_tokens: 100000 # Tokens threshold for reactive auto-compaction
-  max_context_window: 200000     # Maximum context window for the model
-  # Proactive context guard: triggers ensure_context_fits() BEFORE LLM calls.
-  # If context exceeds this, tool results are compacted, then history is compacted,
-  # then oldest messages are truncated as a last resort.
-  # Defaults to 90% of max_context_window if not explicitly set.
+  compact_trigger_tokens: 100000
+  max_context_window: 200000
   hard_limit_tokens: 180000
-  notify_auto_compaction: true    # Show dim notification when auto-compaction runs
-  log_conversations: false        # Whether to log conversations to disk
-  conversations_dir: conversations # Directory for conversation logs
+  notify_auto_compaction: true
+  log_conversations: false
+  conversations_dir: conversations
   tool_compaction:
-    enable_per_message_compaction: true  # Enable per-message tool result compaction
-    keep_recent_tool_blocks: 3            # Number of recent tool blocks to keep
-    compact_failed_tools: true            # Whether to compact failed tool results
+    enable_per_message_compaction: true
+    keep_recent_tool_blocks: 3
+    compact_failed_tools: true
 
-# =============================================================================
-# SUB AGENT SETTINGS
-# =============================================================================
-# Configuration for sub-agent token limits and behavior
+# -- Sub-Agent Settings -------------------------------------------------------
+
 SUB_AGENT_SETTINGS:
-  soft_limit_tokens: 75000      # Budget shown to agent in prompt (advisory)
-  hard_limit_tokens: 300000     # Hard stop - fail fast when exceeded (mandatory)
-  enable_compaction: false      # Disable auto-compaction for sub-agent sessions
+  soft_limit_tokens: 75000
+  hard_limit_tokens: 300000
+  enable_compaction: false
 
-# =============================================================================
-# MODEL PRICING (Optional)
-# =============================================================================
-# Override default pricing for specific models (cost per 1M tokens)
-# Format: MODEL_PRICES:
-#   model_name:
-#     cost_in: 0.50
-#     cost_out: 1.50
+# -- Status Bar ---------------------------------------------------------------
 
+STATUS_BAR_SETTINGS:
+  show_curr_tokens: true
+  show_in_tokens: true
+  show_out_tokens: true
+  show_total_tokens: true
+  show_cost: true
+  show_completed: true
+
+# -- Integrations -------------------------------------------------------------
+
+# Obsidian vault (disabled by default — no token cost when off)
+OBSIDIAN_SETTINGS:
+  enabled: false
+  vault_path: ""
+  exclude_folders: ".obsidian,.trash,node_modules,.git,__pycache__"
+  project_base: "Dev"
+
+# Model pricing overrides (cost per 1M tokens)
 MODEL_PRICES: {}
 
-# =============================================================================
-# OBSIDIAN SETTINGS (Optional)
-# =============================================================================
-# Obsidian vault integration for wiki-link resolution, backlinks, and frontmatter.
-# Disabled by default — no tools registered, no token cost when off.
-OBSIDIAN_SETTINGS:
-  enabled: false            # Set to true to enable Obsidian tools
-  vault_path: ""            # Absolute path to your Obsidian vault root
-  exclude_folders: ".obsidian,.trash,node_modules,.git,__pycache__"  # Comma-separated folders to skip during vault scans
-  project_base: "Dev"       # Base folder within vault for project notes
-
-# =============================================================================
-# NOTES
-# =============================================================================
-# - Keep this file private! Never commit it to version control
-# - Set file permissions: chmod 600 config.yaml
-# - Environment variables override values in this file
-# - Run 'vmcode /help' for command reference
+# Keep this file private. Env vars override values here. Run 'vmcode /help' for reference.

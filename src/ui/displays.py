@@ -62,6 +62,7 @@ def show_help_table(console):
     table.add_row("[bold #5F9EA0]/usage[/bold #5F9EA0] [provider] [in|out] <cost>", "Set/view provider-specific token cost")
     table.add_row("[bold #5F9EA0]/compact[/bold #5F9EA0] [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
     table.add_row("[bold #5F9EA0]/init[/bold #5F9EA0]", "Generate agents.md")
+    table.add_row("[bold #5F9EA0]/cd[/bold #5F9EA0] [path]", "Change working directory (no args to show current)")
     table.add_row("[bold #5F9EA0]/edit[/bold #5F9EA0], [bold #5F9EA0]/e[/bold #5F9EA0]", "Open editor for multi-line input")
     table.add_row("[bold #5F9EA0]/review[/bold #5F9EA0] [args], [bold #5F9EA0]/r[/bold #5F9EA0]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
     table.add_row("[bold #5F9EA0]/obsidian[/bold #5F9EA0] [set|enable|disable|status]", "Manage Obsidian vault integration")

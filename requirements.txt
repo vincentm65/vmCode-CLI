@@ -3,5 +3,7 @@ rich
 pathspec
 prompt-toolkit>=3.0.0
 ddgs
+readability-lxml
+html2text
 pyyaml
 pygments

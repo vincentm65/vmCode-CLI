@@ -482,8 +482,14 @@ def _build_vault_section() -> str:
         return None
 
     try:
-        from tools.obsidian import get_vault_session
+        from tools.obsidian import get_vault_session, init_session
         session = get_vault_session()
+        # Initialize session on first prompt build if not yet available.
+        # Normally initialized by AgenticLoop.__init__, but the system prompt
+        # is built earlier (in ChatManager.__init__), causing an inconsistent
+        # vault section (missing note schemas) on fresh start.
+        if session is None:
+            session = init_session()
     except Exception:
         session = None
 
@@ -541,7 +547,7 @@ def _build_vault_section() -> str:
             "or `Docs/`. The ONLY allowed subfolder is `Done/` (for archiving). "
             "NEVER create nested subfolders like `Tasks/Feature Name/` "
             "or `Bugs/Component/`. Task/bug filenames must be flat: "
-            "`Tasks/Enhanced web search - DuckDuckGo adapter.md` (correct) vs "
+            "`Tasks/Enhanced web search with full page content reading.md` (correct) vs "
             "`Tasks/Enhanced Web Search/DuckDuckGo adapter.md` (wrong).",
             "",
             "**Title format:** `title: Short description in sentence case` — no quotes, "

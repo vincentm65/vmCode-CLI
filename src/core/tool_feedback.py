@@ -468,24 +468,52 @@ def display_tool_feedback(command, tool_result, console, indent=False, panel_upd
         handle_execute_command_feedback(tool_result, console, panel_updater)
         return
 
-    # For web_search: display results count
+    # For web_search: display results count and content fetch status
     if command.startswith("web search"):
         lines = tool_result.split('\n')
         if lines:
-            # Extract results_found from first line
-            match = re.search(r'results_found=(\d+)', lines[0])
-            if match:
-                count = int(match.group(1))
-                # Only add prefix for console, not for panel_updater
+            summary = _parse_web_search_metadata(lines[0])
+            if summary:
                 prefix = "╰─ " if not panel_updater else ""
-                if count == 0:
-                    message = f"{prefix}[dim]No results found[/dim]"
-                else:
-                    message = f"{prefix}[dim]Found {count} result{'s' if count != 1 else ''}[/dim]"
+                message = f"{prefix}[dim]{summary}[/dim]"
                 _print_or_append(message, console, panel_updater)
         if not panel_updater:
             console.print()
         return
+
+
+def _parse_web_search_metadata(first_line):
+    """Parse web search metadata line into a human-readable summary.
+
+    Args:
+        first_line: The first line of web_search tool result containing metadata.
+
+    Returns:
+        str: Human-readable summary like "Found 5 results, 3 pages fetched"
+    """
+    match = re.search(r'results_found=(\d+)', first_line)
+    if not match:
+        return ""
+
+    count = int(match.group(1))
+    if count == 0:
+        return "No results found"
+
+    parts = [f"Found {count} result{'s' if count != 1 else ''}"]
+
+    fetched = re.search(r'pages_fetched=(\d+)', first_line)
+    if fetched:
+        fc = int(fetched.group(1))
+        if fc > 0:
+            parts.append(f"{fc} page{'s' if fc != 1 else ''} fetched")
+
+    failed = re.search(r'pages_failed=(\d+)', first_line)
+    if failed:
+        f = int(failed.group(1))
+        if f > 0:
+            parts.append(f"{f} failed")
+
+    return ", ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -582,17 +610,11 @@ def build_panel_tool_message(tool_name, tool_result, command):
                     query = parts[1]
 
         lines = tool_result.split('\n')
-        results_count = None
-        if lines:
-            match = re.search(r'results_found=(\d+)', lines[0])
-            if match:
-                results_count = int(match.group(1))
+        summary = _parse_web_search_metadata(lines[0]) if lines else ""
 
         if query:
-            if results_count is not None:
-                if results_count == 0:
-                    return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ No results found[/dim]"
-                return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ Found {results_count} result{'s' if results_count != 1 else ''}[/dim]"
+            if summary:
+                return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ {summary}[/dim]"
             return f"[bold #5F9EA0]web search | {query}[/bold #5F9EA0]\n[dim]╰─ Search completed[/dim]"
         return f"[bold #5F9EA0]web_search[/bold #5F9EA0]\n[dim]╰─ Search completed[/dim]"
 

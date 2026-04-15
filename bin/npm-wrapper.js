@@ -168,10 +168,16 @@ async function main() {
   // Check/create config
   checkConfig();
   
-  // Run the Python application
+  // Run the Python application with install directory in environment
+  // VMCODE_CONFIG_DIR points to src/ (where config.py lives), which has parents[1] -> repo root
+  const srcDir = path.join(packageDir, 'src');
   const pythonProcess = spawn(pythonCmd, [pythonScript], {
     stdio: 'inherit',
-    cwd: packageDir
+    cwd: packageDir,
+    env: {
+      ...process.env,
+      VMCODE_CONFIG_DIR: srcDir,
+    }
   });
   
   pythonProcess.on('close', (code) => {

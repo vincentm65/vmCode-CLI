@@ -1907,6 +1907,54 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
+def _handle_cd(chat_manager, console, debug_mode_container, args):
+    """Handle /cd command — change working directory.
+
+    Usage: /cd <path>
+    Examples:
+        /cd /home/user/projects
+        /cd ..
+        /cd ~/Documents
+    """
+    import os
+
+    if not args or not args.strip():
+        # Show current working directory
+        cwd = os.getcwd()
+        console.print(f"[bold #5F9EA0]Current directory:[/bold #5F9EA0] {cwd}")
+        return CommandResult(status="handled")
+
+    path = args.strip()
+
+    # Expand ~ to home directory
+    path = os.path.expanduser(path)
+
+    # Resolve to absolute path
+    try:
+        target_path = Path(path).resolve()
+    except Exception as e:
+        console.print(f"[red]Invalid path: {e}[/red]")
+        return CommandResult(status="handled")
+
+    # Check if path exists and is a directory
+    if not target_path.exists():
+        console.print(f"[red]Directory not found: {target_path}[/red]")
+        return CommandResult(status="handled")
+
+    if not target_path.is_dir():
+        console.print(f"[red]Not a directory: {target_path}[/red]")
+        return CommandResult(status="handled")
+
+    # Change directory
+    try:
+        os.chdir(target_path)
+        console.print(f"[green]Changed directory to: {target_path}[/green]")
+    except Exception as e:
+        console.print(f"[red]Failed to change directory: {e}[/red]")
+
+    return CommandResult(status="handled")
+
+
 def _handle_project(chat_manager, console, debug_mode_container, args):
     """Handle /project command — manage project structure in Obsidian vault.
 
@@ -2082,10 +2130,6 @@ def _handle_project(chat_manager, console, debug_mode_container, args):
         dashboard_path.write_text(dashboard_content, encoding="utf-8")
         created_folders.append("Dashboard.md")
 
-        # Invalidate vault cache so new notes are indexed
-        from tools.obsidian import invalidate_vault_cache
-        invalidate_vault_cache()
-
         console.print(f"[green]Project initialized: {project_folder.name}[/green]")
         for folder in created_folders:
             console.print(f"  [dim]Created: {folder}/ (_Template.md)[/dim]")
@@ -2153,6 +2197,7 @@ _COMMAND_HANDLERS = {
     "/rotate-key": _handle_rotate_key,
     "/obsidian": _handle_obsidian,
     "/project": _handle_project,
+    "/cd": _handle_cd,
 }
 
 
