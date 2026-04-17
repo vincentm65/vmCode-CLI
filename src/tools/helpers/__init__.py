@@ -51,7 +51,7 @@ from .converters import (
 from .loader import (
     discover_tools,
     load_builtin_tools,
-    load_user_tools,
+    load_plugin_tools,
     load_all_tools,
     list_registered_tools,
     list_tools_for_mode,
@@ -94,7 +94,7 @@ __all__ = [
     # Tool loading and discovery
     'discover_tools',
     'load_builtin_tools',
-    'load_user_tools',
+    'load_plugin_tools',
     'load_all_tools',
     'list_registered_tools',
     'list_tools_for_mode',

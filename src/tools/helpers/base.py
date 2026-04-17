@@ -93,6 +93,19 @@ class ToolDefinition:
         return self.handler(**arguments)
 
 
+# Named groups of related tools for bulk enable/disable
+TOOL_GROUPS = {
+    "file_ops": {
+        "label": "File Operations",
+        "tools": ["read_file", "create_file", "edit_file", "list_directory"],
+    },
+    "task_mgmt": {
+        "label": "Task Management",
+        "tools": ["create_task_list", "complete_task", "show_task_list"],
+    },
+}
+
+
 class ToolRegistry:
     """Global registry for all tools.
 
@@ -101,11 +114,124 @@ class ToolRegistry:
 
     _instance: Optional['ToolRegistry'] = None
     _tools: Dict[str, ToolDefinition] = {}
+    _disabled: Dict[str, None] = {}  # dict used as ordered set — mirrors _tools pattern
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
+
+    @classmethod
+    def disable(cls, name: str) -> bool:
+        """Disable a tool by name.
+
+        Args:
+            name: Tool name to disable
+
+        Returns:
+            True if tool was found and disabled, False if not registered
+        """
+        if name in cls._tools:
+            cls._disabled[name] = None
+            return True
+        return False
+
+    @classmethod
+    def enable(cls, name: str) -> bool:
+        """Enable a previously disabled tool.
+
+        Args:
+            name: Tool name to enable
+
+        Returns:
+            True if tool was re-enabled, False if it wasn't disabled
+        """
+        if name in cls._disabled:
+            del cls._disabled[name]
+            return True
+        return False
+
+    @classmethod
+    def is_disabled(cls, name: str) -> bool:
+        """Check if a tool is currently disabled.
+
+        Args:
+            name: Tool name
+
+        Returns:
+            True if tool is disabled
+        """
+        return name in cls._disabled
+
+    @classmethod
+    def disable_group(cls, group_key: str) -> list:
+        """Disable all tools in a named group.
+
+        Args:
+            group_key: Key from TOOL_GROUPS (e.g. "file_ops")
+
+        Returns:
+            List of tool names that were actually disabled
+        """
+        group = TOOL_GROUPS.get(group_key)
+        if not group:
+            return []
+        disabled = []
+        for name in group["tools"]:
+            if name in cls._tools and name not in cls._disabled:
+                cls._disabled[name] = None
+                disabled.append(name)
+        return disabled
+
+    @classmethod
+    def enable_group(cls, group_key: str) -> list:
+        """Enable all tools in a named group.
+
+        Args:
+            group_key: Key from TOOL_GROUPS (e.g. "file_ops")
+
+        Returns:
+            List of tool names that were actually re-enabled
+        """
+        group = TOOL_GROUPS.get(group_key)
+        if not group:
+            return []
+        enabled = []
+        for name in group["tools"]:
+            if name in cls._disabled:
+                del cls._disabled[name]
+                enabled.append(name)
+        return enabled
+
+    @classmethod
+    def get_group_status(cls, group_key: str) -> dict:
+        """Get enabled/disabled status for all tools in a group.
+
+        Args:
+            group_key: Key from TOOL_GROUPS
+
+        Returns:
+            Dict with 'label', 'tools' list of {name, enabled} dicts
+        """
+        group = TOOL_GROUPS.get(group_key)
+        if not group:
+            return {"label": group_key, "tools": []}
+        return {
+            "label": group["label"],
+            "tools": [
+                {"name": name, "enabled": name not in cls._disabled}
+                for name in group["tools"]
+            ],
+        }
+
+    @classmethod
+    def get_disabled(cls) -> set:
+        """Get the set of disabled tool names.
+
+        Returns:
+            Set of disabled tool names
+        """
+        return set(cls._disabled)
 
     @classmethod
     def register(cls, tool_def: ToolDefinition) -> None:
@@ -140,12 +266,12 @@ class ToolRegistry:
 
     @classmethod
     def get_all(cls) -> List[ToolDefinition]:
-        """Get all registered tools.
+        """Get all registered and enabled tools.
 
         Returns:
-            List of all ToolDefinitions
+            List of all ToolDefinitions (excluding disabled)
         """
-        return list(cls._tools.values())
+        return [t for t in cls._tools.values() if t.name not in cls._disabled]
 
     @classmethod
     def get_tools_for_mode(cls, mode: str) -> List[ToolDefinition]:
@@ -155,9 +281,12 @@ class ToolRegistry:
             mode: Interaction mode ('edit' or 'plan')
 
         Returns:
-            List of ToolDefinitions for that mode
+            List of ToolDefinitions for that mode (excluding disabled)
         """
-        return [tool for tool in cls._tools.values() if tool.is_allowed_in_mode(mode)]
+        return [
+            tool for tool in cls._tools.values()
+            if tool.is_allowed_in_mode(mode) and tool.name not in cls._disabled
+        ]
 
     @classmethod
     def unregister(cls, name: str) -> bool:
@@ -169,21 +298,23 @@ class ToolRegistry:
         Returns:
             True if tool was found and removed, False if not registered
         """
+        cls._disabled.pop(name, None)
         return cls._tools.pop(name, None) is not None
 
     @classmethod
     def clear(cls) -> None:
         """Clear all registered tools (mainly for testing)."""
         cls._tools.clear()
+        cls._disabled.clear()
 
     @classmethod
     def tool_count(cls) -> int:
-        """Get the total number of registered tools.
+        """Get the number of active (enabled) tools in the registry.
 
         Returns:
-            Number of tools in registry
+            Number of enabled tools (excludes disabled tools)
         """
-        return len(cls._tools)
+        return len(cls._tools) - len(cls._disabled)
 
 
 def get_terminal_policy(tool_name: str) -> str:

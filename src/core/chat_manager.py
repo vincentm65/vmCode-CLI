@@ -2,6 +2,7 @@
 
 import os
 import json
+import logging
 import subprocess
 import time
 import requests
@@ -52,6 +53,9 @@ class ChatManager:
 
         # Custom compaction threshold (overrides global context_settings if set)
         self._compact_trigger_tokens = compact_trigger_tokens
+
+        # Disable all compaction when True (used by sub-agents to preserve findings)
+        self._compaction_disabled = False
 
         # Conversation logging
         self.markdown_logger: Optional[MarkdownConversationLogger] = None
@@ -709,7 +713,7 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
 
     # ===== AI-Based History Compaction =====
 
-    def compact_history(self, console=None, trigger="manual", aggressive=False):
+    def compact_history(self, console=None, trigger="manual"):
         """Compact chat history while preserving recent context.
 
         Strategy:
@@ -718,30 +722,15 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         3. Keep last assistant response (without tool calls) verbatim
         4. Summarize everything prior AND all tool result messages
 
-        Aggressive mode:
-        - Pre-compacts recent tool results first (for older blocks)
-        - Also summarizes tool interactions between last user and final answer
-
         Args:
             console: Console for notifications (None for silent auto-compact)
             trigger: "manual" or "auto"
-            aggressive: If True, also compact recent tool results aggressively
 
         Returns:
             dict with compaction stats or None
         """
         if len(self.messages) < 10:  # Need enough history
             return None
-
-        # In aggressive mode, pre-compact tool results first (for older blocks)
-        if aggressive:
-            # Temporarily reduce keep_recent_tool_blocks to 1 for aggressive compaction
-            original_keep = context_settings.tool_compaction.keep_recent_tool_blocks
-            try:
-                context_settings.tool_compaction.keep_recent_tool_blocks = 1
-                self.compact_tool_results()
-            finally:
-                context_settings.tool_compaction.keep_recent_tool_blocks = original_keep
 
         # Find the last user message (start from end, skip system/tool messages)
         last_user_idx = None
@@ -890,6 +879,10 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         if self._compaction_locked:
             return
 
+        # Skip all compaction if disabled (e.g. sub-agents preserving findings)
+        if self._compaction_disabled:
+            return
+
         # Use custom threshold if set, otherwise use global setting
         trigger_threshold = (
             self._compact_trigger_tokens
@@ -938,6 +931,16 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         if current_tokens < hard_limit:
             return {"action": "none", "tokens": current_tokens}
 
+        # Skip all compaction layers if disabled (e.g. sub-agents preserving findings)
+        if self._compaction_disabled:
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Context (%d tokens) exceeds hard limit (%d) but compaction is disabled — "
+                "API call may fail with context-length error",
+                current_tokens, hard_limit,
+            )
+            return {"action": "none", "tokens": current_tokens}
+
         tokens_before = current_tokens
 
         # If compaction is NOT locked, try layers 1 and 2
@@ -964,7 +967,7 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
 
             # Layer 2: AI-based history compaction
             try:
-                result = self.compact_history(console=None, trigger="auto", aggressive=True)
+                result = self.compact_history(console=None, trigger="auto")
             except Exception:
                 result = None  # Compaction failed, fall through to truncation
 

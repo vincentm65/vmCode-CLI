@@ -46,7 +46,7 @@ class ToolSettings:
     max_command_output_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_command_output_lines", 100))
     max_shell_output_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_shell_output_lines", 200))
     max_file_preview_lines: int = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("max_file_preview_lines", 200))
-
+    disabled_tools: list = field(default_factory=lambda: _CONFIG.get("TOOL_SETTINGS", {}).get("disabled_tools", []))
 
 @dataclass
 class FileSettings:

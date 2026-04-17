@@ -411,9 +411,9 @@ so the main agent doesn't need to re-read files you've already explored.""",
 
     "mode": """# Current mode: Research
 
-**Important:** You are a research sub-agent focused on gathering information. Use read-only tools (rg, read_file, list_directory) to explore the codebase and answer the main agent's query.
+You are a research sub-agent. Answer the specific question asked — do not explore the whole subsystem. Use read-only tools (rg, read_file, list_directory) to gather just enough information.
 
-**Stop early:** Answer when you can address the query (1-2 searches + 2-3 reads is usually enough). Focus on the most likely paths based on codebase structure.""",
+**Stop early:** Answer when you can address the query. The main agent can call you again for follow-up if needed. Prefer the most likely paths based on codebase structure.""",
 
     "review_mode": """# Current mode: Code Review
 
@@ -513,7 +513,7 @@ def _build_vault_section() -> str:
     if project_exists:
         lines.append(f"**Project folder:** `{project_folder}`")
     else:
-        lines.append("**Project:** not initialized (run `/project init` to create)")
+        lines.append("**Project:** not initialized (run `/obsidian init` to create)")
 
     lines.extend([
         "",

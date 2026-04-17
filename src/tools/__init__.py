@@ -113,6 +113,14 @@ from .helpers import (
     TERMINAL_STOP,
 )
 
+# Apply disabled tools from settings (after all tools are registered)
+try:
+    from utils.settings import tool_settings
+    for tool_name in tool_settings.disabled_tools:
+        ToolRegistry.disable(tool_name)
+except Exception as e:
+    _logger.debug("Failed to apply disabled tools: %s", e)
+
 # Make base module available for backward compatibility
 import sys
 from types import ModuleType
@@ -172,7 +180,7 @@ _loader_module = ModuleType('tools.loader')
 from .helpers.loader import (
     discover_tools,
     load_builtin_tools,
-    load_user_tools,
+    load_plugin_tools,
     load_all_tools,
     list_registered_tools,
     list_tools_for_mode,
@@ -180,7 +188,7 @@ from .helpers.loader import (
 _loader_module.__dict__.update({
     'discover_tools': discover_tools,
     'load_builtin_tools': load_builtin_tools,
-    'load_user_tools': load_user_tools,
+    'load_plugin_tools': load_plugin_tools,
     'load_all_tools': load_all_tools,
     'list_registered_tools': list_registered_tools,
     'list_tools_for_mode': list_tools_for_mode,

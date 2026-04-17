@@ -1,21 +1,21 @@
 """Command routing and help display."""
 
-from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional
 from llm import config
-from core.init import run_init
+
 from core.config_manager import ConfigManager as ConfigManagerClass
 from ui.displays import show_help_table
 from ui.banner import display_startup_banner
 from core.agentic import SubAgentPanel
 from ui.setting_selector import SettingSelector, SettingCategory, SettingOption
 
-from utils.settings import MonokaiDarkBGStyle, context_settings, left_align_headings
+from utils.settings import MonokaiDarkBGStyle, context_settings, left_align_headings, tool_settings
 from rich.markdown import Markdown
 from rich.table import Table
 
 from rich import box
+from pathlib import Path
 import json
 import logging
 import ssl
@@ -51,13 +51,6 @@ def _handle_help(chat_manager, console, debug_mode_container, args):
 
 def _handle_compact(chat_manager, console, debug_mode_container, args):
     """Handle manual context compaction."""
-    # Parse args for aggressive mode
-    aggressive = False
-    if args:
-        args_clean = args.strip().lower()
-        if args_clean in ('-a', '--aggressive'):
-            aggressive = True
-
     # Show current context summary immediately using the same format as the status bar
     num_messages = len(chat_manager.messages)
     tokens_curr = chat_manager.token_tracker.current_context_tokens
@@ -68,18 +61,13 @@ def _handle_compact(chat_manager, console, debug_mode_container, args):
     )
     console.print()  # Spacer line
 
-    if aggressive:
-        console.print("[yellow]Aggressive mode: Compacting recent tool results too[/yellow]")
-        console.print()
-
-    result = chat_manager.compact_history(console=console, trigger="manual", aggressive=aggressive)
+    result = chat_manager.compact_history(console=console, trigger="manual")
     if not result:
         console.print("[yellow]Nothing to compact.[/yellow]")
         return CommandResult(status="handled")
 
-    mode_text = " (aggressive)" if aggressive else ""
     console.print(
-        f"[green]Session reset{mode_text}: "
+        f"[green]Session reset: "
         f"{result['before_tokens']:,} -> {result['after_tokens']:,} tokens[/green]"
     )
     
@@ -152,10 +140,6 @@ def _handle_config(chat_manager, console, debug_mode_container, args):
         SettingOption(
             key="show_cost", text="Session cost",
             value=sb_config.get("show_cost", True), input_type="boolean",
-        ),
-        SettingOption(
-            key="show_completed", text="Last completion time",
-            value=sb_config.get("show_completed", True), input_type="boolean",
         ),
     ]
 
@@ -654,13 +638,6 @@ def _handle_key(chat_manager, console, debug_mode_container, args):
 
     return CommandResult(status="handled")
 
-
-def _handle_init(chat_manager, console, debug_mode_container, args):
-    """Handle init command."""
-    repo_root = Path.cwd()
-    run_init(repo_root, console)
-    chat_manager._init_messages(reset_totals=False)  # Reload agents.md into context
-    return CommandResult(status="handled")
 
 
 def _handle_edit(chat_manager, console, debug_mode_container, args):
@@ -1837,8 +1814,11 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
             console.print("[yellow]Obsidian integration disabled. Tools unregistered.[/yellow]")
             return CommandResult(status="handled")
 
+        if args_clean.lower() == "init":
+            return _handle_obsidian_init(console, obsidian_settings)
+
         console.print(f"[red]Unknown subcommand: {args}[/red]")
-        console.print("Usage: [bold #5F9EA0]/obsidian[/bold #5F9EA0] [set <path> | enable | disable | status]")
+        console.print("Usage: [bold #5F9EA0]/obsidian[/bold #5F9EA0] [set <path> | enable | disable | status | init]")
         return CommandResult(status="handled")
 
     # No args — launch interactive SettingSelector UI
@@ -1907,6 +1887,235 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
+def _persist_disabled_tools(console):
+    """Persist current disabled_tools to config file.
+
+    Returns True on success, False on failure.
+    """
+    try:
+        cfg_data = config_manager.load(force_reload=True)
+        if "TOOL_SETTINGS" not in cfg_data:
+            cfg_data["TOOL_SETTINGS"] = {}
+        cfg_data["TOOL_SETTINGS"]["disabled_tools"] = list(tool_settings.disabled_tools)
+        config_manager.save(cfg_data)
+        return True
+    except Exception as e:
+        console.print(f"[yellow]Could not persist to config: {e}[/yellow]")
+        return False
+
+
+def _handle_tools(chat_manager, console, debug_mode_container, args):
+    """Handle /tools command — toggle individual tools or groups on/off.
+
+    No args: Launch interactive SettingSelector with tools grouped by category.
+    Subcommands:
+      list — show all tools with group labels and status
+      enable <name> — enable a single tool
+      disable <name> — disable a single tool
+      enable-group <key> — enable all tools in a group (e.g. file_ops, search, shell)
+      disable-group <key> — disable all tools in a group
+    """
+    from ui.setting_selector import SettingOption, SettingCategory, SettingSelector
+    from tools.helpers.base import ToolRegistry, TOOL_GROUPS
+
+    # Text subcommands
+    if args:
+        args_clean = args.strip()
+
+        if args_clean.lower() in ("list", "status"):
+            all_tools = sorted(ToolRegistry._tools.values(), key=lambda t: t.name)
+            disabled = ToolRegistry.get_disabled()
+            console.print(f"[bold #5F9EA0]Tools: {len(all_tools) - len(disabled)} enabled, {len(disabled)} disabled[/bold #5F9EA0]")
+            console.print()
+
+            # Build reverse lookup: tool_name -> group_label
+            tool_to_group = {}
+            for gkey, gdef in TOOL_GROUPS.items():
+                for tname in gdef["tools"]:
+                    tool_to_group.setdefault(tname, []).append(gdef["label"])
+
+            # Group tools for display
+            current_group = None
+            for t in all_tools:
+                groups = tool_to_group.get(t.name, [])
+                group_label = groups[0] if groups else "Other"
+                is_off = t.name in disabled
+                modes = ", ".join(t.allowed_modes)
+                if group_label != current_group:
+                    current_group = group_label
+                    console.print(f"  [bold]{group_label}[/bold]")
+                status = "[red]off[/red]" if is_off else "[green]on[/green] "
+                console.print(f"    {status} {t.name}  [dim]({modes})[/dim]")
+
+            console.print()
+            console.print("[dim]Groups:[/dim] " + ", ".join(
+                f"[bold]{k}[/bold] ({v['label']})" for k, v in TOOL_GROUPS.items()
+            ))
+            console.print()
+            return CommandResult(status="handled")
+
+        # Parse: enable/disable <name> or enable-group/disable-group <key>
+        parts = args_clean.split(maxsplit=1)
+        if len(parts) == 2:
+            action = parts[0].lower()
+            target = parts[1].strip()
+
+            # Group operations
+            if action in ("enable-group", "disable-group"):
+                group_key = target.lower()
+                if group_key not in TOOL_GROUPS:
+                    console.print(f"[red]Unknown group: {group_key}[/red]")
+                    console.print("[dim]Groups: " + ", ".join(TOOL_GROUPS.keys()) + "[/dim]")
+                    console.print()
+                    return CommandResult(status="handled")
+
+                group_label = TOOL_GROUPS[group_key]["label"]
+                if action == "disable-group":
+                    changed = ToolRegistry.disable_group(group_key)
+                    if changed:
+                        console.print(f"[yellow]Disabled {group_label}:[/yellow] {', '.join(changed)}")
+                    else:
+                        console.print(f"[dim]All {group_label} tools already disabled.[/dim]")
+                else:
+                    changed = ToolRegistry.enable_group(group_key)
+                    if changed:
+                        console.print(f"[green]Enabled {group_label}:[/green] {', '.join(changed)}")
+                    else:
+                        console.print(f"[dim]All {group_label} tools already enabled.[/dim]")
+
+                # Sync and persist
+                tool_settings.disabled_tools = sorted(ToolRegistry.get_disabled())
+                _persist_disabled_tools(console)
+                console.print()
+                return CommandResult(status="handled")
+
+            # Single tool operations
+            if action in ("enable", "disable"):
+                # Match case-insensitively against registered tools
+                all_registered_lower = {t.name.lower(): t.name for t in ToolRegistry._tools.values()}
+                matched = all_registered_lower.get(target.lower())
+                if not matched:
+                    console.print(f"[red]Unknown tool: {target}[/red]")
+                    console.print(f"[dim]Run [bold #5F9EA0]/tools list[/bold #5F9EA0] to see all tools.[/dim]")
+                    return CommandResult(status="handled")
+
+                if action == "enable":
+                    ToolRegistry.enable(matched)
+                    tool_settings.disabled_tools = [n for n in tool_settings.disabled_tools if n != matched]
+                    console.print(f"[green]Enabled: {matched}[/green]")
+                else:
+                    ToolRegistry.disable(matched)
+                    if matched not in tool_settings.disabled_tools:
+                        tool_settings.disabled_tools.append(matched)
+                    console.print(f"[yellow]Disabled: {matched}[/yellow]")
+
+                _persist_disabled_tools(console)
+                console.print()
+                return CommandResult(status="handled")
+
+        console.print(f"[red]Unknown subcommand: {args}[/red]")
+        console.print("Usage: [bold #5F9EA0]/tools[/bold #5F9EA0] [list | enable <name> | disable <name> | enable-group <key> | disable-group <key>]")
+        return CommandResult(status="handled")
+
+    # No args — interactive toggle UI, organized by groups
+    all_tools_map = {t.name: t for t in ToolRegistry._tools.values()}
+    disabled = ToolRegistry.get_disabled()
+
+    categories = []
+    for gkey, gdef in TOOL_GROUPS.items():
+        group_options = []
+        for tname in gdef["tools"]:
+            t = all_tools_map.get(tname)
+            if not t:
+                continue
+            is_off = tname in disabled
+            modes = ", ".join(t.allowed_modes)
+            group_options.append(SettingOption(
+                key=tname,
+                text=tname,
+                value=not is_off,
+                input_type="boolean",
+                on_text="ON",
+                off_text="OFF",
+                description=f"Modes: {modes}",
+            ))
+        if group_options:
+            categories.append(SettingCategory(title=gdef["label"], settings=group_options))
+
+    # Catch any tools not in a group
+    grouped_names = set()
+    for gdef in TOOL_GROUPS.values():
+        grouped_names.update(gdef["tools"])
+    ungrouped = [
+        t for t in sorted(all_tools_map.values(), key=lambda x: x.name)
+        if t.name not in grouped_names
+    ]
+    if ungrouped:
+        other_options = []
+        for t in ungrouped:
+            is_off = t.name in disabled
+            modes = ", ".join(t.allowed_modes)
+            other_options.append(SettingOption(
+                key=t.name,
+                text=t.name,
+                value=not is_off,
+                input_type="boolean",
+                on_text="ON",
+                off_text="OFF",
+                description=f"Modes: {modes}",
+            ))
+        categories.append(SettingCategory(title="Other", settings=other_options))
+
+    selector = SettingSelector(
+        categories=categories,
+        title="Tool Settings",
+    )
+
+    changes = selector.run()
+
+    if changes is None:
+        console.print("[dim]Cancelled.[/dim]")
+        return CommandResult(status="handled")
+
+    if not changes:
+        console.print("[dim]No changes made.[/dim]")
+        return CommandResult(status="handled")
+
+    # Apply changes
+    newly_disabled = []
+    newly_enabled = []
+    for name, enabled in changes.items():
+        if not enabled and name not in disabled:
+            ToolRegistry.disable(name)
+            newly_disabled.append(name)
+        elif enabled and name in disabled:
+            ToolRegistry.enable(name)
+            newly_enabled.append(name)
+
+    # Sync tool_settings.disabled_tools to be the full current disabled set
+    tool_settings.disabled_tools = sorted(ToolRegistry.get_disabled())
+
+    _persist_disabled_tools(console)
+
+    # Summary
+    change_lines = []
+    for name in newly_disabled:
+        change_lines.append(f"  [yellow]Disabled:[/yellow] {name}")
+    for name in newly_enabled:
+        change_lines.append(f"  [green]Enabled:[/green] {name}")
+
+    if change_lines:
+        total_enabled = len(ToolRegistry.get_all())
+        total_disabled = len(ToolRegistry.get_disabled())
+        console.print(f"[green]Tools updated:[/green] ({total_enabled} enabled, {total_disabled} disabled)")
+        for line in change_lines:
+            console.print(line)
+    else:
+        console.print("[dim]No changes applied.[/dim]")
+
+    return CommandResult(status="handled")
+
+
 def _handle_cd(chat_manager, console, debug_mode_container, args):
     """Handle /cd command — change working directory.
 
@@ -1955,215 +2164,195 @@ def _handle_cd(chat_manager, console, debug_mode_container, args):
     return CommandResult(status="handled")
 
 
-def _handle_project(chat_manager, console, debug_mode_container, args):
-    """Handle /project command — manage project structure in Obsidian vault.
-
-    Subcommands:
-        init — scaffold project folder structure (Bugs, Tasks, Docs, Dashboard.md)
-    """
-    from utils.settings import obsidian_settings
-
+def _handle_obsidian_init(console, obsidian_settings):
+    """Handle /obsidian init — scaffold project folder structure in vault."""
     if not obsidian_settings.is_active():
         console.print("[yellow]Obsidian vault is not configured or inactive.[/yellow]")
         console.print("[dim]Run [bold #5F9EA0]/obsidian set <path>[/bold #5F9EA0] to configure your vault.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
-    if not args or not args.strip():
-        console.print("[red]Usage: [bold #5F9EA0]/project[/bold #5F9EA0] init[/red]")
-        console.print("[dim]  init — scaffold project folder structure in vault[/dim]")
+    # subcmd is always "init" — just do the init
+    from tools.obsidian import get_vault_session
+
+    session = get_vault_session()
+    if not session:
+        console.print("[red]Could not determine project folder.[/red]")
+        return CommandResult(status="handled")
+
+    project_folder = session.project_folder
+
+    # Check if already exists
+    if project_folder.is_dir():
+        console.print(f"[yellow]Project folder already exists: {project_folder}[/yellow]")
+        console.print("[dim]No changes made. Delete the folder manually if you want to re-initialize.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
-    subcmd = args.strip().lower()
-
-    if subcmd == "init":
-        from tools.obsidian import get_vault_session
-
-        session = get_vault_session()
-        if not session:
-            console.print("[red]Could not determine project folder.[/red]")
-            return CommandResult(status="handled")
-
-        project_folder = session.project_folder
-
-        # Check if already exists
-        if project_folder.is_dir():
-            console.print(f"[yellow]Project folder already exists: {project_folder}[/yellow]")
-            console.print("[dim]No changes made. Delete the folder manually if you want to re-initialize.[/dim]")
-            console.print()
-            return CommandResult(status="handled")
-
-        # Define folder structure and templates
-        folders = {
-            "Bugs": (
-                "---\n"
-                "title: {title}\n"
-                "type: bug\n"
-                "status: reported\n"
-                "priority: medium\n"
-                "date_created: {date}\n"
-                "date_modified: {date}\n"
-                "tags: [bug]\n"
-                "---\n"
-                "\n"
-                "# {title}\n"
-                "\n"
-                "**Description:**\n"
-                "\n"
-                "**Steps to reproduce:**\n"
-                "\n"
-                "**Expected behavior:**\n"
-                "\n"
-                "**Actual behavior:**\n"
-                "\n"
-                "Statuses: `reported` → `in-progress` → `fixed` → `verified`\n"
-            ),
-            "Tasks": (
-                "---\n"
-                "title: {title}\n"
-                "type: task\n"
-                "status: todo\n"
-                "priority: medium\n"
-                "date_created: {date}\n"
-                "date_modified: {date}\n"
-                "tags: [task]\n"
-                "---\n"
-                "\n"
-                "# {title}\n"
-                "\n"
-                "**Description:**\n"
-                "\n"
-                "**Acceptance criteria:**\n"
-                "\n"
-                "Statuses: `todo` → `in-progress` → `done`\n"
-            ),
-            "Docs": (
-                "---\n"
-                "title: {title}\n"
-                "type: doc\n"
-                "date_created: {date}\n"
-                "date_modified: {date}\n"
-                "tags: [docs]\n"
-                "---\n"
-                "\n"
-                "# {title}\n"
-                "\n"
-            ),
-        }
-
-        from datetime import date
-
-        today = date.today().isoformat()
-        created_folders = []
-
-        for folder_rel, template in folders.items():
-            folder_path = project_folder / folder_rel
-            folder_path.mkdir(parents=True, exist_ok=True)
-            created_folders.append(folder_rel)
-
-            # Write template
-            template_path = folder_path / "_Template.md"
-            if not template_path.exists():
-                title = folder_rel.split("/")[-1].rstrip("s")
-                content = template.format(date=today, title=title)
-                template_path.write_text(content, encoding="utf-8")
-
-        # Create Done/ subfolders for archiving completed notes
-        for folder_rel in ("Bugs", "Tasks"):
-            done_path = project_folder / folder_rel / "Done"
-            done_path.mkdir(parents=True, exist_ok=True)
-            created_folders.append(f"{folder_rel}/Done")
-
-        # Create Dashboard
-        dashboard_path = project_folder / "Dashboard.md"
-        repo_name = project_folder.name
-        dv_tasks = (
-            f'```dataview\n'
-            f"TABLE status, priority, date_created\n"
-            f'FROM "{session.project_folder_relative}/Tasks"\n'
-            f'WHERE type = "task" AND status != "done"\n'
-            f"SORT date_created DESC\n"
-            f"```\n"
-        )
-        dv_bugs = (
-            f'```dataview\n'
-            f"TABLE status, priority, date_created\n"
-            f'FROM "{session.project_folder_relative}/Bugs"\n'
-            f'WHERE type = "bug" AND status != "fixed" AND status != "verified"\n'
-            f"SORT date_created DESC\n"
-            f"```\n"
-        )
-        dv_completed = (
-            f'```dataview\n'
-            f"TABLE type, status, date_modified\n"
-            f'FROM "{session.project_folder_relative}"\n'
-            f'WHERE (type = "task" AND status = "done")\n'
-            f'   OR (type = "bug" AND (status = "fixed" OR status = "verified"))\n'
-            f"SORT date_modified DESC\n"
-            f"```\n"
-        )
-        dashboard_content = (
+    # Define folder structure and templates
+    folders = {
+        "Bugs": (
             "---\n"
-            "type: dashboard\n"
+            "title: {title}\n"
+            "type: bug\n"
+            "status: reported\n"
+            "priority: medium\n"
             "date_created: {date}\n"
             "date_modified: {date}\n"
-            "tags: [dashboard]\n"
+            "tags: [bug]\n"
             "---\n"
             "\n"
-            "# {title} Dashboard\n"
+            "# {title}\n"
             "\n"
-            "> [!summary] Project Overview\n"
-            "> Check the Bugs/ and Tasks/ folders for issue tracking.\n"
+            "**Description:**\n"
             "\n"
-            "## Open Tasks\n"
+            "**Steps to reproduce:**\n"
             "\n"
-            f"{dv_tasks}\n"
-            "## Open Bugs\n"
+            "**Expected behavior:**\n"
             "\n"
-            f"{dv_bugs}\n"
-            "## Recently Completed\n"
+            "**Actual behavior:**\n"
             "\n"
-            f"{dv_completed}\n"
-        )
-        dashboard_content = dashboard_content.format(date=today, title=repo_name)
-        dashboard_path.write_text(dashboard_content, encoding="utf-8")
-        created_folders.append("Dashboard.md")
+            "Statuses: `reported` → `in-progress` → `fixed` → `verified`\n"
+        ),
+        "Tasks": (
+            "---\n"
+            "title: {title}\n"
+            "type: task\n"
+            "status: todo\n"
+            "priority: medium\n"
+            "date_created: {date}\n"
+            "date_modified: {date}\n"
+            "tags: [task]\n"
+            "---\n"
+            "\n"
+            "# {title}\n"
+            "\n"
+            "**Description:**\n"
+            "\n"
+            "**Acceptance criteria:**\n"
+            "\n"
+            "Statuses: `todo` → `in-progress` → `done`\n"
+        ),
+        "Docs": (
+            "---\n"
+            "title: {title}\n"
+            "type: doc\n"
+            "date_created: {date}\n"
+            "date_modified: {date}\n"
+            "tags: [docs]\n"
+            "---\n"
+            "\n"
+            "# {title}\n"
+            "\n"
+        ),
+    }
 
-        console.print(f"[green]Project initialized: {project_folder.name}[/green]")
-        for folder in created_folders:
-            console.print(f"  [dim]Created: {folder}/ (_Template.md)[/dim]")
+    from datetime import date
+
+    today = date.today().isoformat()
+    created_folders = []
+
+    for folder_rel, template in folders.items():
+        folder_path = project_folder / folder_rel
+        folder_path.mkdir(parents=True, exist_ok=True)
+        created_folders.append(folder_rel)
+
+        # Write template
+        template_path = folder_path / "_Template.md"
+        if not template_path.exists():
+            title = folder_rel.split("/")[-1].rstrip("s")
+            content = template.format(date=today, title=title)
+            template_path.write_text(content, encoding="utf-8")
+
+    # Create Done/ subfolders for archiving completed notes
+    for folder_rel in ("Bugs", "Tasks"):
+        done_path = project_folder / folder_rel / "Done"
+        done_path.mkdir(parents=True, exist_ok=True)
+        created_folders.append(f"{folder_rel}/Done")
+
+    # Create Dashboard
+    dashboard_path = project_folder / "Dashboard.md"
+    repo_name = project_folder.name
+    dv_tasks = (
+        f'```dataview\n'
+        f"TABLE status, priority, date_created\n"
+        f'FROM "{session.project_folder_relative}/Tasks"\n'
+        f'WHERE type = "task" AND status != "done"\n'
+        f"SORT date_created DESC\n"
+        f"```\n"
+    )
+    dv_bugs = (
+        f'```dataview\n'
+        f"TABLE status, priority, date_created\n"
+        f'FROM "{session.project_folder_relative}/Bugs"\n'
+        f'WHERE type = "bug" AND status != "fixed" AND status != "verified"\n'
+        f"SORT date_created DESC\n"
+        f"```\n"
+    )
+    dv_completed = (
+        f'```dataview\n'
+        f"TABLE type, status, date_modified\n"
+        f'FROM "{session.project_folder_relative}"\n'
+        f'WHERE (type = "task" AND status = "done")\n'
+        f'   OR (type = "bug" AND (status = "fixed" OR status = "verified"))\n'
+        f"SORT date_modified DESC\n"
+        f"```\n"
+    )
+    dashboard_content = (
+        "---\n"
+        "type: dashboard\n"
+        "date_created: {date}\n"
+        "date_modified: {date}\n"
+        "tags: [dashboard]\n"
+        "---\n"
+        "\n"
+        "# {title} Dashboard\n"
+        "\n"
+        "> [!summary] Project Overview\n"
+        "> Check the Bugs/ and Tasks/ folders for issue tracking.\n"
+        "\n"
+        "## Open Tasks\n"
+        "\n"
+        f"{dv_tasks}\n"
+        "## Open Bugs\n"
+        "\n"
+        f"{dv_bugs}\n"
+        "## Recently Completed\n"
+        "\n"
+        f"{dv_completed}\n"
+    )
+    dashboard_content = dashboard_content.format(date=today, title=repo_name)
+    dashboard_path.write_text(dashboard_content, encoding="utf-8")
+    created_folders.append("Dashboard.md")
+
+    console.print(f"[green]Project initialized: {project_folder.name}[/green]")
+    for folder in created_folders:
+        console.print(f"  [dim]Created: {folder}/ (_Template.md)[/dim]")
+    console.print()
+
+    # Check if Dataview plugin is installed and enabled
+    vault_root = session.vault_root
+    community_plugins = vault_root / ".obsidian" / "community-plugins.json"
+    dataview_dir = vault_root / ".obsidian" / "plugins" / "dataview"
+    has_plugin_entry = (
+        community_plugins.is_file()
+        and "dataview" in community_plugins.read_text(encoding="utf-8")
+    )
+    has_plugin_files = (
+        dataview_dir.is_dir()
+        and (dataview_dir / "main.js").is_file()
+        and (dataview_dir / "manifest.json").is_file()
+    )
+    if not has_plugin_entry or not has_plugin_files:
+        console.print("[yellow]Dataview plugin not detected — dashboard tables won't render.[/yellow]")
+        console.print("[dim]Install the Dataview community plugin in Obsidian:[/dim]")
+        console.print("[dim]  Settings → Community plugins → Browse → search 'Dataview' → Install & Enable[/dim]")
+        console.print("[dim]Or download from: https://github.com/blacksmithgu/obsidian-dataview[/dim]")
         console.print()
 
-        # Check if Dataview plugin is installed and enabled
-        vault_root = session.vault_root
-        community_plugins = vault_root / ".obsidian" / "community-plugins.json"
-        dataview_dir = vault_root / ".obsidian" / "plugins" / "dataview"
-        has_plugin_entry = (
-            community_plugins.is_file()
-            and "dataview" in community_plugins.read_text(encoding="utf-8")
-        )
-        has_plugin_files = (
-            dataview_dir.is_dir()
-            and (dataview_dir / "main.js").is_file()
-            and (dataview_dir / "manifest.json").is_file()
-        )
-        if not has_plugin_entry or not has_plugin_files:
-            console.print("[yellow]Dataview plugin not detected — dashboard tables won't render.[/yellow]")
-            console.print("[dim]Install the Dataview community plugin in Obsidian:[/dim]")
-            console.print("[dim]  Settings → Community plugins → Browse → search 'Dataview' → Install & Enable[/dim]")
-            console.print("[dim]Or download from: https://github.com/blacksmithgu/obsidian-dataview[/dim]")
-            console.print()
-
-        console.print("[dim]Create issues with [bold #5F9EA0]/project init[/bold #5F9EA0] to set up the project folder.[/dim]")
-        console.print()
-        return CommandResult(status="handled")
-
-    else:
-        console.print(f"[red]Unknown subcommand: {subcmd}[/red]")
-        console.print("[dim]Usage: [bold #5F9EA0]/project[/bold #5F9EA0] init[/dim]")
-        console.print()
-        return CommandResult(status="handled")
+    console.print("[dim]Create issues with [bold #5F9EA0]/obsidian init[/bold #5F9EA0] to set up the project folder.[/dim]")
+    console.print()
+    return CommandResult(status="handled")
 
 
 # Command registry - maps command names to their handlers
@@ -2178,7 +2367,7 @@ _COMMAND_HANDLERS = {
     "/reset": _handle_clear,
     "/provider": _handle_provider,
     "/config": _handle_config,
-    "/init": _handle_init,
+
     "/edit": _handle_edit,
     "/e": _handle_edit,
     "/usage": _handle_usage,
@@ -2196,7 +2385,7 @@ _COMMAND_HANDLERS = {
     "/upgrade": _handle_upgrade,
     "/rotate-key": _handle_rotate_key,
     "/obsidian": _handle_obsidian,
-    "/project": _handle_project,
+    "/tools": _handle_tools,
     "/cd": _handle_cd,
 }
 

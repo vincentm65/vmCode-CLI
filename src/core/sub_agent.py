@@ -24,17 +24,17 @@ def _configure_compaction():
 
 
 def _inject_system_prompt(chat_manager, sub_agent_type: str = "research"):
-    """Build sub-agent prompt and inject it with token usage info.
+    """Build sub-agent prompt and inject it.
+
+    Token usage is reported live by the wrapper in run_sub_agent(),
+    so the system prompt is kept clean.
 
     Args:
         chat_manager: ChatManager instance to configure
         sub_agent_type: Type of sub-agent ('research' or 'review').
     """
     base_prompt = build_sub_agent_prompt(sub_agent_type=sub_agent_type)
-    token_usage = chat_manager.token_tracker.get_usage_for_prompt(
-        context_limit=sub_agent_settings.soft_limit_tokens
-    )
-    chat_manager.messages = [{"role": "system", "content": f"{base_prompt}\n\n{token_usage}"}]
+    chat_manager.messages = [{"role": "system", "content": base_prompt}]
 
 
 def _load_codebase_map(chat_manager):
@@ -86,6 +86,7 @@ def _create_chat_manager(sub_agent_type: str = "research"):
         ChatManager: A new ChatManager instance with pre-configured system prompt
     """
     chat_manager = _configure_compaction()
+    chat_manager._compaction_disabled = True
     _inject_system_prompt(chat_manager, sub_agent_type=sub_agent_type)
     _load_codebase_map(chat_manager)
     _configure_isolation(chat_manager)
@@ -156,24 +157,45 @@ def run_sub_agent(
         force_parallel_execution=True  # Enable parallel execution for read-only tools
     )
 
-    # Wrap orchestrator.run to check hard limit before each LLM call
+    # Wrap orchestrator._get_llm_response to check hard token limit and
+    # wrap client.chat_completion once (outside the loop) to inject live
+    # token feedback as a system message — avoids per-call monkey-patching
+    # and eliminates any re-entrancy risk.
     original_get_llm_response = orchestrator._get_llm_response
+    original_chat_completion = temp_chat_manager.client.chat_completion
+
+    def _chat_completion_with_token_hint(messages, **kwargs):
+        """Prepend a system-level token budget hint to every LLM call."""
+        tt = temp_chat_manager.token_tracker
+        hint = f"[Token budget: {tt.current_context_tokens:,} curr / {tt.conv_total_tokens:,} total]"
+        token_msg = {"role": "system", "content": hint}
+        return original_chat_completion([token_msg, *messages], **kwargs)
 
     def _get_llm_response_with_hard_limit(allowed_tools=None):
-        """Wrapper to check hard token limit before each LLM call."""
+        """Wrapper to check hard token limit and update panel with live token counts."""
+        tt = temp_chat_manager.token_tracker
+
         # Check hard token limit before making LLM call
-        current_total = temp_chat_manager.token_tracker.total_tokens
-        if current_total >= sub_agent_settings.hard_limit_tokens:
+        if tt.total_tokens >= sub_agent_settings.hard_limit_tokens:
             raise Exception(
                 f"Sub-agent hard token limit exceeded: "
-                f"{current_total:,} / {sub_agent_settings.hard_limit_tokens:,} tokens. "
+                f"{tt.total_tokens:,} / {sub_agent_settings.hard_limit_tokens:,} tokens. "
                 "Please refine your query or use more targeted searches."
             )
 
+        # Update panel with live token counts
+        # Order: conversation length (current context) first, total tokens billed second
+        conv_length = tt.current_context_tokens
+        total_billed = tt.conv_total_tokens
+        if hasattr(panel_updater, 'token_info'):
+            panel_updater.token_info = f"{conv_length:,} curr | {total_billed:,} total"
+            panel_updater.append("")  # Refresh panel title
+
         return original_get_llm_response(allowed_tools=allowed_tools)
 
-    # Replace the method with our wrapper
+    # Apply both patches once, before the orchestrator loop starts
     orchestrator._get_llm_response = _get_llm_response_with_hard_limit
+    temp_chat_manager.client.chat_completion = _chat_completion_with_token_hint
 
     try:
         # Run sub-agent task
@@ -195,6 +217,9 @@ def run_sub_agent(
             "model": "",
             "error": error_details
         }
+    finally:
+        # Restore originals
+        temp_chat_manager.client.chat_completion = original_chat_completion
 
     # Get final token usage (no need for delta calculation on fresh instance)
     delta_prompt = temp_chat_manager.token_tracker.total_prompt_tokens
@@ -217,6 +242,7 @@ def run_sub_agent(
         "prompt_tokens": delta_prompt,
         "completion_tokens": delta_completion,
         "total_tokens": delta_total,
+        "context_tokens": tt.current_context_tokens,
     }
     if delta_cost > 0:
         usage["cost"] = delta_cost

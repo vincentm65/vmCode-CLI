@@ -373,7 +373,6 @@ def _build_status_bar_settings():
         "show_out_tokens": sbs.get("show_out_tokens", True),
         "show_total_tokens": sbs.get("show_total_tokens", True),
         "show_cost": sbs.get("show_cost", True),
-        "show_completed": sbs.get("show_completed", True),
     }
 
 

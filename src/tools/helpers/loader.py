@@ -145,56 +145,56 @@ def load_builtin_tools() -> int:
     return ToolRegistry.tool_count()
 
 
-def load_user_tools() -> int:
-    """Load user tools from user_tools/ directory.
+def load_plugin_tools() -> int:
+    """Load plugin tools from tool_plugins/ directory.
 
     Returns:
         Number of tools loaded
 
     Note:
-        - user_tools/ directory at repository root
-        - User tools can override built-in tools
+        - tool_plugins/ directory at repository root
+        - Plugin tools can override built-in tools
     """
-    # Get repository root (assumes we're in src/utils/tools/)
+    # Get repository root (assumes we're in src/tools/helpers/)
     current_dir = Path(__file__).parent
     repo_root = current_dir.parent.parent.parent
 
-    # Define user tool directories
-    user_directories = [
-        str(repo_root / "user_tools"),
+    # Define plugin tool directories
+    plugin_directories = [
+        str(repo_root / "tool_plugins"),
     ]
 
-    # Discover tools in user directories
-    return discover_tools(user_directories)
+    # Discover tools in plugin directories
+    return discover_tools(plugin_directories)
 
 
 def load_all_tools() -> int:
-    """Load all tools (built-in and user tools).
+    """Load all tools (built-in and plugin tools).
 
     Returns:
         Total number of tools loaded
 
     Discovery order:
-        1. Built-in tools (src/utils/tools/*.py)
-        2. User tools (user_tools/*.py)
+        1. Built-in tools (src/tools/*.py)
+        2. Plugin tools (tool_plugins/*.py)
 
     Note:
-        User tools loaded later can override built-in tools.
+        Plugin tools loaded later can override built-in tools.
     """
     logger.info("Starting tool loading...")
 
     # Load built-in tools first
     builtin_count = load_builtin_tools()
 
-    # Then load user tools (can override built-ins)
-    user_count = load_user_tools()
+    # Then load plugin tools (can override built-ins)
+    plugin_count = load_plugin_tools()
 
-    total_count = builtin_count + user_count
+    total_count = builtin_count + plugin_count
     total_registered = ToolRegistry.tool_count()
 
     logger.info(
         f"Tool loading complete: {builtin_count} built-in + "
-        f"{user_count} user modules = {total_count} modules, "
+        f"{plugin_count} plugin modules = {total_count} modules, "
         f"{total_registered} tools registered"
     )
 

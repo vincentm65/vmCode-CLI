@@ -60,13 +60,14 @@ def show_help_table(console):
     table.add_row("[bold #5F9EA0]/key[/bold #5F9EA0] <key>", "Set API key for current provider")
     table.add_row("[bold #5F9EA0]/model[/bold #5F9EA0] <name>", "Set model for current provider")
     table.add_row("[bold #5F9EA0]/usage[/bold #5F9EA0] [provider] [in|out] <cost>", "Set/view provider-specific token cost")
-    table.add_row("[bold #5F9EA0]/compact[/bold #5F9EA0] [-a]", "Compact context with an AI summary (add -a for aggressive mode)")
-    table.add_row("[bold #5F9EA0]/init[/bold #5F9EA0]", "Generate agents.md")
+    table.add_row("[bold #5F9EA0]/compact[/bold #5F9EA0]", "Compact context with an AI summary")
+
+
     table.add_row("[bold #5F9EA0]/cd[/bold #5F9EA0] [path]", "Change working directory (no args to show current)")
     table.add_row("[bold #5F9EA0]/edit[/bold #5F9EA0], [bold #5F9EA0]/e[/bold #5F9EA0]", "Open editor for multi-line input")
     table.add_row("[bold #5F9EA0]/review[/bold #5F9EA0] [args], [bold #5F9EA0]/r[/bold #5F9EA0]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
-    table.add_row("[bold #5F9EA0]/obsidian[/bold #5F9EA0] [set|enable|disable|status]", "Manage Obsidian vault integration")
-    table.add_row("[bold #5F9EA0]/project[/bold #5F9EA0] [init|status]", "Scaffold project folders or view issue status in vault")
+    table.add_row("[bold #5F9EA0]/obsidian[/bold #5F9EA0] [set|enable|disable|status|init]", "Manage vault integration, scaffold project folders")
+    table.add_row("[bold #5F9EA0]/tools[/bold #5F9EA0] [list|enable|disable|enable-group|disable-group]", "Toggle tools or groups (e.g. file_ops, task_mgmt)")
 
 
     console.print(Panel(table, title="[bold #5F9EA0]Commands[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))

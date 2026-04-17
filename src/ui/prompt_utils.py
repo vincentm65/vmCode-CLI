@@ -31,12 +31,6 @@ def get_bottom_toolbar_text(chat_manager):
     # over locally estimated cost from token counts × static rates
     total_cost = chat_manager.token_tracker.get_display_cost(model)
     
-    # Import LAST_COMPLETION_TIME from main
-    import importlib
-    main_module = importlib.import_module('ui.main')
-    last_completion = getattr(main_module, 'LAST_COMPLETION_TIME', None)
-    format_time = getattr(main_module, 'format_time', lambda s: f"{int(s)}s")
-
     # Format model name (take last part if path)
     if "\\" in model or "/" in model:
         model_display = model.split("\\")[-1].split("/")[-1]
@@ -72,10 +66,6 @@ def get_bottom_toolbar_text(chat_manager):
     # Conditionally add cost
     if STATUS_BAR_SETTINGS.get("show_cost", True):
         parts.append(f'<style fg="#606060"> | </style><style fg="#808080">cost</style><style fg="#606060">: ${total_cost:.4f}</style>')
-    
-    # Conditionally add completion time
-    if STATUS_BAR_SETTINGS.get("show_completed", True) and last_completion is not None:
-        parts.append(f'<style fg="#606060"> | </style><style fg="#6B8E23">completed</style><style fg="#606060">: {format_time(last_completion)}</style>')
     
     return HTML('\n' + ''.join(parts))
 

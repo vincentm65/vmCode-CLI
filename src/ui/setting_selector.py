@@ -60,7 +60,6 @@ class SettingSelector:
         categories: List[SettingCategory],
         title: str = "Settings",
         on_change: Callable[[str, str, Any], None] = None,  # Called on value change
-        on_activate: Callable[[str, Any], None] = None,  # Called on Enter for nav items
         show_save: bool = True,  # Whether to show the Save button
     ):
         """Initialize the setting selector.
@@ -69,13 +68,11 @@ class SettingSelector:
             categories: List of SettingCategory objects with settings
             title: Panel title
             on_change: Callback(key, action, value) when setting changes
-            on_activate: Callback(key, value) when Enter pressed on nav-type item
             show_save: Whether to display the Save button
         """
         self.categories = categories
         self.title = title
         self.on_change = on_change
-        self.on_activate = on_activate
         self.show_save = show_save
 
         self.current_cat_idx = 0
@@ -88,8 +85,6 @@ class SettingSelector:
             for cat in categories
             for s in cat.settings
         }
-        # For "options" type: track which option is selected within a setting
-        self._current_option_idx = 0
 
     def _get_current_setting(self) -> Optional[SettingOption]:
         """Get the currently selected setting."""
@@ -456,8 +451,6 @@ class SettingSelector:
 
             # Nav: activate drill-down
             if setting.input_type == 'nav':
-                if self.on_activate:
-                    self.on_activate(setting.key, setting.value)
                 event.app.exit(result={'_nav': setting.key})
                 return
 
@@ -585,52 +578,4 @@ class SettingSelector:
         output.flush()
 
         # None = cancelled, {} = saved with no changes, {...} = saved with changes
-        # {'_nav': key} = nav item activated (drill-down)
-        if result is None:
-            return None
-        if isinstance(result, dict) and '_nav' in result:
-            return result  # Nav activation result
-        # Distinguish empty dict (saved, no changes) from None (cancelled)
         return result
-
-
-# Convenience function for quick usage
-def select_setting(
-    question: str,
-    options: List[Dict[str, Any]],
-    current_value: Any = None,
-    on_change: Callable[[str, Any], None] = None
-) -> Optional[Any]:
-    """Quick single-setting selector.
-
-    Args:
-        question: Setting display name
-        options: List of {value, text, description?}
-        current_value: Currently selected value
-        on_change: Callback(value) when value changes
-
-    Returns:
-        New selected value or None if canceled
-    """
-    setting = SettingOption(
-        key="_single",
-        text=question,
-        value=current_value,
-        input_type="select",
-        options=[{"value": o.get("value"), "text": o.get("text"), "description": o.get("description")} for o in options]
-    )
-
-    def wrapped_on_change(key, action, value):
-        if on_change:
-            on_change(value)
-
-    selector = SettingSelector(
-        categories=[SettingCategory(title="Settings", settings=[setting])],
-        title=question,
-        on_change=wrapped_on_change
-    )
-
-    result = selector.run()
-    if result and "_single" in result:
-        return result["_single"]
-    return None

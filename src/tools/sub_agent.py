@@ -118,7 +118,8 @@ def sub_agent(
             panel.set_complete({
                 'prompt_tokens': usage.get('prompt_tokens', 0),
                 'completion_tokens': usage.get('completion_tokens', 0),
-                'total_tokens': usage.get('total_tokens', 0)
+                'total_tokens': usage.get('total_tokens', 0),
+                'context_tokens': usage.get('context_tokens', 0),
             })
 
         # Display sub-agent result summary (used for context)

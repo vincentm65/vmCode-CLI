@@ -33,6 +33,7 @@ class SubAgentPanel:
         self.query = query
         self.tool_calls = []  # List of formatted Rich markup strings
         self.total_tool_calls = 0
+        self.token_info = None  # Live token info string, e.g. "32k / 45k"
         self._live = None
         self._spinner_index = 0
         self._show_spinner = True
@@ -46,10 +47,11 @@ class SubAgentPanel:
 
     def _get_title(self):
         """Get panel title with optional spinner and tool call counter."""
+        token_suffix = f" | {self.token_info}" if self.token_info else ""
         if self._show_spinner:
             spinner = self._SPINNER_FRAMES[self._spinner_index % len(self._SPINNER_FRAMES)]
-            return f"[#5F9EA0]{spinner} Sub-Agent ({self.total_tool_calls})[/#5F9EA0]"
-        return f"[#5F9EA0]Sub-Agent ({self.total_tool_calls})[/#5F9EA0]"
+            return f"[#5F9EA0]{spinner} Sub-Agent ({self.total_tool_calls}){token_suffix}[/#5F9EA0]"
+        return f"[#5F9EA0]Sub-Agent ({self.total_tool_calls}){token_suffix}[/#5F9EA0]"
 
     def _render_panel(self, title=None, border_style="#5F9EA0"):
         """Render the current panel state.
@@ -203,10 +205,11 @@ class SubAgentPanel:
         """
         self._show_spinner = False  # Stop spinner
 
-        # Build title with token usage if available
+        # Build title with token usage: conversation length first, total billed second
         if usage and usage.get('total_tokens'):
+            ctx_tokens = usage.get('context_tokens', 0)
             total_tokens = usage.get('total_tokens', 0)
-            title = f"[green]✓ Sub-Agent Complete ({self.total_tool_calls}) - {total_tokens:,} tokens[/green]"
+            title = f"[green]✓ Sub-Agent Complete ({self.total_tool_calls}) - {ctx_tokens:,} curr, {total_tokens:,} total[/green]"
         else:
             title = f"[green]✓ Sub-Agent Complete ({self.total_tool_calls})[/green]"
 

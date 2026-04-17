@@ -125,7 +125,6 @@ STATUS_BAR_SETTINGS:
   show_out_tokens: true
   show_total_tokens: true
   show_cost: true
-  show_completed: true
 
 # -- Integrations -------------------------------------------------------------
 
