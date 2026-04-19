@@ -143,6 +143,33 @@ function ensureUserConfig() {
   return configFile;
 }
 
+// Handle subcommands before launching Python
+const subcommand = process.argv[2];
+
+if (subcommand === 'update') {
+  console.log('Updating vmcode-cli to latest version...');
+  const updateProcess = spawn('npm', ['install', '-g', 'vmcode-cli@latest'], {
+    stdio: 'inherit',
+    shell: true
+  });
+
+  updateProcess.on('close', (code) => {
+    if (code === 0) {
+      console.log('\n✓ vmcode-cli updated successfully');
+    } else {
+      console.error('\n❌ Update failed (exit code ' + code + ')');
+      console.error('Try running manually: npm install -g vmcode-cli@latest');
+    }
+    process.exit(code || 0);
+  });
+
+  updateProcess.on('error', (err) => {
+    console.error('❌ Failed to run update:', err.message);
+    process.exit(1);
+  });
+  return;
+}
+
 async function main() {
   // Find Python executable
   const pythonCmd = findPython();
