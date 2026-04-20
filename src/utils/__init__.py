@@ -1,1 +1,1 @@
-"""Utility modules for vmCode."""
+"""Utility modules for bone-agent."""

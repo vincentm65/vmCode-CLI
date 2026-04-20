@@ -9,13 +9,13 @@ def resolve_config_path() -> Path:
     """Resolve config.yaml path.
 
     Resolution order:
-    1. VMCODE_CONFIG_PATH — explicit user config path (set by npm wrapper)
-    2. ~/.vmcode/config.yaml — user home dotfile (dev and npm installs)
+    1. BONE_CONFIG_PATH — explicit user config path (set by npm wrapper)
+    2. ~/.bone/config.yaml — user home dotfile (dev and npm installs)
     """
-    _user_cfg = os.environ.get('VMCODE_CONFIG_PATH')
+    _user_cfg = os.environ.get('BONE_CONFIG_PATH')
     if _user_cfg:
         return Path(_user_cfg).resolve()
-    return Path.home() / '.vmcode' / 'config.yaml'
+    return Path.home() / '.bone' / 'config.yaml'
 
 # Module-level config path (single source of truth)
 CONFIG_PATH = resolve_config_path()
@@ -31,7 +31,7 @@ ENV_API_KEYS = {
     'KIMI_API_KEY': os.environ.get('KIMI_API_KEY'),
     'MINIMAX_PLAN_API_KEY': os.environ.get('MINIMAX_PLAN_API_KEY'),
     'MINIMAX_API_KEY': os.environ.get('MINIMAX_API_KEY'),
-    'VMCODE_PROXY_API_KEY': os.environ.get('VMCODE_PROXY_API_KEY'),
+    'BONE_PROXY_API_KEY': os.environ.get('BONE_PROXY_API_KEY'),
 }
 
 # Detect platform for llama.cpp paths
@@ -311,23 +311,23 @@ def _get_provider_registry():
             "allow_temperature": True,
             **_model_cost("KIMI_MODEL"),
         },
-        "vmcode": {
+        "bone": {
             "type": "api",
-            "api_key": _CONFIG.get("VMCODE_PROXY_API_KEY", ""),
-            "model": _CONFIG.get("VMCODE_PROXY_MODEL", "openai/gpt-4o-mini"),
-            "api_base": _CONFIG.get("VMCODE_PROXY_API_BASE", "https://api.vmcode.dev"),
+            "api_key": _CONFIG.get("BONE_PROXY_API_KEY", ""),
+            "model": _CONFIG.get("BONE_PROXY_MODEL", "openai/gpt-4o-mini"),
+            "api_base": _CONFIG.get("BONE_PROXY_API_BASE", "https://api.vmcode.dev"),
             "endpoint": "/v1/chat/completions",
-            "error_prefix": "vmCode Proxy",
+            "error_prefix": "bone-agent Proxy",
             "config_keys": {
-                "VMCODE_PROXY_API_KEY": "",
-                "VMCODE_PROXY_MODEL": "openai/gpt-4o-mini",
-                "VMCODE_PROXY_API_BASE": "https://api.vmcode.dev",
+                "BONE_PROXY_API_KEY": "",
+                "BONE_PROXY_MODEL": "openai/gpt-4o-mini",
+                "BONE_PROXY_API_BASE": "https://api.vmcode.dev",
             },
             "default_temperature": 0.1,
             "default_top_p": 0.9,
             "allow_top_p": True,
             "allow_temperature": True,
-            **_model_cost("VMCODE_PROXY_MODEL"),
+            **_model_cost("BONE_PROXY_MODEL"),
         },
     }
     return _provider_registry_cache

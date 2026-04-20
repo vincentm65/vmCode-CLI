@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * vmCode - npm wrapper for Python application
- * This script launches the Python vmcode application
+ * bone-agent - npm wrapper for Python application
+ * This script launches the Python bone-agent application
  */
 
 const { spawn } = require('child_process');
@@ -16,9 +16,9 @@ let packageDir = __dirname;
 // First check if package.json exists in current directory (local install)
 if (!fs.existsSync(path.join(packageDir, 'package.json'))) {
   // For global installs: check if we're in node_modules/.bin (go up to node_modules/package-name)
-  const nodeModulesBin = path.join(packageDir, '..', 'vmcode-cli', 'package.json');
+  const nodeModulesBin = path.join(packageDir, '..', 'bone-agent-cli', 'package.json');
   if (fs.existsSync(nodeModulesBin)) {
-    packageDir = path.join(packageDir, '..', 'vmcode-cli');
+    packageDir = path.join(packageDir, '..', 'bone-agent-cli');
   } else {
     // Alternative: walk up the directory tree looking for package.json
     let found = false;
@@ -107,7 +107,7 @@ function installPythonDependencies(pythonCmd) {
 
 function showSetupMessage() {
   console.log('\n' + '='.repeat(60));
-  console.log('vmCode - Terminal-based AI coding assistant');
+  console.log('bone-agent - Terminal-based AI coding assistant');
   console.log('='.repeat(60));
   console.log('\nFirst-time setup needed!\n');
   console.log('1. Python is required (3.9 or later)');
@@ -116,24 +116,24 @@ function showSetupMessage() {
   console.log('  npm run install\n');
   console.log('Or manually:');
   console.log('  python3 -m pip install -r requirements.txt\n');
-  console.log('Then run vmcode again.\n');
+  console.log('Then run bone-agent again.\n');
 }
 
 function ensureUserConfig() {
-  // User config lives in ~/.vmcode/config.yaml (persists across npm updates)
-  const vmcodeDir = path.join(os.homedir(), '.vmcode');
-  const configFile = path.join(vmcodeDir, 'config.yaml');
+  // User config lives in ~/.bone/config.yaml (persists across npm updates)
+  const boneDir = path.join(os.homedir(), '.bone');
+  const configFile = path.join(boneDir, 'config.yaml');
   const configExample = path.join(packageDir, 'config.yaml.example');
 
-  if (!fs.existsSync(vmcodeDir)) {
-    fs.mkdirSync(vmcodeDir, { recursive: true });
+  if (!fs.existsSync(boneDir)) {
+    fs.mkdirSync(boneDir, { recursive: true });
   }
 
   if (!fs.existsSync(configFile)) {
     if (fs.existsSync(configExample)) {
       try {
         fs.copyFileSync(configExample, configFile);
-        console.log('✓ Config created: ~/.vmcode/config.yaml');
+        console.log('✓ Config created: ~/.bone/config.yaml');
       } catch (e) {
         console.log('Failed to create config:', e.message);
       }
@@ -147,18 +147,18 @@ function ensureUserConfig() {
 const subcommand = process.argv[2];
 
 if (subcommand === 'update') {
-  console.log('Updating vmcode-cli to latest version...');
-  const updateProcess = spawn('npm', ['install', '-g', 'vmcode-cli@latest'], {
+  console.log('Updating bone-agent-cli to latest version...');
+  const updateProcess = spawn('npm', ['install', '-g', 'bone-agent-cli@latest'], {
     stdio: 'inherit',
     shell: true
   });
 
   updateProcess.on('close', (code) => {
     if (code === 0) {
-      console.log('\n✓ vmcode-cli updated successfully');
+      console.log('\n✓ bone-agent-cli updated successfully');
     } else {
       console.error('\n❌ Update failed (exit code ' + code + ')');
-      console.error('Try running manually: npm install -g vmcode-cli@latest');
+      console.error('Try running manually: npm install -g bone-agent-cli@latest');
     }
     process.exit(code || 0);
   });
@@ -195,17 +195,17 @@ async function main() {
     }
   }
   
-  // Ensure user config exists in ~/.vmcode/ (persists across npm updates)
+  // Ensure user config exists in ~/.bone/ (persists across npm updates)
   const userConfigPath = ensureUserConfig();
   
   // Run the Python application
-  // VMCODE_CONFIG_PATH points to user's persistent config.yaml in ~/.vmcode/
+  // BONE_CONFIG_PATH points to user's persistent config.yaml in ~/.bone/
   const pythonProcess = spawn(pythonCmd, [pythonScript], {
     stdio: 'inherit',
     cwd: process.cwd(),
     env: {
       ...process.env,
-      VMCODE_CONFIG_PATH: userConfigPath,
+      BONE_CONFIG_PATH: userConfigPath,
     }
   });
   
@@ -214,7 +214,7 @@ async function main() {
   });
   
   pythonProcess.on('error', (err) => {
-    console.error('\n❌ Failed to start vmcode:', err.message);
+    console.error('\n❌ Failed to start bone-agent:', err.message);
     process.exit(1);
   });
   

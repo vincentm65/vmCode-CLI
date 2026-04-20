@@ -1,1 +1,1 @@
-"""User interface layer for vmCode."""
+"""User interface layer for bone-agent."""

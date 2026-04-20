@@ -1,9 +1,9 @@
 @echo off
-REM vmCode setup script for Windows (git clone installation)
-REM This script sets up vmcode as a system command
+REM bone-agent setup script for Windows (git clone installation)
+REM This script sets up bone-agent as a system command
 
 echo ==========================================
-echo   vmCode Setup
+echo   bone-agent Setup
 echo ==========================================
 echo.
 
@@ -60,23 +60,23 @@ if not exist "config.yaml" (
     echo config.yaml already exists
 )
 
-REM Create vmcode command
+REM Create bone command
 echo.
-echo Setting up vmcode command...
+echo Setting up bone-agent command...
 
 REM Option 1: Create batch file in PATH
 set "USER_BIN=%USERPROFILE%\bin"
 if not exist "%USER_BIN%" mkdir "%USER_BIN%"
 
-REM Create vmcode.bat launcher
+REM Create bone-agent.bat launcher
 (
 echo @echo off
-echo REM vmCode launcher
+echo REM bone-agent launcher
 echo cd /d "%PROJECT_ROOT%"
 echo python src/ui/main.py %%*
-) > "%USER_BIN%\vmcode.bat"
+) > "%USER_BIN%\bone-agent.bat"
 
-echo Created command: %USER_BIN%\vmcode.bat
+echo Created command: %USER_BIN%\bone-agent.bat
 
 REM Check if USER_BIN is in PATH
 echo %PATH% | find /i /c "%USER_BIN%" >nul
@@ -103,8 +103,8 @@ echo ==========================================
 echo   Setup Complete!
 echo ==========================================
 echo.
-echo Run vmcode:
-echo   vmcode
+echo Run bone-agent:
+echo   bone-agent
 echo.
 echo Or run directly:
 echo   cd %PROJECT_ROOT%

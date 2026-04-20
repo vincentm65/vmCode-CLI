@@ -19,12 +19,11 @@ def format_directory_path(path: str) -> str:
         path: Full directory path.
         
     Returns:
-        Shortened path like 'c:/.../vmCode' or full path if short enough.
+        Shortened path like 'c:/.../bone-agent' or full path if short enough.
     """
     parts = path.split(os.sep)
     if len(parts) > 2:
         return f"{parts[0]}.../{parts[-1]}"
-    return path
 
 
 def _get_version() -> str:
@@ -38,7 +37,7 @@ def _get_version() -> str:
 
 
 def display_startup_banner(approve_mode: str, interaction_mode: str = "edit", *, clear_screen: bool = False):
-    """Ultra-minimalist startup screen for vmCode.
+    """Ultra-minimalist startup screen for bone-agent.
 
     Args:
         approve_mode: Current approval mode setting.
@@ -66,7 +65,7 @@ def display_startup_banner(approve_mode: str, interaction_mode: str = "edit", *,
 
     # Add content
     grid.add_row(
-        Text("vmCode", style="bold white"),
+        Text("bone", style="bold white"),
         Text(f"v{_get_version()}", style="dim white")
     )
 

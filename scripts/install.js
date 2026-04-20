@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * vmCode npm install script
+ * bone-agent npm install script
  * Handles Python dependency installation
  */
 
@@ -12,7 +12,7 @@ const fs = require('fs');
 const packageDir = path.resolve(__dirname, '..');
 const requirementsFile = path.join(packageDir, 'requirements.txt');
 
-console.log('Installing vmCode...\n');
+console.log('Installing bone-agent...\n');
 
 function findPython() {
   const possibleCommands = ['python3', 'python', 'python3.9', 'python3.10', 'python3.11', 'python3.12'];
@@ -63,21 +63,21 @@ function installDependencies(pythonCmd) {
 }
 
 function setupConfig() {
-  // User config lives in ~/.vmcode/config.yaml (persists across npm updates)
-  const vmcodeDir = path.join(os.homedir(), '.vmcode');
-  const configFile = path.join(vmcodeDir, 'config.yaml');
+  // User config lives in ~/.bone/config.yaml (persists across npm updates)
+  const boneDir = path.join(os.homedir(), '.bone');
+  const configFile = path.join(boneDir, 'config.yaml');
   const configExample = path.join(packageDir, 'config.yaml.example');
 
-  if (!fs.existsSync(vmcodeDir)) {
-    fs.mkdirSync(vmcodeDir, { recursive: true });
+  if (!fs.existsSync(boneDir)) {
+    fs.mkdirSync(boneDir, { recursive: true });
   }
 
   if (!fs.existsSync(configFile) && fs.existsSync(configExample)) {
     console.log('Creating config.yaml from example...');
     try {
       fs.copyFileSync(configExample, configFile);
-      console.log('✓ Config created: ~/.vmcode/config.yaml');
-      console.log('\n⚠️  IMPORTANT: Edit ~/.vmcode/config.yaml and add your API keys!');
+      console.log('✓ Config created: ~/.bone/config.yaml');
+      console.log('\n⚠️  IMPORTANT: Edit ~/.bone/config.yaml and add your API keys!');
       console.log('   Or set them via environment variables:\n');
       console.log('   export OPENAI_API_KEY="sk-your-key-here"\n');
     } catch (e) {
@@ -94,7 +94,7 @@ async function main() {
     if (!pythonCmd) {
       console.error('\n❌ Error: Python 3.9+ is not installed or not in PATH');
       console.error('Please install Python from https://python.org');
-      console.error('\nAfter installing Python, run: npm install vmcode\n');
+      console.error('\nAfter installing Python, run: npm install bone-agent\n');
       process.exit(1);
     }
     
@@ -121,12 +121,12 @@ async function main() {
     setupConfig();
     
     console.log('='.repeat(60));
-    console.log('vmCode installation complete!');
+    console.log('bone-agent installation complete!');
     console.log('='.repeat(60));
-    console.log('\nRun vmcode with:');
-    console.log('  vmcode\n');
+    console.log('\nRun bone-agent with:');
+    console.log('  bone-agent\n');
     console.log('Or with npx:');
-    console.log('  npx vmcode\n');
+    console.log('  npx bone-agent\n');
     
   } catch (err) {
     console.error('\n❌ Installation failed:', err.message);

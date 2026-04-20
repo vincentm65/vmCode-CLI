@@ -19,7 +19,7 @@ from core.config_manager import ConfigManager
 
 # Provider metadata for wizard display
 WIZARD_PROVIDERS = [
-    ("vmcode", "vmCode (free tier — no key needed)", "api"),
+    ("bone", "bone-agent (free tier — no key needed)", "api"),
     ("openai", "OpenAI", "api"),
     ("anthropic", "Anthropic (Claude)", "api"),
     ("gemini", "Google Gemini", "api"),
@@ -30,8 +30,8 @@ WIZARD_PROVIDERS = [
     ("local", "Local model (llama.cpp)", "local"),
 ]
 
-# API providers that need a key (skip vmcode free tier and local)
-_API_PROVIDERS = [p for p in WIZARD_PROVIDERS if p[2] == "api" and p[0] != "vmcode"]
+# API providers that need a key (skip bone free tier and local)
+_API_PROVIDERS = [p for p in WIZARD_PROVIDERS if p[2] == "api" and p[0] != "bone"]
 
 
 def _resolve_config_path() -> Path:
@@ -83,7 +83,7 @@ def _select_provider(console: Console) -> str:
     ))
 
     for i, (pid, label, ptype) in enumerate(WIZARD_PROVIDERS, 1):
-        marker = "[dim]free[/dim]" if pid == "vmcode" else ""
+        marker = "[dim]free[/dim]" if pid == "bone" else ""
         console.print(f"  [bold]{i:>2}[/bold]. {label} {marker}")
 
     console.print()
@@ -111,9 +111,9 @@ def _select_provider(console: Console) -> str:
 
 def _prompt_api_key(console: Console, provider_id: str) -> str:
     """Prompt for API key if the provider requires one."""
-    # vmcode free tier and local don't need a key
-    if provider_id == "vmcode":
-        console.print("\n  [dim]vmCode free tier — no API key required.[/dim]")
+    # bone free tier and local don't need a key
+    if provider_id == "bone":
+        console.print("\n  [dim]bone-agent free tier — no API key required.[/dim]")
         return ""
     if provider_id == "local":
         console.print("\n  [dim]Local model — no API key required.[/dim]")
@@ -140,7 +140,7 @@ def _prompt_obsidian(console: Console) -> tuple[bool, str]:
     console.print()
     console.print(Panel(
         Text.from_markup("Enable Obsidian vault integration?\n"
-                         "This lets vmCode create project notes in your vault."),
+                         "This lets bone-agent create project notes in your vault."),
         title="Step 3 of 3",
         border_style="grey23",
         padding=(0, 2),
@@ -206,7 +206,7 @@ def write_config(provider_id: str, api_key: str = "",
             "minimax_plan": "MINIMAX_PLAN_API_KEY",
             "anthropic": "ANTHROPIC_API_KEY",
             "kimi": "KIMI_API_KEY",
-            "vmcode": "VMCODE_PROXY_API_KEY",
+            "bone": "BONE_PROXY_API_KEY",
         }
         config_key = key_map.get(provider_id)
         if config_key:
@@ -245,7 +245,7 @@ def run_wizard(console: Optional[Console] = None) -> bool:
     console.print()
     console.print(Panel(
         Text.from_markup(
-            "[bold #5F9EA0]Welcome to vmCode![/bold #5F9EA0]\n\n"
+            "[bold #5F9EA0]Welcome to bone-agent![/bold #5F9EA0]\n\n"
             "Let's get you set up. This will take about a minute.\n"
             "You can always change settings later with [bold]/config[/bold]."
         ),

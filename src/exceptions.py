@@ -1,11 +1,11 @@
-"""Custom exception hierarchy for vmCode."""
+"""Custom exception hierarchy for bone-agent."""
 
-class VmCodeError(Exception):
-    """Base exception for all vmCode application errors.
+class BoneAgentError(Exception):
+    """Base exception for all bone-agent application errors.
 
     All custom exceptions should inherit from this class.
     Provides consistent error handling and allows catching
-    all vmCode-specific errors with a single except clause.
+    all bone-agent-specific errors with a single except clause.
     """
     def __init__(self, message: str, *, details: dict = None):
         """Initialize exception with optional details.
@@ -29,12 +29,12 @@ class VmCodeError(Exception):
         return base_msg
 
 
-class ConfigurationError(VmCodeError):
+class ConfigurationError(BoneAgentError):
     """Raised when configuration is invalid, missing, or cannot be loaded."""
     pass
 
 
-class LLMError(VmCodeError):
+class LLMError(BoneAgentError):
     """Raised when LLM API communication fails or returns unexpected data."""
     pass
 
@@ -49,7 +49,7 @@ class LLMResponseError(LLMError):
     pass
 
 
-class ToolExecutionError(VmCodeError):
+class ToolExecutionError(BoneAgentError):
     """Raised when tool execution fails."""
     pass
 
@@ -64,7 +64,7 @@ class FileEditError(ToolExecutionError):
     pass
 
 
-class ValidationError(VmCodeError):
+class ValidationError(BoneAgentError):
     """Raised when input validation fails."""
     pass
 

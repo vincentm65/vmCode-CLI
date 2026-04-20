@@ -1,7 +1,7 @@
 """Tool execution utilities.
 
 This package provides command execution, file editing, and result formatting
-capabilities for the vmCode AI assistant.
+capabilities for the bone-agent AI assistant.
 """
 
 import logging

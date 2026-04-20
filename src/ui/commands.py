@@ -612,8 +612,8 @@ def _open_provider_editor(chat_manager, console, provider):
         value=current_model, input_type="text",
     ))
 
-    # API key (not for local or vmcode — vmcode manages its own key via /signup)
-    if provider not in ("local", "vmcode"):
+    # API key (not for local or bone — bone manages its own key via /signup)
+    if provider not in ("local", "bone"):
         current_key = cfg.get('api_key', '')
         # Show masked value, store actual in description for comparison
         masked = (current_key[:8] + "...") if len(current_key) > 8 else (current_key or "")
@@ -623,8 +623,8 @@ def _open_provider_editor(chat_manager, console, provider):
             description=current_key,
         ))
 
-    # Cost in/out (not for local or vmcode — costs are server-side)
-    if provider not in ("local", "vmcode"):
+    # Cost in/out (not for local or bone — costs are server-side)
+    if provider not in ("local", "bone"):
         model_prices = config_data.get("MODEL_PRICES", {})
         existing = model_prices.get(current_model, {})
         settings.append(SettingOption(
@@ -782,16 +782,16 @@ def _handle_model(chat_manager, console, debug_mode_container, args, cron_schedu
     """Handle model setting command."""
     current_provider = getattr(chat_manager.client, 'provider', 'unknown')
     
-    # For vmcode provider, show interactive model selection
-    if current_provider == "vmcode" and not args:
+    # For bone provider, show interactive model selection
+    if current_provider == "bone" and not args:
         from ui.setting_selector import SettingOption, SettingCategory, SettingSelector
         
         cfg = config.get_provider_config(current_provider)
         current_model = cfg.get('model') or cfg.get('api_model') or ''
         
-        # Models available via vmcode proxy (OpenRouter-compatible)
+        # Models available via bone proxy (OpenRouter-compatible)
         # Format: (display_name, openrouter_model_id)
-        vmcode_models = [
+        bone_models = [
             # DeepSeek
             ("DeepSeek-V3.2       1×", "deepseek/deepseek-v3.2"),
             # MiniMax
@@ -812,7 +812,7 @@ def _handle_model(chat_manager, console, debug_mode_container, args, cron_schedu
 
         model_options = []
         active_value = current_model
-        for display_name, model_id in vmcode_models:
+        for display_name, model_id in bone_models:
             if model_id == current_model or display_name.lower() == current_model.lower():
                 active_value = model_id
             model_options.append({
@@ -1013,21 +1013,21 @@ def _handle_usage(chat_manager, console, debug_mode_container, args, cron_schedu
     # No args - show current usage stats
     current_provider = getattr(chat_manager.client, 'provider', 'unknown')
 
-    # vmcode: fetch from proxy API
-    if current_provider == "vmcode":
-        cfg = config.get_provider_config("vmcode")
+    # bone: fetch from proxy API
+    if current_provider == "bone":
+        cfg = config.get_provider_config("bone")
         api_key = cfg.get('api_key', '')
         api_base = cfg.get('api_base', 'https://api.vmcode.dev')
 
         if not api_key:
-            console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+            console.print("[yellow]No API key set for bone. Use /key to set one.[/yellow]")
             console.print()
             return CommandResult(status="handled")
 
         # Fetch usage from proxy and render percentage bars
         status_code, usage = _call_proxy_api("GET", "/v1/usage", api_base, api_key=api_key)
         if status_code == 0 or usage is None:
-            console.print("[red]Failed to fetch usage from vmcode.[/red]")
+            console.print("[red]Failed to fetch usage from bone.[/red]")
             console.print("[dim]Check your API key and network connection.[/dim]")
             console.print()
             return CommandResult(status="handled")
@@ -1250,7 +1250,7 @@ def _call_proxy_api(
     api_key: str | None = None,
     timeout: int = 10,
 ) -> tuple[int, dict | None]:
-    """Call a vmcode-proxy API endpoint.
+    """Call a bone-proxy API endpoint.
 
     Returns (status_code, parsed_json_or_None).
     Returns (0, None) on network/parse failures.
@@ -1288,27 +1288,27 @@ def _call_proxy_api(
 
 
 def _get_proxy_config(chat_manager):
-    """Get vmcode api_key and api_base from current config.
+    """Get bone api_key and api_base from current config.
 
     Returns (api_key, api_base) tuple. api_key may be empty string.
     """
-    cfg = config.get_provider_config("vmcode")
+    cfg = config.get_provider_config("bone")
     api_key = cfg.get("api_key", "")
     api_base = cfg.get("api_base", "https://api.vmcode.dev")
     return api_key, api_base
 
 
 def _require_proxy_provider(chat_manager, console):
-    """Check that vmcode is the current provider.
+    """Check that bone is the current provider.
 
-    Returns True if on vmcode, prints error and returns False otherwise.
+    Returns True if on bone, prints error and returns False otherwise.
     """
     current_provider = getattr(chat_manager.client, "provider", "unknown")
-    if current_provider != "vmcode":
+    if current_provider != "bone":
         console.print(
-            "[yellow]This command requires the vmcode provider.[/yellow]"
+            "[yellow]This command requires the bone provider.[/yellow]"
         )
-        console.print("[dim]Run [bold #5F9EA0]/provider vmcode[/bold #5F9EA0] first.[/dim]")
+        console.print("[dim]Run [bold #5F9EA0]/provider bone[/bold #5F9EA0] first.[/dim]")
         console.print()
         return False
     return True
@@ -1338,7 +1338,7 @@ def _handle_plan(chat_manager, console, debug_mode_container, args, cron_schedul
     # Determine current plan
     current_provider = getattr(chat_manager.client, "provider", "unknown")
     current_plan = None
-    if current_provider == "vmcode":
+    if current_provider == "bone":
         api_key, _ = _get_proxy_config(chat_manager)
         if api_key:
             acct_status, acct_data = _call_proxy_api("GET", "/v1/auth/account", api_base, api_key=api_key)
@@ -1364,10 +1364,10 @@ def _handle_plan(chat_manager, console, debug_mode_container, args, cron_schedul
 
 
 def _handle_signup(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
-    """Handle /signup <email> — create account and switch to vmcode."""
+    """Handle /signup <email> — create account and switch to bone."""
     if not args or not args.strip():
         console.print("[red]Usage: /signup <email>[/red]")
-        console.print("[dim]Creates a vmcode account and generates an API key.[/dim]")
+        console.print("[dim]Creates a bone-agent account and generates an API key.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1412,9 +1412,9 @@ def _handle_signup(chat_manager, console, debug_mode_container, args, cron_sched
     console.print(f"[bold white on grey23]  {api_key}  [/bold white on grey23]")
     console.print()
 
-    # Save backup to ~/.vmcode/api_key.txt
+    # Save backup to ~/.bone/api_key.txt
     try:
-        key_path = Path.home() / ".vmcode" / "api_key.txt"
+        key_path = Path.home() / ".bone" / "api_key.txt"
         key_path.parent.mkdir(parents=True, exist_ok=True)
         key_path.write_text(api_key)
         key_path.chmod(0o600)
@@ -1424,20 +1424,20 @@ def _handle_signup(chat_manager, console, debug_mode_container, args, cron_sched
 
     # Persist API key to config (always succeeds or warns — never blocks)
     try:
-        config_manager.set_api_key("vmcode", api_key)
+        config_manager.set_api_key("bone", api_key)
     except Exception as e:
         console.print(f"[yellow]Could not save API key to config: {e}[/yellow]")
         console.print("[dim]Use [bold #5F9EA0]/key {api_key}[/bold #5F9EA0] to set it manually.[/dim]")
 
-    # Switch to vmcode provider (best-effort)
+    # Switch to bone provider (best-effort)
     try:
-        config_manager.set_provider("vmcode")
+        config_manager.set_provider("bone")
         chat_manager.reload_config()
-        chat_manager.switch_provider("vmcode")
-        console.print("[green]Switched to vmcode provider.[/green]")
+        chat_manager.switch_provider("bone")
+        console.print("[green]Switched to bone provider.[/green]")
     except Exception as e:
-        console.print(f"[yellow]Could not auto-switch to vmcode: {e}[/yellow]")
-        console.print("[dim]Run [bold #5F9EA0]/provider vmcode[/bold #5F9EA0] to switch manually.[/dim]")
+        console.print(f"[yellow]Could not auto-switch to bone: {e}[/yellow]")
+        console.print("[dim]Run [bold #5F9EA0]/provider bone[/bold #5F9EA0] to switch manually.[/dim]")
 
     console.print()
     return CommandResult(status="handled")
@@ -1450,7 +1450,7 @@ def _handle_account(chat_manager, console, debug_mode_container, args, cron_sche
 
     api_key, api_base = _get_proxy_config(chat_manager)
     if not api_key:
-        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print("[yellow]No API key set for bone. Use /key to set one.[/yellow]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1526,7 +1526,7 @@ def _send_reset_key_email(console, api_base, email):
 
 
 def _handle_login(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
-    """Handle /login <email> — log in to an existing vmcode account on this device.
+    """Handle /login <email> — log in to an existing bone-agent account on this device.
 
     Two paths:
     - User has their API key: validate it, save to config, switch provider.
@@ -1534,7 +1534,7 @@ def _handle_login(chat_manager, console, debug_mode_container, args, cron_schedu
     """
     if not args or not args.strip():
         console.print("[red]Usage: /login <email>[/red]")
-        console.print("[dim]Log in to an existing vmcode account on this device.[/dim]")
+        console.print("[dim]Log in to an existing bone-agent account on this device.[/dim]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1567,7 +1567,7 @@ def _handle_login(chat_manager, console, debug_mode_container, args, cron_schedu
             pass  # If we can't check, just proceed
 
     console.print()
-    console.print(f"[bold #5F9EA0]vmCode Login[/bold #5F9EA0]")
+    console.print(f"[bold #5F9EA0]bone-agent Login[/bold #5F9EA0]")
     console.print(f"[dim]Logging in as {email}[/dim]")
     console.print()
 
@@ -1590,19 +1590,19 @@ def _handle_login(chat_manager, console, debug_mode_container, args, cron_schedu
         if status == 200 and data and data.get("email", "").lower() == email.lower():
             # Valid key — save and switch
             try:
-                config_manager.set_api_key("vmcode", raw_key)
+                config_manager.set_api_key("bone", raw_key)
             except Exception as e:
                 console.print(f"[yellow]Could not save API key to config: {e}[/yellow]")
                 console.print(f"[dim]Use [bold #5F9EA0]/key {raw_key}[/bold #5F9EA0] to set it manually.[/dim]")
 
             try:
-                config_manager.set_provider("vmcode")
+                config_manager.set_provider("bone")
                 chat_manager.reload_config()
-                chat_manager.switch_provider("vmcode")
-                console.print("[green]Switched to vmcode provider.[/green]")
+                chat_manager.switch_provider("bone")
+                console.print("[green]Switched to bone provider.[/green]")
             except Exception as e:
-                console.print(f"[yellow]Could not auto-switch to vmcode: {e}[/yellow]")
-                console.print("[dim]Run [bold #5F9EA0]/provider vmcode[/bold #5F9EA0] to switch manually.[/dim]")
+                console.print(f"[yellow]Could not auto-switch to bone: {e}[/yellow]")
+                console.print("[dim]Run [bold #5F9EA0]/provider bone[/bold #5F9EA0] to switch manually.[/dim]")
 
             plan = data.get("plan", "free")
             verified = "yes" if data.get("verified") else "no"
@@ -1634,7 +1634,7 @@ def _handle_resend(chat_manager, console, debug_mode_container, args, cron_sched
 
     api_key, api_base = _get_proxy_config(chat_manager)
     if not api_key:
-        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print("[yellow]No API key set for bone. Use /key to set one.[/yellow]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1708,7 +1708,7 @@ def _handle_manage(chat_manager, console, debug_mode_container, args, cron_sched
 
     api_key, api_base = _get_proxy_config(chat_manager)
     if not api_key:
-        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print("[yellow]No API key set for bone. Use /key to set one.[/yellow]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1755,7 +1755,7 @@ def _handle_upgrade(chat_manager, console, debug_mode_container, args, cron_sche
 
     api_key, api_base = _get_proxy_config(chat_manager)
     if not api_key:
-        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print("[yellow]No API key set for bone. Use /key to set one.[/yellow]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1881,7 +1881,7 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args, cron_s
 
     api_key, api_base = _get_proxy_config(chat_manager)
     if not api_key:
-        console.print("[yellow]No API key set for vmcode. Use /key to set one.[/yellow]")
+        console.print("[yellow]No API key set for bone. Use /key to set one.[/yellow]")
         console.print()
         return CommandResult(status="handled")
 
@@ -1922,7 +1922,7 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args, cron_s
 
     # Save to config
     try:
-        config_manager.set_api_key("vmcode", new_key)
+        config_manager.set_api_key("bone", new_key)
         console.print("[green]New key saved to config.[/green]")
     except Exception as e:
         console.print(f"[yellow]Could not save to config: {e}[/yellow]")
@@ -1930,7 +1930,7 @@ def _handle_rotate_key(chat_manager, console, debug_mode_container, args, cron_s
 
     # Backup to file
     try:
-        key_path = Path.home() / ".vmcode" / "api_key.txt"
+        key_path = Path.home() / ".bone" / "api_key.txt"
         key_path.parent.mkdir(parents=True, exist_ok=True)
         key_path.write_text(new_key)
         key_path.chmod(0o600)

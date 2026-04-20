@@ -1,1 +1,1 @@
-"""Core business logic for vmCode."""
+"""Core business logic for bone-agent."""

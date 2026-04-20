@@ -1,4 +1,4 @@
-"""External editor integration for vmCode."""
+"""External editor integration for bone-agent."""
 import os
 import platform
 import subprocess
@@ -45,7 +45,7 @@ def _create_temp_file() -> Tuple[Path, object]:
     temp_fd = tempfile.NamedTemporaryFile(
         mode='w+',
         suffix='.md',
-        prefix='vmcode_edit_',
+        prefix='bone_agent_edit_',
         delete=False,
         encoding='utf-8'
     )

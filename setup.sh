@@ -1,11 +1,11 @@
 #!/bin/bash
-# vmCode setup script for git clone installation
-# This script sets up vmcode as a system command
+# bone-agent setup script for git clone installation
+# This script sets up bone-agent as a system command
 
 set -e
 
 echo "=========================================="
-echo "  vmCode Setup"
+echo "  bone-agent Setup"
 echo "=========================================="
 echo ""
 
@@ -70,9 +70,9 @@ else
     echo "✓ config.yaml already exists"
 fi
 
-# Create vmcode alias/command
+# Create bone alias/command
 echo ""
-echo "🔗 Setting up vmcode command..."
+echo "🔗 Setting up bone-agent command..."
 
 # Option 1: Create symlink to user's bin directory
 USER_BIN="$HOME/.local/bin"
@@ -80,15 +80,15 @@ mkdir -p "$USER_BIN"
 
 if [ -w "$USER_BIN" ]; then
     # Create a symlink to the main.py script
-    cat > "$USER_BIN/vmcode" << 'EOF'
+    cat > "$USER_BIN/bone-agent" << 'EOF'
 #!/bin/bash
-# vmCode launcher
+# bone-agent launcher
 cd "$(dirname "$(readlink -f "$0")")/../.." || exit 1"
 python3 src/ui/main.py "$@"
 EOF
     
-    chmod +x "$USER_BIN/vmcode"
-    echo "✓ Created command: $USER_BIN/vmcode"
+    chmod +x "$USER_BIN/bone-agent"
+    echo "✓ Created command: $USER_BIN/bone-agent"
     
     # Check if USER_BIN is in PATH
     if [[ ":$PATH:" != *":$USER_BIN:"* ]]; then
@@ -116,7 +116,7 @@ else
     echo ""
     echo "Add this alias to your shell config (~/.bashrc or ~/.zshrc):"
     echo ""
-    echo "   alias vmcode='cd $PROJECT_ROOT && python3 src/ui/main.py'"
+    echo "   alias bone-agent='cd $PROJECT_ROOT && python3 src/ui/main.py'"
     echo ""
     echo "Then reload your shell: source ~/.bashrc"
 fi
@@ -126,8 +126,8 @@ echo "=========================================="
 echo "  Setup Complete!"
 echo "=========================================="
 echo ""
-echo "Run vmcode:"
-echo "  vmcode"
+echo "Run bone-agent:"
+echo "  bone-agent"
 echo ""
 echo "Or run directly:"
 echo "  cd $PROJECT_ROOT"

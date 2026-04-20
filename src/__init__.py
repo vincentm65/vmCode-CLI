@@ -1,4 +1,4 @@
-"""vmCode - AI-powered coding assistant."""
+"""bone-agent - AI-powered coding assistant."""
 
 import json
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Main entry point for vmCode chatbot."""
+"""Main entry point for bone-agent chatbot."""
 
 import os
 import sys
@@ -34,7 +34,7 @@ from ui.prompt_utils import get_bottom_toolbar_text, setup_common_bindings, TOOL
 from core.agentic import agentic_answer
 from utils.settings import MonokaiDarkBGStyle, left_align_headings
 from utils.paths import REPO_ROOT, RG_EXE_PATH
-from exceptions import VmCodeError
+from exceptions import BoneAgentError
 from tools.loader import load_all_tools
 
 # Console setup
@@ -545,8 +545,8 @@ def main():
                             if not check_double_ctrl_c():
                                 console.print("\n[yellow]Response interrupted (Ctrl+C). Press Ctrl+C again to exit.[/yellow]")
                             console.print()  # Extra spacing
-                        except VmCodeError as e:
-                            # Handle all vmCode custom exceptions gracefully
+                        except BoneAgentError as e:
+                            # Handle all bone-agent custom exceptions gracefully
                             console.print(f"[red]Error: {e}[/red]", markup=False)
                             if hasattr(e, 'details') and e.details:
                                 console.print(f"[dim]Details: {e.details}[/dim]", markup=False)
@@ -616,8 +616,8 @@ def main():
                                 if hasattr(stream, 'close'):
                                     stream.close()
 
-                        except VmCodeError as e:
-                            # Handle all vmCode custom exceptions gracefully
+                        except BoneAgentError as e:
+                            # Handle all bone-agent custom exceptions gracefully
                             console.print(f"[red]Error: {e}[/red]", markup=False)
                             if hasattr(e, 'details') and e.details:
                                 console.print(f"[dim]Details: {e.details}[/dim]", markup=False)
@@ -655,7 +655,7 @@ def main():
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="vmCode CLI")
+    parser = argparse.ArgumentParser(description="bone-agent CLI")
     parser.add_argument("--cron-run", metavar="JOB_ID", help="Run a cron job headlessly and exit")
     args = parser.parse_args()
 

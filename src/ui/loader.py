@@ -1,4 +1,4 @@
-"""Animated terminal effects for vmCode — loading spinners, progress bars, and visual flair."""
+"""Animated terminal effects for bone-agent — loading spinners, progress bars, and visual flair."""
 
 import time
 import random
@@ -16,7 +16,7 @@ console = Console()
 
 # ── ASCII art logo ──────────────────────────────────────────────────────────
 
-VMCODE_LOGO = r"""
+BONE_AGENT_LOGO = r"""
    ╦ ╦┌─┐┌┐ ╔╦╗┬┬  ┌─┐
    ║║║├┤ ├┴┐ ║ ││  ├┤
    ╚╩╝└─┘└─┘ ╩ ┴┴─┘└─┘
@@ -47,10 +47,10 @@ def _wave_string(text: str, frame_idx: int, color: str = "#5F9EA0") -> Text:
 def display_intro_animation(provider: str = "", model: str = ""):
     """Play a cinematic intro animation on startup.
 
-    Shows the vmCode logo with a typing effect, a wave animation underneath,
+    Shows the bone-agent logo with a typing effect, a wave animation underneath,
     and provider/model info fading in.
     """
-    logo_lines = VMCODE_LOGO.strip("\n").split("\n")
+    logo_lines = BONE_AGENT_LOGO.strip("\n").split("\n")
 
     try:
         with Live(console=console, transient=False, refresh_per_second=24) as live:
@@ -135,7 +135,7 @@ def display_intro_animation(provider: str = "", model: str = ""):
     except Exception:
         # Fallback: if Live fails (e.g. non-TTY), just print static logo
         console.print(Panel(
-            Text(VMCODE_LOGO.strip("\n"), style="bold #5F9EA0"),
+            Text(BONE_AGENT_LOGO.strip("\n"), style="bold #5F9EA0"),
             border_style="grey30",
             subtitle="  local-first  ·  agent-powered  ·  terminal-native",
         ))

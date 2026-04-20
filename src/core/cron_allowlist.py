@@ -1,6 +1,6 @@
 """Per-job command allow list for cron jobs.
 
-Stores approved shell commands per job ID in ~/.vmcode/cron/allowed_commands.yaml.
+Stores approved shell commands per job ID in ~/.bone/cron/allowed_commands.yaml.
 During scheduled runs, only commands on the allow list (plus global SAFE_COMMAND_RULES)
 are auto-approved. Unlisted commands are blocked with agent feedback.
 
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 def _get_allowed_commands_path() -> Path:
-    """Return ~/.vmcode/cron/allowed_commands.yaml."""
-    cron_dir = Path.home() / ".vmcode" / "cron"
+    """Return ~/.bone/cron/allowed_commands.yaml."""
+    cron_dir = Path.home() / ".bone" / "cron"
     cron_dir.mkdir(parents=True, exist_ok=True)
     return cron_dir / "allowed_commands.yaml"
 

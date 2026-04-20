@@ -1,1 +1,1 @@
-"""LLM integration layer for vmCode."""
+"""LLM integration layer for bone-agent."""

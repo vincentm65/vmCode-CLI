@@ -1,4 +1,4 @@
-## vmCode
+## bone-agent
 
 A CLI-based AI coding assistant capable of codebase search, file editing, computer use, and web search.
 
@@ -6,7 +6,7 @@ A CLI-based AI coding assistant capable of codebase search, file editing, comput
 
 ## Features
 
-- **Multiple LLM Provider Support**: vmCode, OpenAI, Anthropic, OpenRouter, GLM, Gemini, Kimi, MiniMax, and local models
+- **Multiple LLM Provider Support**: bone-agent (built-in proxy), OpenAI, Anthropic, OpenRouter, GLM, Gemini, Kimi, MiniMax, and local models
 - **Tool-Based Interaction**: Code search (`rg`), file editing, directory operations, and web search
 - **Multiple Modes**: Edit (full access), Plan (read-only), and Learn (documentation style)
 - **Parallel Execution**: Run multiple tools concurrently for efficiency
@@ -19,16 +19,16 @@ A CLI-based AI coding assistant capable of codebase search, file editing, comput
 
 ```bash
 # Install globally (requires Python 3.9+)
-npm install -g vmcode-cli
+npm install -g bone-agent-cli
 
-# Run vmcode
-vmcode
+# Run bone-agent
+bone-agent
 ```
 
 Or use npx without installing:
 
 ```bash
-npx vmcode-cli
+npx bone-agent-cli
 ```
 
 ### What Gets Installed
@@ -36,8 +36,8 @@ npx vmcode-cli
 The npm package automatically:
 1. Checks for Python 3.9+ on your system
 2. Installs Python dependencies via pip
-3. Creates `~/.vmcode/config.yaml` from `config.yaml.example` if missing (persists across updates)
-4. Sets up the `vmcode` command globally
+3. Creates `~/.bone/config.yaml` from `config.yaml.example` if missing (persists across updates)
+4. Sets up the `bone-agent` command globally
 
 **Requirements:**
 - Node.js 14+ (for npm)
@@ -50,13 +50,13 @@ If Python is not found, the installer will guide you through installing it.
 
 ```bash
 # Clone the repository
-git clone https://github.com/vincentm65/vmCode-CLI.git
-cd vmCode-CLI
+git clone https://github.com/vincentm65/bone-agent.git
+cd bone-agent
 
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Run vmcode
+# Run bone-agent
 python src/ui/main.py
 ```
 
@@ -80,7 +80,7 @@ Run the app and use the built-in commands:
 
 #### Option 2: Edit config.yaml Directly
 
-Edit `~/.vmcode/config.yaml` and add your keys:
+Edit `~/.bone/config.yaml` and add your keys:
 
 ```yaml
 # OpenAI
@@ -94,17 +94,17 @@ ANTHROPIC_MODEL: claude-3-5-sonnet-20241022
 # Or any other supported provider...
 ```
 
-**Note:** Config is stored at `~/.vmcode/config.yaml` — it persists across npm updates and is never tracked by git.
+**Note:** Config is stored at `~/.bone/config.yaml` — it persists across npm updates and is never tracked by git.
 
 #### Option 3: Environment Variables
 
-Set environment variables (they take precedence over ~/.vmcode/config.yaml):
+Set environment variables (they take precedence over ~/.bone/config.yaml):
 
 ```bash
 export OPENAI_API_KEY="sk-your-key-here"
 export ANTHROPIC_API_KEY="sk-ant-your-key-here"
 
-vmcode
+bone-agent
 ```
 
 ### Available Environment Variables
@@ -116,8 +116,8 @@ vmcode
 - `OPENROUTER_API_KEY` - OpenRouter API key
 - `KIMI_API_KEY` - Kimi (Moonshot AI) API key
 - `MINIMAX_API_KEY` - MiniMax API key
-- `VMCODE_API_KEY` - vmCode API key (auto-set via `/signup`)
-- `VMCODE_API_BASE` - vmCode API base URL (default: `https://api.vmcode.dev`)
+- `BONE_API_KEY` - bone-agent (proxy) API key (auto-set via `/signup`)
+- `BONE_API_BASE` - bone-agent (proxy) API base URL (default: `https://api.vmcode.dev`)
 
 ## Commands
 
@@ -126,10 +126,10 @@ vmcode
 - `/key <api_key>` - Set API key for current provider
 - `/mode <edit|plan|learn>` - Switch interaction mode
 - `/config` - Show all configuration settings
-- `/signup <email>` - Create a vmCode account
-- `/account` - View your vmCode account and plan details
-- `/plan` - View available vmCode plans
-- `/upgrade` - Upgrade your vmCode subscription
+- `/signup <email>` - Create a bone-agent account and get API key
+- `/account` - View your bone-agent account and plan details
+- `/plan` - View available plans and pricing
+- `/upgrade` - Upgrade your subscription
 - `/help` - Display all available commands
 
 /help Menu:
@@ -139,7 +139,7 @@ vmcode
 ## Project Structure
 
 ```
-vmCode-CLI/
+bone-agent/
 ├── bin/
 │   ├── npm-wrapper.js  # npm entry point
 │   ├── rg              # ripgrep binary (Linux/macOS)
@@ -157,9 +157,9 @@ vmCode-CLI/
 └── tests/              # Test suite (for development)
 ```
 
-## vmCode Plan
+## bone-agent Plan (Built-in Proxy)
 
-vmCode offers a built-in proxy provider for a seamless setup experience. Create an account and start coding without configuring third-party API keys.
+bone-agent offers a built-in proxy provider for a seamless setup experience. Create an account and start coding without configuring third-party API keys.
 
 ```
 > /signup you@example.com
@@ -171,13 +171,13 @@ Available plans: **Free**, **Lite**, and **Pro**. Use `/plan` to see details and
 
 ## Security
 
-- User config lives at `~/.vmcode/config.yaml` — outside the repo and git, persists across updates
+- User config lives at `~/.bone/config.yaml` — outside the repo and git, persists across updates
 - Never commit API keys or sensitive configuration
 - Use environment variables for CI/CD or shared environments
 
 ## Development
 
-vmCode is currently in active development. Production readiness is in progress with focus on:
+bone-agent is currently in active development. Production readiness is in progress with focus on:
 - Comprehensive test coverage
 - Documentation
 - Error handling improvements

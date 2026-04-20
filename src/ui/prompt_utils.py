@@ -1,4 +1,4 @@
-"""Shared prompt utilities for vmCode CLI."""
+"""Shared prompt utilities for bone-agent CLI."""
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.key_binding import KeyBindings

@@ -1,10 +1,10 @@
 {
-  "name": "vmcode-cli",
+  "name": "bone-agent-cli",
   "version": "1.2.2",
   "description": "A terminal-based AI coding assistant powered by OpenAI-style function calling",
   "main": "src/ui/main.py",
   "bin": {
-    "vmcode": "bin/npm-wrapper.js"
+    "bone-agent": "bin/npm-wrapper.js"
   },
   "files": [
     "package.json",
@@ -18,7 +18,7 @@
     "src/**/*.py"
   ],
   "scripts": {
-    "postinstall": "echo 'vmcode installed! Run with: vmcode'",
+    "postinstall": "echo 'bone-agent installed! Run with: bone-agent'",
     "start": "node bin/npm-wrapper.js"
   },
   "keywords": [
@@ -35,12 +35,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vincentm65/vmCode-CLI.git"
+    "url": "git+https://github.com/vincentm65/bone-agent-cli.git"
   },
   "bugs": {
-    "url": "https://github.com/vincentm65/vmCode-CLI/issues"
+    "url": "https://github.com/vincentm65/bone-agent-cli/issues"
   },
-  "homepage": "https://github.com/vincentm65/vmCode-CLI",
+  "homepage": "https://github.com/vincentm65/bone-agent-cli",
   "engines": {
     "node": ">=14.0.0"
   },

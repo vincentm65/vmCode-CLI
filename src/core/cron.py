@@ -1,10 +1,10 @@
-"""Cron scheduler for vmCode.
+"""Cron scheduler for bone-agent.
 
 Provides natural-language scheduled job execution integrated into the
-vmCode agentic loop. Jobs are defined in ~/.vmcode/cron/jobs.yaml and
-run as background threads while vmCode is active.
+bone-agent agentic loop. Jobs are defined in ~/.bone/cron/jobs.yaml and
+run as background threads while bone-agent is active.
 
-External trigger: vmcode --cron-run <job-id>
+External trigger: bone-agent --cron-run <job-id>
 """
 
 import logging
@@ -22,8 +22,8 @@ logger = logging.getLogger(__name__)
 # ── Paths ────────────────────────────────────────────────────────────────
 
 def _get_cron_dir() -> Path:
-    """Return ~/.vmcode/cron/ directory, creating it if needed."""
-    cron_dir = Path.home() / ".vmcode" / "cron"
+    """Return ~/.bone/cron/ directory, creating it if needed."""
+    cron_dir = Path.home() / ".bone" / "cron"
     cron_dir.mkdir(parents=True, exist_ok=True)
     return cron_dir
 
@@ -203,7 +203,7 @@ def _should_run(spec: dict, last_run: Optional[datetime], now: datetime) -> bool
 # ── Config persistence ───────────────────────────────────────────────────
 
 class CronConfig:
-    """Load/save cron jobs from ~/.vmcode/cron/jobs.yaml."""
+    """Load/save cron jobs from ~/.bone/cron/jobs.yaml."""
 
     def __init__(self):
         self._path = _get_jobs_path()
@@ -495,7 +495,7 @@ class CronScheduler:
 def run_job_headless(job_id: str) -> int:
     """Run a single job headlessly (no interactive session).
 
-    Used by `vmcode --cron-run <job-id>`.
+    Used by `bone-agent --cron-run <job-id>`.
 
     Returns 0 on success, 1 on failure.
     """

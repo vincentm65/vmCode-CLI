@@ -80,8 +80,8 @@ def show_help_table(console):
     acct_table.add_column("Command", no_wrap=True)
     acct_table.add_column("Description")
 
-    acct_table.add_row("[bold #5F9EA0]/signup[/bold #5F9EA0] <email>", "Create vmcode account and get API key")
-    acct_table.add_row("[bold #5F9EA0]/login[/bold #5F9EA0]", "Log in to an existing vmcode account")
+    acct_table.add_row("[bold #5F9EA0]/signup[/bold #5F9EA0] <email>", "Create bone-agent account and get API key")
+    acct_table.add_row("[bold #5F9EA0]/login[/bold #5F9EA0]", "Log in to an existing bone-agent account")
     acct_table.add_row("[bold #5F9EA0]/account[/bold #5F9EA0]", "View account info and subscription status")
     acct_table.add_row("[bold #5F9EA0]/plan[/bold #5F9EA0]", "View available plans and pricing")
     acct_table.add_row("[bold #5F9EA0]/upgrade[/bold #5F9EA0]", "Upgrade or change your plan")

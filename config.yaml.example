@@ -1,10 +1,10 @@
-# vmCode Configuration
+# bone-agent Configuration
 # Copy to config.yaml and add your API keys.
 # Keys can also be set via environment variables or: /key <api-key>  /provider <name>
 
 # -- General ------------------------------------------------------------------
 
-LAST_PROVIDER: vmcode
+LAST_PROVIDER: bone
 
 # -- Provider API Keys --------------------------------------------------------
 
@@ -53,10 +53,10 @@ MINIMAX_API_KEY: "your-minimax-key-here"
 MINIMAX_MODEL: "MiniMax-M2"
 MINIMAX_API_BASE: "https://api.minimax.io/anthropic/v1"
 
-# vmCode Proxy (subscription — key from billing portal)
-VMCODE_PROXY_API_KEY: ""
-VMCODE_PROXY_MODEL: "openai/gpt-4o-mini"
-VMCODE_PROXY_API_BASE: "https://api.vmcode.dev"
+# bone-agent Proxy (subscription — key from billing portal)
+BONE_PROXY_API_KEY: ""
+BONE_PROXY_MODEL: "openai/gpt-4o-mini"
+BONE_PROXY_API_BASE: "https://api.vmcode.dev"
 
 # -- Local Models (llama.cpp) -------------------------------------------------
 
@@ -138,4 +138,4 @@ OBSIDIAN_SETTINGS:
 # Model pricing overrides (cost per 1M tokens)
 MODEL_PRICES: {}
 
-# Keep this file private. Env vars override values here. Run 'vmcode /help' for reference.
+# Keep this file private. Env vars override values here. Run 'bone-agent /help' for reference.

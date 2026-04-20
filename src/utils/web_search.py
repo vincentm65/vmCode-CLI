@@ -17,7 +17,7 @@ _FETCH_TIMEOUT = 10
 # Delay between page fetches to avoid rate limiting (seconds)
 _FETCH_DELAY = 1.0
 # User agent for page fetching
-_USER_AGENT = "Mozilla/5.0 (compatible; vmcode/1.0; +https://github.com/vmcode)"
+_USER_AGENT = "Mozilla/5.0 (compatible; bone-agent/1.0; +https://github.com/vincentm65/bone-agent-cli)"
 
 def _fetch_page_content(url, console=None):
     """Fetch a URL and extract main article content as markdown.

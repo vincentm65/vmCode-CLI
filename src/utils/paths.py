@@ -1,4 +1,4 @@
-"""Shared path constants for vmCode.
+"""Shared path constants for bone-agent.
 
 Centralizes APP_ROOT, REPO_ROOT, and tool paths (e.g. ripgrep)
 so they can be imported from both core and ui modules without
