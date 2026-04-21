@@ -388,6 +388,7 @@ SECTION_TOOL_DEPS = {
     "editing_pattern": ["edit_file"],
     "task_lists_pattern": ["create_task_list", "complete_task", "show_task_list", "edit_file"],
     "temp_folder": ["create_file"],
+    "memory_system": ["edit_file"],
 }
 
 
@@ -402,6 +403,26 @@ def _should_include_section(section_key: str) -> bool:
         return True
     from tools.helpers.base import ToolRegistry
     return not all(ToolRegistry.is_disabled(t) for t in deps)
+
+def _build_memory_section() -> str | None:
+    """Build the memory system section for the system prompt.
+
+    Returns the section from MemoryManager if the singleton is available
+    and edit_file tool is enabled. Returns None otherwise.
+    """
+    # Check tool availability (memory system requires edit_file)
+    from tools.helpers.base import ToolRegistry
+    if ToolRegistry.is_disabled("edit_file"):
+        return None
+
+    try:
+        from core.memory import MemoryManager
+        manager = MemoryManager.get_instance()
+        if manager is None:
+            return None
+        return manager.get_prompt_section()
+    except Exception:
+        return None
 
 
 def _build_vault_section() -> str:
@@ -631,6 +652,11 @@ def build_system_prompt() -> str:
 
     # Dynamic date/time/location context (inserted right after intro)
     sections.insert(1, _build_context_section())
+
+    # Memory system section (from MemoryManager singleton, if available)
+    _memory_section = _build_memory_section()
+    if _memory_section:
+        sections.append(_memory_section)
 
     # Obsidian vault section (inserted before mode section)
     vault_section = _build_vault_section()

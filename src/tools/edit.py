@@ -156,7 +156,7 @@ def _find_unique_span_with_fallbacks(content, search_text):
     return None, diagnostics
 
 
-def _resolve_repo_path(path_str, repo_root, gitignore_spec=None, vault_root=None):
+def _resolve_repo_path(path_str, repo_root, gitignore_spec=None, vault_root=None, skip_gitignore=False):
     """Resolve and validate a path for editing.
 
     This function wraps PathResolver.resolve_and_validate() for the edit tool's
@@ -167,6 +167,7 @@ def _resolve_repo_path(path_str, repo_root, gitignore_spec=None, vault_root=None
         repo_root: Repository root directory
         gitignore_spec: Optional pathspec.PathSpec for .gitignore filtering
         vault_root: Optional Obsidian vault root path
+        skip_gitignore: If True, skip .gitignore filtering (for memory files)
 
     Returns:
         Resolved Path object
@@ -180,7 +181,7 @@ def _resolve_repo_path(path_str, repo_root, gitignore_spec=None, vault_root=None
     resolver = PathResolver(repo_root=repo_root, gitignore_spec=gitignore_spec, vault_path=vault_path)
     resolved, error = resolver.resolve_and_validate(
         path_str,
-        check_gitignore=True,
+        check_gitignore=not skip_gitignore,
         must_exist=True,
         must_be_file=False,  # We'll check this separately
         enforce_boundary=vault_path is not None,
@@ -222,18 +223,30 @@ def _prepare_edit(arguments, repo_root, gitignore_spec=None, vault_root=None) ->
     if not path or not isinstance(path, str) or not path.strip():
         raise FileEditError("Missing or invalid 'path' parameter")
 
+    # Memory files (.bone/ and user_memory.md) are auto-approved writes that the
+    # system itself adds to .gitignore, so gitignore filtering would block them.
+    is_memory = Path(path).parent.name == ".bone" or Path(path).name == "user_memory.md"
+
     # Resolve and validate path using PathResolver
     try:
-        file_path = _resolve_repo_path(path, repo_root, gitignore_spec, vault_root=vault_root)
+        file_path = _resolve_repo_path(path, repo_root, gitignore_spec, vault_root=vault_root,
+                                       skip_gitignore=is_memory)
     except PathValidationError as e:
         # Re-raise with additional context
         raise FileEditError(str(e), details=e.details)
 
     if not file_path.exists():
-        raise FileEditError(
-            f"File not found",
-            details={"path": str(file_path)}
-        )
+        # Auto-create memory files (.bone/) with default header on first write.
+        # These are already auto-approved, so directory+file creation is safe.
+        if file_path.parent.name == ".bone" or file_path.name == "user_memory.md":
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            header = "# Project Memory\n\n" if file_path.name == "agents.md" else "# User Memory\n\n"
+            file_path.write_text(header, encoding="utf-8")
+        else:
+            raise FileEditError(
+                f"File not found",
+                details={"path": str(file_path)}
+            )
 
     search = arguments.get("search")
     replace = arguments.get("replace")

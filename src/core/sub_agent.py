@@ -223,11 +223,11 @@ def run_sub_agent(
         tt = temp_chat_manager.token_tracker
         hint = f"[Token budget: {tt.current_context_tokens:,} curr / {tt.conv_total_tokens:,} total]"
 
-        if not _soft_limit_warned and tt.total_tokens >= sub_agent_settings.soft_limit_tokens:
+        if not _soft_limit_warned and tt.current_context_tokens >= sub_agent_settings.soft_limit_tokens:
             _soft_limit_warned = True
             hint = (
                 f"WARNING: You have exceeded the soft token limit "
-                f"({tt.total_tokens:,} / {sub_agent_settings.soft_limit_tokens:,}). "
+                f"({tt.current_context_tokens:,} / {sub_agent_settings.soft_limit_tokens:,}). "
                 "STOP exploring and return your findings immediately. Do NOT call any more tools. "
                 + hint
             )
@@ -240,10 +240,12 @@ def run_sub_agent(
         tt = temp_chat_manager.token_tracker
 
         # Check hard token limit before making LLM call
-        if tt.total_tokens >= sub_agent_settings.hard_limit_tokens:
+        # Use current_context_tokens (prompt size) not total_tokens (cumulative billing)
+        # to catch prompt-length-over-limit errors before they hit the API.
+        if tt.current_context_tokens >= sub_agent_settings.hard_limit_tokens:
             raise HardLimitExceeded(
                 f"Sub-agent hard token limit exceeded: "
-                f"{tt.total_tokens:,} / {sub_agent_settings.hard_limit_tokens:,} tokens."
+                f"{tt.current_context_tokens:,} / {sub_agent_settings.hard_limit_tokens:,} tokens."
             )
 
         # Update panel with live token counts

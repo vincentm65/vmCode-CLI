@@ -2413,6 +2413,13 @@ def _handle_cd(chat_manager, console, debug_mode_container, args, cron_scheduler
     except Exception as e:
         console.print(f"[red]Failed to change directory: {e}[/red]")
 
+    # Reset memory system singleton (project memory is per-repo)
+    try:
+        from core.memory import MemoryManager
+        MemoryManager.reset()
+    except Exception:
+        pass
+
     return CommandResult(status="handled")
 
 
