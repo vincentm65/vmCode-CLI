@@ -11,6 +11,54 @@ from llm.prompts import build_sub_agent_prompt
 from utils.settings import sub_agent_settings
 
 
+class HardLimitExceeded(Exception):
+    """Raised when the sub-agent hits its hard token limit."""
+    pass
+
+
+def _format_messages_dump(messages) -> str:
+    """Format sub-agent message history as a markdown dump.
+
+    Args:
+        messages: List of message dicts from the sub-agent ChatManager.
+
+    Returns:
+        Markdown string with the full conversation context.
+    """
+    lines = [
+        "## Sub-Agent Context Dump (Hard Limit Reached)",
+        "",
+        "The sub-agent exceeded its hard token limit. Below is the full, unabridged context of its investigation. No summary was produced.",
+        "",
+        "---",
+        "",
+    ]
+    for i, msg in enumerate(messages):
+        role = msg.get("role", "unknown")
+        content = msg.get("content", "")
+        tool_calls = msg.get("tool_calls")
+        tool_call_id = msg.get("tool_call_id")
+
+        if tool_call_id:
+            lines.append(f"### Message {i} — tool result ({tool_call_id})")
+        elif tool_calls:
+            lines.append(f"### Message {i} — assistant tool calls")
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                lines.append(f"- `{fn.get('name', '?')}` — `{fn.get('arguments', '')}`")
+        else:
+            lines.append(f"### Message {i} — {role}")
+
+        if content:
+            # Truncate large content to avoid blowing out the main agent's context
+            max_chars = 4000
+            if len(content) > max_chars:
+                content = content[:max_chars] + f"\n\n... (truncated, {len(content) - max_chars:,} chars omitted)"
+            lines.append(content)
+        lines.append("")
+    return "\n".join(lines)
+
+
 def _configure_compaction():
     """Create a ChatManager with compaction settings from config.
 
@@ -33,7 +81,11 @@ def _inject_system_prompt(chat_manager, sub_agent_type: str = "research"):
         chat_manager: ChatManager instance to configure
         sub_agent_type: Type of sub-agent ('research' or 'review').
     """
-    base_prompt = build_sub_agent_prompt(sub_agent_type=sub_agent_type)
+    base_prompt = build_sub_agent_prompt(
+        sub_agent_type=sub_agent_type,
+        soft_limit_tokens=sub_agent_settings.soft_limit_tokens,
+        hard_limit_tokens=sub_agent_settings.hard_limit_tokens,
+    )
     chat_manager.messages = [{"role": "system", "content": base_prompt}]
 
 
@@ -163,10 +215,23 @@ def run_sub_agent(
     original_get_llm_response = orchestrator._get_llm_response
     original_chat_completion = temp_chat_manager.client.chat_completion
 
+    _soft_limit_warned = False
+
     def _chat_completion_with_token_hint(messages, **kwargs):
-        """Prepend a system-level token budget hint to every LLM call."""
+        """Prepend a system-level token budget hint (and soft-limit warning once) to every LLM call."""
+        nonlocal _soft_limit_warned
         tt = temp_chat_manager.token_tracker
         hint = f"[Token budget: {tt.current_context_tokens:,} curr / {tt.conv_total_tokens:,} total]"
+
+        if not _soft_limit_warned and tt.total_tokens >= sub_agent_settings.soft_limit_tokens:
+            _soft_limit_warned = True
+            hint = (
+                f"WARNING: You have exceeded the soft token limit "
+                f"({tt.total_tokens:,} / {sub_agent_settings.soft_limit_tokens:,}). "
+                "STOP exploring and return your findings immediately. Do NOT call any more tools. "
+                + hint
+            )
+
         token_msg = {"role": "system", "content": hint}
         return original_chat_completion([token_msg, *messages], **kwargs)
 
@@ -176,10 +241,9 @@ def run_sub_agent(
 
         # Check hard token limit before making LLM call
         if tt.total_tokens >= sub_agent_settings.hard_limit_tokens:
-            raise Exception(
+            raise HardLimitExceeded(
                 f"Sub-agent hard token limit exceeded: "
-                f"{tt.total_tokens:,} / {sub_agent_settings.hard_limit_tokens:,} tokens. "
-                "Please refine your query or use more targeted searches."
+                f"{tt.total_tokens:,} / {sub_agent_settings.hard_limit_tokens:,} tokens."
             )
 
         # Update panel with live token counts
@@ -196,6 +260,8 @@ def run_sub_agent(
     orchestrator._get_llm_response = _get_llm_response_with_hard_limit
     temp_chat_manager.client.chat_completion = _chat_completion_with_token_hint
 
+    hard_limit_exceeded = False
+
     try:
         # Run sub-agent task
         orchestrator.run(
@@ -203,6 +269,8 @@ def run_sub_agent(
             thinking_indicator=None,
             allowed_tools=sub_agent_settings.allowed_tools
         )
+    except HardLimitExceeded:
+        hard_limit_exceeded = True
     except Exception as e:
         import traceback
         error_details = f"{e}\n\nTraceback:\n{traceback.format_exc()}"
@@ -227,15 +295,16 @@ def run_sub_agent(
     tt = temp_chat_manager.token_tracker
     delta_cost = tt.total_actual_cost + tt.total_estimated_cost
 
-    # Extract final response (last assistant message with content)
-    final_content = ""
-    for msg in reversed(temp_chat_manager.messages):
-        if msg.get("role") == "assistant" and msg.get("content"):
-            final_content = msg["content"].strip()
-            break
-
-    # Format with usage at end
-    result = final_content
+    if hard_limit_exceeded and sub_agent_settings.dump_context_on_hard_limit:
+        result = _format_messages_dump(temp_chat_manager.messages)
+    else:
+        # Extract final response (last assistant message with content)
+        final_content = ""
+        for msg in reversed(temp_chat_manager.messages):
+            if msg.get("role") == "assistant" and msg.get("content"):
+                final_content = msg["content"].strip()
+                break
+        result = final_content
 
     usage = {
         "prompt_tokens": delta_prompt,
@@ -250,5 +319,6 @@ def run_sub_agent(
         "result": result,
         "usage": usage,
         "model": temp_chat_manager.client.model,
-        "error": None
+        "error": None,
+        "hard_limit_exceeded": hard_limit_exceeded,
     }

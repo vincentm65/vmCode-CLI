@@ -177,6 +177,10 @@ def review_changes(
 
         raw_result = sub_agent_data.get('result', '')
 
+        # If hard limit was exceeded, skip injection and return raw dump for both
+        if sub_agent_data.get('hard_limit_exceeded'):
+            return {"display": raw_result, "history": raw_result}
+
         # Always inject file contents from citations into the history version
         injected_result = inject_file_contents(
             raw_result, repo_root, gitignore_spec, console

@@ -274,23 +274,23 @@ class SettingSelector:
         lines.append("")
         setting = self._get_current_setting()
         if self._on_save:
-            lines.append("<style fg='gray'>Enter to save changes, Esc to cancel</style>")
+            lines.append("<style fg='gray'>Enter to save changes, Esc to save &amp; close</style>")
         elif self.editing_value:
             if setting and setting.input_type in ("number", "float", "text"):
-                lines.append("<style fg='gray'>Type value, Enter to confirm, Esc to cancel</style>")
+                lines.append("<style fg='gray'>Type value, Enter to confirm, Esc to discard</style>")
             elif setting and setting.input_type == "select":
-                lines.append("<style fg='gray'>↑↓ Change, Enter to confirm, Esc to cancel</style>")
+                lines.append("<style fg='gray'>↑↓ Change, Enter to confirm, Esc to discard</style>")
         else:
             if setting and setting.input_type == "nav":
-                lines.append("<style fg='gray'>↑↓ Navigate, Enter to open, Esc to cancel</style>")
+                lines.append("<style fg='gray'>↑↓ Navigate, Enter to open, Esc to save &amp; close</style>")
             elif setting and setting.input_type == "options":
-                lines.append("<style fg='gray'>↑↓ Change option, Enter to select</style>")
+                lines.append("<style fg='gray'>↑↓ Change option, Enter to select, Esc to save &amp; close</style>")
             elif setting and self._is_boolean_setting(setting):
-                lines.append("<style fg='gray'>↑↓ Navigate, Enter to toggle, Esc to cancel</style>")
+                lines.append("<style fg='gray'>↑↓ Navigate, Enter to toggle, Esc to save &amp; close</style>")
             elif setting:
-                lines.append("<style fg='gray'>↑↓ Navigate, Enter to edit, Esc to cancel</style>")
+                lines.append("<style fg='gray'>↑↓ Navigate, Enter to edit, Esc to save &amp; close</style>")
             else:
-                lines.append("<style fg='gray'>↑↓ Navigate, Esc to cancel</style>")
+                lines.append("<style fg='gray'>↑↓ Navigate, Esc to save &amp; close</style>")
 
         return HTML("\n".join(lines))
 
@@ -495,7 +495,14 @@ class SettingSelector:
 
         @bindings.add(Keys.Escape)
         def close(event):
-            event.app.exit(result=None)
+            if self.editing_value:
+                # First Esc while editing: discard in-progress input
+                self.editing_value = False
+                self.input_buffer = ""
+                invalidate()
+                return
+            # Esc saves (same as Save button)
+            self._save(event)
 
         @bindings.add(Keys.Right)
         def enter_edit(event):
@@ -563,6 +570,8 @@ class SettingSelector:
         )
 
         invalidate.app = application
+        # Add a blank line before the selector to separate from prior output
+        application.output.write_raw("\n")
         # Save cursor position before rendering so we can erase on exit
         application.output.write_raw("\033[s")
         application.output.flush()

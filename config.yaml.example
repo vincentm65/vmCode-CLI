@@ -103,9 +103,10 @@ CONTEXT_SETTINGS:
 # -- Sub-Agent Settings -------------------------------------------------------
 
 SUB_AGENT_SETTINGS:
-  soft_limit_tokens: 75000
-  hard_limit_tokens: 300000
+  soft_limit_tokens: 300000
+  hard_limit_tokens: 500000
   enable_compaction: false
+  dump_context_on_hard_limit: true
 
 # -- Status Bar ---------------------------------------------------------------
 

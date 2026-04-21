@@ -285,6 +285,10 @@ Show code only when using `edit_file`/`create_file` tools. Keep text explanation
 # Sub-agent specific sections (research-focused, read-only tools passed via function calling)
 
 SUB_AGENT_SECTIONS = {
+    "token_budget": """## Token Budget
+
+You have a total budget of approximately {hard_limit:,} tokens for this task. When you reach {soft_limit:,} tokens, you MUST immediately stop exploring and return your findings to the main agent. Do not continue reading files, searching, or making tool calls once you are near or past the soft limit. Wrap up your answer with citations and return it promptly.""",
+
     "response_format": """# Response Format
 
 When answering the main agent's query:
@@ -639,11 +643,13 @@ def build_system_prompt() -> str:
     return "\n\n".join(sections)
 
 
-def build_sub_agent_prompt(sub_agent_type: str = "research") -> str:
+def build_sub_agent_prompt(sub_agent_type: str = "research", soft_limit_tokens: int | None = None, hard_limit_tokens: int | None = None) -> str:
     """Build prompt for sub-agent (research or review, read-only).
 
     Args:
         sub_agent_type: Type of sub-agent ('research' or 'review').
+        soft_limit_tokens: Soft token limit to display in prompt.
+        hard_limit_tokens: Hard token limit to display in prompt.
 
     Returns:
         Complete system prompt string
@@ -686,6 +692,15 @@ def build_sub_agent_prompt(sub_agent_type: str = "research") -> str:
             inserted = True
     if not inserted:
         result.append(response_format)
+
+    # Insert token budget guidance before the mode section
+    if soft_limit_tokens is not None and hard_limit_tokens is not None:
+        token_budget = SUB_AGENT_SECTIONS["token_budget"].format(
+            soft_limit=soft_limit_tokens,
+            hard_limit=hard_limit_tokens,
+        )
+        result.append(token_budget)
+
     result.append(mode_section)
     return "\n\n".join(result)
 

@@ -124,6 +124,10 @@ def sub_agent(
         # Display sub-agent result summary (used for context)
         raw_result = sub_agent_data.get('result', '')
 
+        # If hard limit was exceeded, skip injection and return raw dump
+        if sub_agent_data.get('hard_limit_exceeded'):
+            return raw_result
+
         # Parse and inject file contents
         injected_result = inject_file_contents(
             raw_result, repo_root, gitignore_spec, console
