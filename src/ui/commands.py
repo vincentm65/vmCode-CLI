@@ -561,12 +561,13 @@ def _handle_clear(chat_manager, console, debug_mode_container, args, cron_schedu
     conv_cache_read = chat_manager.token_tracker.conv_cache_read_tokens
     conv_cache_creation = chat_manager.token_tracker.conv_cache_creation_tokens
     if conv_cache_read > 0 or conv_cache_creation > 0:
+        total_cached = conv_cache_read + conv_cache_creation
         cache_hit_pct = (
-            conv_cache_read / conv_in * 100
-        ) if conv_in > 0 else 0
+            conv_cache_read / total_cached * 100
+        ) if total_cached > 0 else 0
         console.print(f"  Cache read:   {conv_cache_read:,} tokens")
         console.print(f"  Cache write:  {conv_cache_creation:,} tokens")
-        console.print(f"  ({cache_hit_pct:.0f}% of input served from cache)")
+        console.print(f"  ({cache_hit_pct:.0f}% cache hit rate)")
 
     # Display cost — combined actual + estimated, with config-based fallback
     tracker_conv = chat_manager.token_tracker
@@ -1065,10 +1066,11 @@ def _handle_usage(chat_manager, console, debug_mode_container, args, cron_schedu
     # Display cache token breakdown (if any cache tokens were recorded)
     has_cache = tracker.total_cache_read_tokens > 0 or tracker.total_cache_creation_tokens > 0
     if has_cache:
+        total_cached = tracker.total_cache_read_tokens + tracker.total_cache_creation_tokens
         cache_hit_pct = (
             tracker.total_cache_read_tokens
-            / tracker.total_prompt_tokens * 100
-        ) if tracker.total_prompt_tokens > 0 else 0
+            / total_cached * 100
+        ) if total_cached > 0 else 0
         console.print()
         console.print(f"[#5F9EA0]Input Cache ({cache_hit_pct:.0f}% hit rate):[/#5F9EA0]")
         console.print(f"  Cache read:   {tracker.total_cache_read_tokens:,} tokens")
@@ -2433,6 +2435,57 @@ def _handle_cd(chat_manager, console, debug_mode_container, args, cron_scheduler
     return CommandResult(status="handled")
 
 
+def _handle_prompt(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
+    """Handle /prompt command — show/swap prompt variants."""
+    from utils.settings import prompt_settings
+    from llm.prompts import _variant_available, _list_variants
+
+    cfg_manager = config_manager
+
+    if not args or args.strip() == "list":
+        variants = _list_variants()
+        current = prompt_settings.variant
+        console.print()
+        console.print(f"[bold #5F9EA0]Prompt Variants[/bold #5F9EA0]  (current: [bold]{current}[/bold])")
+        console.print()
+        for v in variants:
+            marker = "[bold green]active[/bold green]" if v == current else ""
+            console.print(f"  [bold]{v}[/bold]  {marker}")
+        console.print()
+        console.print("[dim]Switch with: [bold #5F9EA0]/prompt main[/bold #5F9EA0] or [bold #5F9EA0]/prompt micro[/bold #5F9EA0][/dim]")
+        return CommandResult(status="handled")
+
+    # Single arg: variant name to switch to
+    target = args.strip().lower()
+
+    if not _variant_available(target):
+        variants = _list_variants()
+        console.print(f"[red]Unknown variant: '{target}'[/red]")
+        console.print(f"[dim]Available: {', '.join(variants)}[/dim]")
+        return CommandResult(status="handled")
+
+    # Update settings
+    prompt_settings.variant = target
+
+    # Persist to config
+    try:
+        cfg_data = cfg_manager.load(force_reload=True)
+        if "PROMPT_SETTINGS" not in cfg_data:
+            cfg_data["PROMPT_SETTINGS"] = {}
+        cfg_data["PROMPT_SETTINGS"]["variant"] = target
+        cfg_manager.save(cfg_data)
+    except Exception as e:
+        console.print(f"[red]Failed to save variant to config: {e}[/red]")
+        console.print("[yellow]Variant applied for this session only — it will revert on restart.[/yellow]")
+
+    # Rebuild system prompt in-place (no restart)
+    chat_manager.update_system_prompt(variant=target)
+    console.print(f"[green]Switched to '{target}' variant[/green]")
+    console.print("[dim]System prompt rebuilt in-place.[/dim]")
+
+    return CommandResult(status="handled")
+
+
 def _handle_obsidian_init(console, obsidian_settings):
     """Handle /obsidian init — scaffold project folder structure in vault."""
     if not obsidian_settings.is_active():
@@ -2658,6 +2711,7 @@ _COMMAND_HANDLERS = {
     "/cd": _handle_cd,
     "/setup": _handle_setup,
     "/cron": _handle_cron,
+    "/prompt": _handle_prompt,
 }
 
 

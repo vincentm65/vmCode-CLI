@@ -19,16 +19,16 @@ A CLI-based AI coding assistant capable of codebase search, file editing, comput
 
 ```bash
 # Install globally (requires Python 3.9+)
-npm install -g bone-agent-cli
+npm install -g bone-agent
 
-# Run bone-agent
-bone-agent
+# Run bone
+bone
 ```
 
 Or use npx without installing:
 
 ```bash
-npx bone-agent-cli
+npx bone
 ```
 
 ### What Gets Installed
@@ -37,7 +37,7 @@ The npm package automatically:
 1. Checks for Python 3.9+ on your system
 2. Installs Python dependencies via pip
 3. Creates `~/.bone/config.yaml` from `config.yaml.example` if missing (persists across updates)
-4. Sets up the `bone-agent` command globally
+4. Sets up the `bone` command globally
 
 **Requirements:**
 - Node.js 14+ (for npm)
@@ -104,7 +104,7 @@ Set environment variables (they take precedence over ~/.bone/config.yaml):
 export OPENAI_API_KEY="sk-your-key-here"
 export ANTHROPIC_API_KEY="sk-ant-your-key-here"
 
-bone-agent
+bone
 ```
 
 ### Available Environment Variables

@@ -55,6 +55,10 @@ class TokenTracker:
         self.total_cache_creation_tokens = 0   # Cumulative input tokens written to cache
         self.conv_cache_read_tokens = 0        # Per-conversation cache read tokens
         self.conv_cache_creation_tokens = 0    # Per-conversation cache creation tokens
+
+        # Active prompt variant (loaded from prompts/ directory)
+        self.current_variant = "main"
+
     def add_usage(self, usage_data, model_name: str = ""):
         """Add token usage from an API response.
 
@@ -122,7 +126,19 @@ class TokenTracker:
             # Fallback: look up cost rates from config
             cost_in, cost_out = get_model_cost(model_name)
             if cost_in > 0 or cost_out > 0:
-                computed = self._calculate_cost(prompt_tokens, completion_tokens, cost_in, cost_out)
+                # Compute the billable (non-cache) input token count for cost
+                # estimation.  Providers normalize `prompt_tokens` differently:
+                #   - Anthropic handler: sums input + cache_read + cache_creation
+                #   - OpenAI: prompt_tokens natively includes cached_tokens
+                #   - Future providers: may exclude cache tokens from prompt_tokens
+                # Use the explicit `input_tokens` field (Anthropic native,
+                # non-cache portion) when available; otherwise subtract cache
+                # tokens from prompt_tokens (assumes prompt_tokens includes
+                # cache counts).
+                base_prompt = usage_data.get('input_tokens')
+                if base_prompt is None:
+                    base_prompt = max(0, prompt_tokens - cache_read - cache_creation)
+                computed = self._calculate_cost(base_prompt, completion_tokens, cost_in, cost_out)
                 self.add_estimated_cost(computed['total_cost'])
 
     def add_actual_cost(self, cost_usd: float):

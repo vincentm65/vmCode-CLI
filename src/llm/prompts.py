@@ -1,263 +1,20 @@
 ﻿
 
 # Modular prompt composition for native function calling
-# Base sections shared across all modes and sub-modes
-
-BASE_SECTIONS = {
-    "intro": "You are a coding assistant that helps navigate codebases using native function calling.",
-
-    "tone_and_style": """## Tone and Style
-- Be a intelligent, senior developer. Use first person (I, we).
-- No emojis unless requested.
-- Do not use uppercase text for emphasis unless the user explicitly instructs it.""",
-
-    "communication_style": """## Communication Style
-
-**Important:** Default to concise explanations
-
-- Show only changed code snippets when making edits via tools, never in explanations
-- Use bullet points instead of prose when possible
-- Target: 3-5 sentences max for explanations, 10-15 lines max for plans
-- Explain the "why" and "what", skip the "how" unless requested
-
-Examples:
-❌ "I'll update the function by adding a parameter called `userId` and then modify the return statement to include..."
-✓ "Add userId parameter to track user associations\"""",
-
-    "conversational_tool_calling": """## Conversational Tool Calling
-
-Include explanatory text alongside tool calls to provide context.
-
-**Share your thinking every 3-8 tool calls** - users need visibility into your reasoning during extended sequences.
-
-**When to explain:**
-- Starting exploration: explain initial strategy
-- Making progress: summarize findings and next steps
-- Getting stuck: explain why you're pivoting
-- Redirecting: note when changing approach
-
-**Skip for:** single obvious tool call at the start (e.g., "Reading config file"). Never skip for follow-up searches or sequences >1-2 calls.
-
-Example: [Search: "auth handlers"] → [Read: auth.py] → [Thinking: "Found validate_token, checking handler"] → [Search: "token handler"] → [Read: handler.py] → [Answer]
-""",
-
-    "professional_objectivity": """## Professional Objectivity
-
-Prioritize technical accuracy and truthfulness over validating the user's beliefs. Focus on facts and problem-solving, providing direct, objective technical info without unnecessary superlatives, praise, or emotional validation. Apply rigorous standards to all ideas and disagree when necessary. Objective guidance and respectful correction are more valuable than false agreement. Investigate to find the truth rather than instinctively confirming beliefs.""",
-
-    "think_before_acting": """## Think Before Acting
-
-**Decision Policy:**
-1. What does the user need?
-2. Is the answer available from visible context, prior tool results, or injected file contents?
-3. If not, what's the minimum tool needed to fill the gap?
-4. **Ambiguous?** If multiple valid approaches exist, use select_option to clarify before proceeding
-5. Stop as soon as the answer is supported.
-
-Use the smallest number of tool calls needed. Prefer one precise search over multiple broad searches.""",
-
-    "batch_independent_calls": """## Batch Independent Calls
-
-**Important:** Batch independent tool calls to minimize tokens and latency.
-
-Make independent calls in parallel (e.g., rg + read_file(file1) + read_file(file2)). If calls depend on previous results, run them sequentially. Never guess or use placeholders for dependent values.""",
-
-
-
-
-
-    "trust_subagent_context": """## Trust Subagent Results
-
-**Important:** When sub_agent returns results with '## INJECTED FILE CONTENTS', the files have already been read.
-
-**You must:**
-- Use the injected file contents directly
-- Do not call `read_file()` for any file that appears in '## Injected File Contents'
-- Do not re-read the same file with different line ranges
-- Do not read "full file" when subagent already injected it
-
-The injected code blocks contain the actual file content — not summaries.
-
-Example:
-- Subagent injects: '### src/auth.py (lines 45-78)'
-- Use the injected content directly
-- Do not call `read_file("src/auth.py", 45, 78)`
-- Do not call `read_file("src/auth.py")` — don't read full file either
-
-Only call `read_file()` for files not mentioned in the injected section.
-
-Violating this instruction wastes tokens and shows you didn't read the subagent's work.""",
-
-    "context_reliability": """## Context Reliability
-
-**Runtime Context Management:**
-- Older tool results may be compacted, summarized, truncated, or absent from conversation history
-- Only recent tool-assisted rounds may retain full verbatim outputs
-- File contents from earlier reads may no longer be visible in current context
-
-**Reacquisition Policy:**
-- Use visible conversation context, prior tool results, and injected file contents first
-- If needed facts are not visible in current context, reacquire only the missing fact with minimum tools
-- After edits, treat earlier reads of that file as stale - re-read to verify final state
-- Stop investigating once the answer is supported by available evidence""",
-
-    "code_references": """## Code References
-
-When referencing specific functions or pieces of code include the pattern `file_path:line_number` to allow the user to easily navigate to the source code location.
-
-<example>
-user: Where are errors from the client handled?
-assistant: Clients are marked as failed in the `connectToServer` function in src/services/process.ts:712.
-</example>""",
-
-    "exploration_pattern": """## Exploration
-
-1. If you know file path(s), start with `read_file` (use line ranges for files >500 lines)
-2. Otherwise, start with targeted `rg` searches (specific keywords/functions)
-3. Batch read all relevant files found
-4. **If multiple exploration paths exist**, use select_option to confirm direction with user
-5. Answer based on results
-
-**File Reading Strategy:**
-- Read full file for <500 lines. Use line ranges for larger files (100-200 lines/chunk)
-- Start/end chunks at logical boundaries (function/class definitions)
-- Use minimal overlap (10-20 lines) only if needed for continuity
-
-**Use list_directory to Check File Sizes:**
-- `list_directory` shows line counts for each file (helps decide full vs partial reads)
-- Files >500 lines should use `start_line` and `max_lines` parameters
-
-**Track Previous Reads:**
-- Check `start_line` and `lines_read` metadata from previous tool results
-- Use this info to continue reading from where you left off
-- Avoid re-reading lines you've already seen""",
-
-    "targeted_searching": """## Targeted Searching
-
-**Avoid spam searches** - every rg call has latency:
-1. **Reuse existing results** - before searching again, check if previous results already contain your answer
-2. **Use files_with_matches first** - get file list, then read specific files  
-3. **One search often enough** - combine patterns with `|` before making multiple calls
-4. **Specific > Generic** - search "def authenticate_user" not "auth" or "handle"
-
-Good: single rg for pattern + read_file(file1) + read_file(file2)
-Bad: rg → read → rg → read → rg → read (chaining sequential searches)""",
-
-    "editing_pattern": """## Editing
-
-For every edit:
-1. **Find exact text** to change (including whitespace/quotes)
-2. **Copy exactly** for the `search` parameter
-3. **Include context** to make search unique
-4. **Never guess** — always verify search text matches
-
-Tip: Read the file first to understand the context and find the exact text to edit.
-
-If search appears multiple times, add more context. Copy character-for-character without reformatting.
-
-**Before editing multiple files**: If there are multiple valid implementation approaches with different trade-offs, use select_option to clarify which approach the user prefers.""",
-
-    "task_lists_pattern": """## Task Lists
-For multi-file edit sequences: `create_task_list` → `edit_file` → `complete_task(task_ids=[N,M,...])` (batch completions). Don't complete failed/rejected edits. Use `show_task_list` if lost. Don't paste task lists in responses; don't show after completing unless asked.
-
-Single task: `complete_task(task_id=0)`
-
-**Always include a `title`** when calling `create_task_list` — use a short phrase summarizing the workflow (e.g. 'Add pagination to user API').
-
-**Before creating task lists**: If the edit approach involves significant trade-offs or architectural decisions, use select_option to confirm the approach with the user first.""",
-
-    "casual_interactions": """## Casual Interactions
-
-Respond without tools for:
-- Greetings, general explanations, conceptual questions
-- Questions answerable from training data or codebase map
-
-Not every question needs code exploration.""",
-
-    "ask_questions": """## Ask Questions
-
-**Use select_option whenever you encounter:**
-
-- **Ambiguity** - Multiple valid approaches and you're unsure which to prioritize
-- **Preferences** - User-specific choices (naming conventions, frameworks, patterns)
-- **Trade-offs** - Performance vs maintainability, simplicity vs flexibility, etc.
-- **Scope decisions** - How deep to go, what to include vs exclude
-- **Clarification** - Unclear requirements or conflicting constraints
-- **Priority conflicts** - When optimization goals compete (speed, memory, readability)
-- **Design choices** - Architecture patterns, data structures, algorithms
-
-**When not to ask:**
-- Trivial decisions that don't impact the outcome
-- Questions answerable from visible context or training data
-- Single obvious solution exists
-- User already specified their preference
-
-**Examples:**
-- "Which logging framework do you prefer: (loguru, structlog, standard logging)?"
-- "Should I optimize for memory usage or execution speed?"
-- "Do you want a simple implementation or a more extensible architecture?"
-- "Should I handle edge case X now or document it for later?"
-
-**Pattern:**
-1. Recognize a decision point with trade-offs
-2. Use select_option to present 2-5 clear options
-3. Include brief descriptions for each option
-4. Proceed based on user selection
-
-This works in any mode.""",
-
-    "tool_preferences": """## Tool Preferences
-
-**Prefer native tools over execute_command:**
-- Use `rg` tool (not `execute_command rg`) for code searches
-- Use `read_file` (not `Get-Content`) for reading files
-- Use `list_directory` (not `Get-ChildItem`) for listing directories
-- Use `create_file` (not `New-Item`) for creating files
-- Use `edit_file` (not `Set-Content`/`Add-Content`) for editing files
-
-**Use execute_command for:**
-- Git operations: `git clone`, `git pull`, `git push`, `git status`, etc.
-- File operations: `rm`, `mv`, `cp`, `mkdir`, `rmdir`, `chmod`, etc.
-- System tasks: package management (`pacman`, `pip`, `npm`), process management (`ps`, `kill`), service management (`systemctl`)
-- Network tools: `ping`, `curl`, `wget`, `ssh`, `scp`
-- Development: `make`, `cmake`, building projects, running tests
-- Any other shell commands that don't overlap with native tools
-
-**Do not use execute_command for:**
-- Code search: use `rg` tool
-- Reading files: use `read_file` tool
-- Listing directories: use `list_directory` tool
-- Creating files: use `create_file` tool
-- Editing files: use `edit_file` tool
-- python/python3 commands to edit/modify files (use native tools: create_file, edit_file)""",
-
-    "when_to_use_sub_agent": """## When to Use sub_agent
-
-Use for broad multi-file exploration when the answer is not already available from visible context. This includes tracing flows, architecture questions, and pattern analysis requiring multiple search+read cycles.
-
-Do not call sub_agent when one direct read_file or one targeted rg is sufficient for the answer.
-
-**Alternative: Use select_option** when you need user input on decisions, preferences, or clarifications - it's faster and more direct than exploration for trade-off questions.""",
-
-    "error_handling": """## Error Handling
-
-1. Try alternative approach (different terms, different file)
-2. If stuck, report what you tried
-3. Don't retry the same failed approach
-4. **If the error indicates ambiguity in requirements**, use select_option to clarify with the user rather than guessing""",
-
-
-
-    "temp_folder": """## Temp Folder
-
-**Use the `.temp` folder** (at app root) for scratch work and temporary files.
-
-**Examples:**
-- `.temp/test_preview.md` - test files
-- `.temp/demo_data.json` - temporary data
-
-Keeps test files separate from production code and easy to clean up.""",
-}
+#
+# All prompt sections are loaded from file-based variants under prompts/<variant>/.
+# Each variant directory contains individual .md files for each section.
+# Section ordering is defined programmatically in _main_sections() and
+# _sub_agent_sections() — no manifest files needed.
+
+import logging
+
+logger = logging.getLogger(__name__)
+from pathlib import Path
+from string import Template
+
+# Root of the prompts directory (repo root / prompts)
+_PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
 
 # Mode section for main agent
@@ -287,7 +44,7 @@ Show code only when using `edit_file`/`create_file` tools. Keep text explanation
 SUB_AGENT_SECTIONS = {
     "token_budget": """## Token Budget
 
-You have a total budget of approximately {hard_limit:,} tokens for this task. When you reach {soft_limit:,} tokens, you MUST immediately stop exploring and return your findings to the main agent. Do not continue reading files, searching, or making tool calls once you are near or past the soft limit. Wrap up your answer with citations and return it promptly.""",
+You have a total budget of approximately $hard_limit tokens for this task. When you reach $soft_limit tokens, you MUST immediately stop exploring and return your findings to the main agent. Do not continue reading files, searching, or making tool calls once you are near or past the soft limit. Wrap up your answer with citations and return it promptly.""",
 
     "response_format": """# Response Format
 
@@ -392,18 +149,6 @@ SECTION_TOOL_DEPS = {
 }
 
 
-def _should_include_section(section_key: str) -> bool:
-    """Check whether a prompt section should be included based on tool availability.
-
-    A section is skipped only when ALL of its dependent tools are disabled.
-    Uses lazy import to avoid circular dependency with tools module.
-    """
-    deps = SECTION_TOOL_DEPS.get(section_key)
-    if not deps:
-        return True
-    from tools.helpers.base import ToolRegistry
-    return not all(ToolRegistry.is_disabled(t) for t in deps)
-
 def _build_memory_section() -> str | None:
     """Build the memory system section for the system prompt.
 
@@ -425,20 +170,22 @@ def _build_memory_section() -> str | None:
         return None
 
 
-def _build_vault_section() -> str:
+def _build_vault_section(variant: str = "main") -> str | None:
     """Build the Obsidian vault section for the system prompt.
 
-    Returns a single section covering vault path, project folder, file routing,
-    plan routing, project management schemas, and tool guidance. Returns None
-    if vault is not active.
+    Loads obsidian.md from prompts/<variant>/ and substitutes dynamic values
+    (vault root, project folder, excluded folders) using string.Template.
+    If project exists, also loads and appends obsidian_project.md from the
+    same variant directory.
+
+    Returns None if vault is not active.
     """
-    import logging
     try:
         from utils.settings import obsidian_settings
         if not obsidian_settings.is_active():
             return None
     except Exception as e:
-        logging.getLogger(__name__).debug("Obsidian not available: %s", e)
+        logger.debug("Obsidian not available: %s", e)
         return None
 
     try:
@@ -464,141 +211,37 @@ def _build_vault_section() -> str:
 
     excluded = obsidian_settings.exclude_folders
 
-    lines = [
-        "## Obsidian Vault",
-        "",
-        f"**Vault root:** `{vault_root}`",
-    ]
+    # Load base obsidian template from variant directory
+    base_path = _PROMPTS_DIR / variant / "obsidian.md"
+    if not base_path.is_file():
+        logger.warning(
+            "Obsidian template not found at %s — vault section omitted", base_path
+        )
+        return None
 
+    base_content = base_path.read_text(encoding="utf-8").strip()
+
+    # Substitute dynamic values using string.Template
     if project_exists:
-        lines.append(f"**Project folder:** `{project_folder}`")
+        project_header = f"**Project folder:** `{project_folder}`"
     else:
-        lines.append("**Project:** not initialized (run `/obsidian init` to create)")
+        project_header = "**Project:** not initialized (run `/obsidian init` to create)"
 
-    lines.extend([
-        "",
-        "**Path separation (CRITICAL):** Project folder is for **notes only**. "
-        "Code files use **relative paths** from repo root (e.g. `src/core/chat_manager.py`). "
-        "Never prepend vault/project paths to code paths.",
-        "",
-        "**Content routing (CRITICAL):** "
-        "ALL project notes (bugs, tasks, docs) MUST be created in the vault using `create_file` "
-        f"with absolute vault paths (e.g. `{project_folder}/Bugs/My bug title.md`). "
-        "Code changes (source, configs, tests) → relative repo paths. "
-        "Scratch/draft work → `.temp/` at repo root ONLY. "
-        "NEVER create vault notes in `.temp/`, the repo root, or any repo subdirectory.",
-        "",
-        "**Plan routing:** When asked to plan a feature or change, create a task note in "
-        f"`{project_folder}/Tasks/`. Do NOT create plan files in `.temp/` or the repo — "
-        "task notes ARE the plan records.",
-        "",
-        f"**Search:** `rg` scans both repo and vault (vault results show `[vault]` prefix). "
-        f"Excluded: {excluded}.",
-        "",
-        "**Rules:** `[[wiki-links]]` for cross-references, YAML frontmatter in all notes, "
-        "never touch `.obsidian/`, update `date_modified` on edits. "
-        "Code refs in notes: plain paths (not wiki-links).",
-    ])
+    formatted = Template(base_content).safe_substitute(
+        vault_root=vault_root,
+        project_folder=project_folder,
+        project_header=project_header,
+        excluded=excluded,
+    )
 
+    # Append project-specific section if project exists
     if project_exists:
-        lines.extend([
-            "",
-            "**Flat folder structure (CRITICAL):** Notes go directly into `Bugs/`, `Tasks/`, "
-            "or `Docs/`. The ONLY allowed subfolder is `Done/` (for archiving). "
-            "NEVER create nested subfolders like `Tasks/Feature Name/` "
-            "or `Bugs/Component/`. Task/bug filenames must be flat: "
-            "`Tasks/Enhanced web search with full page content reading.md` (correct) vs "
-            "`Tasks/Enhanced Web Search/DuckDuckGo adapter.md` (wrong).",
-            "",
-            "**Title format:** `title: Short description in sentence case` — no quotes, "
-            "no type prefix (never `Bug: ...` or `Task N: ...`). The H1 heading must match "
-            "the title exactly.",
-            "",
-            "**Type field (exact values):** `type: bug | task | doc` — lowercase only.",
-            "",
-            "**Note schemas:** Every note MUST follow its type template exactly.",
-            "",
-            "- **Bug:** `Bugs/<title>.md`",
-            "  Required FM: title, type (bug), status, priority, date_created, date_modified, tags.",
-            "  Body sections: ## Related Files, ## Steps to Reproduce, ## Expected Behavior, ## Actual Behavior.",
-            "  Optional body: ## Root Cause, ## Fix, ## Investigation Summary.",
-            "",
-            "  Example:",
-            "  ```",
-            "  ---",
-            "  title: First Letter Cut Off in Agent Response",
-            "  type: bug",
-            "  status: reported",
-            "  priority: high",
-            "  date_created: 2025-07-27",
-            "  date_modified: 2025-07-27",
-            "  tags: [bug, agent, rendering]",
-            "  ---",
-            "",
-            "  # First Letter Cut Off in Agent Response",
-            "",
-            "  ## Related Files",
-            "  - src/core/agentic.py:1154",
-            "",
-            "  ## Steps to Reproduce",
-            "  1. Use agentic mode",
-            "  2. Get a response starting with characters in lstrip set",
-            "",
-            "  ## Expected Behavior",
-            "  Full first character/word is preserved.",
-            "",
-            "  ## Actual Behavior",
-            "  Leading characters are silently stripped.",
-            "  ```",
-            "",
-            "- **Task:** `Tasks/<title>.md`",
-            "  Required FM: title, type (task), status, priority, date_created, date_modified, tags.",
-            "  Body sections: ## Related Files, ## Problem (or ## Scope / ## Description).",
-            "",
-            "  Example:",
-            "  ```",
-            "  ---",
-            "  title: Extract retry logic to src/core/retry.py",
-            "  type: task",
-            "  status: todo",
-            "  priority: medium",
-            "  date_created: 2025-07-10",
-            "  date_modified: 2025-07-10",
-            "  tags: [refactor, agentic]",
-            "  ---",
-            "",
-            "  # Extract retry logic to src/core/retry.py",
-            "",
-            "  ## Related Files",
-            "  - src/core/agentic.py:522-586",
-            "  - src/core/retry.py (new)",
-            "",
-            "  ## Scope",
-            "  Move retry constants and functions from agentic.py into retry.py.",
-            "  ```",
-            "",
-            "- **Doc:** `Docs/<title>.md`",
-            "  Required FM: title, type (doc), date_created, date_modified, tags.",
-            "  Optional FM: priority.",
-            "  No required body sections — free-form markdown.",
-            "",
-            "**Common mistakes to avoid:**",
-            "- NEVER create `Bugs/`, `Tasks/` folders in the repo root",
-            "- NEVER put vault notes in `.temp/`",
-            "- NEVER use `# Bug:`, `# Task:` prefixes in H1 headings",
-            "- NEVER use quoted strings for title values in frontmatter",
-            "- NEVER nest folders (e.g. `Tasks/Some Feature/subtask.md`)",
-            "- NEVER use uppercase or mixed-case type values",
-        ])
+        project_path = _PROMPTS_DIR / variant / "obsidian_project.md"
+        if project_path.is_file():
+            project_content = project_path.read_text(encoding="utf-8").strip()
+            formatted = formatted + "\n\n" + project_content
 
-    lines.extend([
-        "",
-        "**Archiving:** Terminal status (bug: fixed/verified, task: done) "
-        "→ move to `Done/` folder via `execute_command mv`. "
-        "User asks to sweep → `mv` each done note.",
-    ])
-
-    return "\n".join(lines)
+    return formatted
 
 
 def _build_context_section() -> str:
@@ -617,56 +260,176 @@ def _build_context_section() -> str:
     )
 
 
-def build_system_prompt() -> str:
+def _static(variant: str, name: str) -> str:
+    """Load a static .md section from prompts/<variant>/."""
+    path = _PROMPTS_DIR / variant / name
+    if path.is_file():
+        return path.read_text(encoding="utf-8").strip()
+    logger.warning("Section file not found: %s — prompt section '%s' omitted", path, name)
+    return ""
+
+
+def _resolve_variant() -> str:
+    """Resolve the prompt variant from settings, falling back to 'main'."""
+    try:
+        from utils.settings import prompt_settings
+        return prompt_settings.variant
+    except Exception:
+        return "main"
+
+
+def _should_include_section(section_key: str) -> bool:
+    """Check whether a prompt section should be included based on tool availability.
+
+    A section is skipped only when ALL of its dependent tools are disabled.
+    Uses lazy import to avoid circular dependency with tools module.
+    """
+    deps = SECTION_TOOL_DEPS.get(section_key)
+    if not deps:
+        return True
+    from tools.helpers.base import ToolRegistry
+    return not all(ToolRegistry.is_disabled(t) for t in deps)
+
+
+def _build_prompt_to_list(sections: list[tuple[str, callable]]) -> list[str]:
+    """Build prompt as a list of section strings from (key, content_fn) pairs.
+
+    Skips sections that fail _should_include_section (tool deps)
+    or whose content_fn returns None/empty.
+    """
+    result = []
+    for key, content_fn in sections:
+        if not _should_include_section(key):
+            continue
+        content = content_fn()
+        if content:
+            result.append(content)
+    return result
+
+
+def _build_prompt(sections: list[tuple[str, callable]]) -> str:
+    """Build prompt string from (key, content_fn) pairs.
+
+    Delegates to _build_prompt_to_list and joins the result.
+    """
+    return "\n\n".join(_build_prompt_to_list(sections))
+
+
+def _variant_available(variant: str) -> bool:
+    """Check if a variant directory exists.
+
+    Raises OSError if directory permissions prevent access.
+    """
+    return (_PROMPTS_DIR / variant).is_dir()
+
+
+def _list_variants() -> list[str]:
+    """List available prompt variants (directories under prompts/)."""
+    if not _PROMPTS_DIR.is_dir():
+        return []
+    return sorted(
+        d.name for d in _PROMPTS_DIR.iterdir()
+        if d.is_dir()
+    )
+
+
+def _main_sections(variant: str) -> list[tuple[str, callable]]:
+    """Return (key, content_fn) pairs for the main agent prompt.
+
+    Order in this list = order in the final prompt.
+    Static .md sections, dynamic builders, and hardcoded sections all
+    live here — single source of truth for ordering.
+    """
+    return [
+        ("intro", lambda: _static(variant, "intro.md")),
+        ("context", _build_context_section),
+        ("tone_and_style", lambda: _static(variant, "tone_and_style.md")),
+        ("communication_style", lambda: _static(variant, "communication_style.md")),
+        ("trust_subagent_context", lambda: _static(variant, "trust_subagent_context.md")),
+        ("context_reliability", lambda: _static(variant, "context_reliability.md")),
+        ("conversational_tool_calling", lambda: _static(variant, "conversational_tool_calling.md")),
+        ("professional_objectivity", lambda: _static(variant, "professional_objectivity.md")),
+        ("think_before_acting", lambda: _static(variant, "think_before_acting.md")),
+        ("batch_independent_calls", lambda: _static(variant, "batch_independent_calls.md")),
+        ("code_references", lambda: _static(variant, "code_references.md")),
+        ("exploration_pattern", lambda: _static(variant, "exploration_pattern.md")),
+        ("targeted_searching", lambda: _static(variant, "targeted_searching.md")),
+        ("editing_pattern", lambda: _static(variant, "editing_pattern.md")),
+        ("task_lists_pattern", lambda: _static(variant, "task_lists_pattern.md")),
+        ("casual_interactions", lambda: _static(variant, "casual_interactions.md")),
+        ("ask_questions", lambda: _static(variant, "ask_questions.md")),
+        ("tool_preferences", lambda: _static(variant, "tool_preferences.md")),
+        ("when_to_use_sub_agent", lambda: _static(variant, "when_to_use_sub_agent.md")),
+        ("error_handling", lambda: _static(variant, "error_handling.md")),
+        ("temp_folder", lambda: _static(variant, "temp_folder.md")),
+        ("memory_system", _build_memory_section),
+        ("obsidian", lambda: _build_vault_section(variant)),
+        ("mode", lambda: MODE_SECTION),
+    ]
+
+
+def _sub_agent_sections(variant: str) -> list[tuple[str, callable]]:
+    """Return (key, content_fn) pairs for the sub-agent prompt.
+
+    The micro variant has a smaller set of sections than main.
+    response_format is placed explicitly after code_references.
+    """
+    # Base sections shared across all variants
+    base = [
+        ("intro", lambda: _static(variant, "intro.md")),
+        ("context", _build_context_section),
+        ("tone_and_style", lambda: _static(variant, "tone_and_style.md")),
+        ("communication_style", lambda: _static(variant, "communication_style.md")),
+    ]
+
+    # Micro variant has a different section set (no conversational_tool_calling,
+    # no professional_objectivity, no think_before_acting, etc.)
+    if variant == "micro":
+        middle = [
+            ("trust_subagent_context", lambda: _static(variant, "trust_subagent_context.md")),
+            ("context_reliability", lambda: _static(variant, "context_reliability.md")),
+            ("exploration_pattern", lambda: _static(variant, "exploration_pattern.md")),
+            ("targeted_searching", lambda: _static(variant, "targeted_searching.md")),
+            ("tool_preferences", lambda: _static(variant, "tool_preferences.md")),
+        ]
+    else:
+        middle = [
+            ("conversational_tool_calling", lambda: _static(variant, "conversational_tool_calling.md")),
+            ("professional_objectivity", lambda: _static(variant, "professional_objectivity.md")),
+            ("think_before_acting", lambda: _static(variant, "think_before_acting.md")),
+            ("batch_independent_calls", lambda: _static(variant, "batch_independent_calls.md")),
+            ("code_references", lambda: _static(variant, "code_references.md")),
+            ("response_format", lambda: SUB_AGENT_SECTIONS["response_format"]),
+            ("exploration_pattern", lambda: _static(variant, "exploration_pattern.md")),
+            ("targeted_searching", lambda: _static(variant, "targeted_searching.md")),
+            ("casual_interactions", lambda: _static(variant, "casual_interactions.md")),
+            ("temp_folder", lambda: _static(variant, "temp_folder.md")),
+        ]
+
+    return base + middle
+
+
+def build_system_prompt(variant: str | None = None) -> str:
     """Build system prompt for main agent.
+
+    Loads section content from prompts/<variant>/. Order is defined by
+    _main_sections(). Raises FileNotFoundError if variant directory is missing.
+
+    Args:
+        variant: Variant name (e.g. 'main', 'micro').
+            If None, reads from settings.
 
     Returns:
         Complete system prompt string
     """
-
-    
-    # Base section keys in display order — filtered by tool availability
-    _base_keys = [
-        "intro",
-        "tone_and_style",
-        "communication_style",
-        "trust_subagent_context",
-        "context_reliability",
-        "conversational_tool_calling",
-        "professional_objectivity",
-        "think_before_acting",
-        "batch_independent_calls",
-        "code_references",
-        "exploration_pattern",
-        "targeted_searching",
-        "editing_pattern",
-        "task_lists_pattern",
-        "casual_interactions",
-        "ask_questions",
-        "tool_preferences",
-        "when_to_use_sub_agent",
-        "error_handling",
-        "temp_folder",
-    ]
-    sections = [BASE_SECTIONS[k] for k in _base_keys if _should_include_section(k)]
-
-    # Dynamic date/time/location context (inserted right after intro)
-    sections.insert(1, _build_context_section())
-
-    # Memory system section (from MemoryManager singleton, if available)
-    _memory_section = _build_memory_section()
-    if _memory_section:
-        sections.append(_memory_section)
-
-    # Obsidian vault section (inserted before mode section)
-    vault_section = _build_vault_section()
-    if vault_section:
-        sections.append(vault_section)
-
-    # Mode section
-    sections.append(MODE_SECTION)
-
-    return "\n\n".join(sections)
+    if variant is None:
+        variant = _resolve_variant()
+    if not _variant_available(variant):
+        raise FileNotFoundError(
+            f"Prompt variant '{variant}' not found: "
+            f"{_PROMPTS_DIR / variant} does not exist"
+        )
+    return _build_prompt(_main_sections(variant))
 
 
 def build_sub_agent_prompt(sub_agent_type: str = "research", soft_limit_tokens: int | None = None, hard_limit_tokens: int | None = None) -> str:
@@ -680,56 +443,30 @@ def build_sub_agent_prompt(sub_agent_type: str = "research", soft_limit_tokens: 
     Returns:
         Complete system prompt string
     """
-    # Pick the mode section based on sub_agent_type
-    if sub_agent_type == "review":
-        mode_section = SUB_AGENT_SECTIONS["review_mode"]
-    else:
-        mode_section = SUB_AGENT_SECTIONS["mode"]
-
-    # Base section keys in display order — filtered by tool availability
-    _sub_base_keys = [
-        "intro",
-        "tone_and_style",
-        "communication_style",
-        "conversational_tool_calling",
-        "professional_objectivity",
-        "think_before_acting",
-        "batch_independent_calls",
-        "code_references",
-        "exploration_pattern",
-        "targeted_searching",
-        "casual_interactions",
-        "temp_folder",
-    ]
-    sections = [BASE_SECTIONS[k] for k in _sub_base_keys if _should_include_section(k)]
-
-    # Dynamic date/time/location context (inserted right after intro)
-    sections.insert(1, _build_context_section())
-
-    # Insert response_format between code_references and exploration_pattern
-    # to match the original prompt ordering (before the plugin-tier refactor).
-    response_format = SUB_AGENT_SECTIONS["response_format"]
-    inserted = False
-    result = []
-    for section in sections:
-        result.append(section)
-        if not inserted and section is BASE_SECTIONS.get("code_references"):
-            result.append(response_format)
-            inserted = True
-    if not inserted:
-        result.append(response_format)
-
-    # Insert token budget guidance before the mode section
-    if soft_limit_tokens is not None and hard_limit_tokens is not None:
-        token_budget = SUB_AGENT_SECTIONS["token_budget"].format(
-            soft_limit=soft_limit_tokens,
-            hard_limit=hard_limit_tokens,
+    variant = _resolve_variant()
+    if not _variant_available(variant):
+        raise FileNotFoundError(
+            f"Sub-agent prompt variant '{variant}' not found: "
+            f"{_PROMPTS_DIR / variant} does not exist"
         )
-        result.append(token_budget)
 
-    result.append(mode_section)
+    result = _build_prompt_to_list(_sub_agent_sections(variant))
+
+    # Append parameterized sections (always last)
+    if soft_limit_tokens is not None and hard_limit_tokens is not None:
+        result.append(
+            Template(SUB_AGENT_SECTIONS["token_budget"]).safe_substitute(
+                soft_limit=f"{soft_limit_tokens:,}",
+                hard_limit=f"{hard_limit_tokens:,}",
+            )
+        )
+
+    if sub_agent_type == "review":
+        result.append(SUB_AGENT_SECTIONS["review_mode"])
+    else:
+        result.append(SUB_AGENT_SECTIONS["mode"])
+
     return "\n\n".join(result)
-
 
 
 

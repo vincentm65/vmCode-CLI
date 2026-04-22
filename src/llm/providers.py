@@ -173,17 +173,27 @@ class AnthropicHandler:
         # OpenAI format: {"choices": [{"message": {"content": "..."}}], "usage": {...}}
 
         # Convert Anthropic usage format (input_tokens/output_tokens) to OpenAI format (prompt_tokens/completion_tokens)
+        # Anthropic's input_tokens does NOT include cache tokens; total input =
+        #   input_tokens + cache_read_input_tokens + cache_creation_input_tokens
         anthropic_usage = response_json.get("usage", {})
+        cache_read = anthropic_usage.get('cache_read_input_tokens', 0)
+        cache_creation = anthropic_usage.get('cache_creation_input_tokens', 0)
+        prompt_tokens = anthropic_usage.get('input_tokens', 0) + cache_read + cache_creation
+        completion_tokens = anthropic_usage.get('output_tokens', 0)
         openai_format_usage = {
-            'prompt_tokens': anthropic_usage.get('input_tokens', 0),
-            'completion_tokens': anthropic_usage.get('output_tokens', 0),
-            'total_tokens': anthropic_usage.get('input_tokens', 0) + anthropic_usage.get('output_tokens', 0),
+            'prompt_tokens': prompt_tokens,
+            'completion_tokens': completion_tokens,
+            'total_tokens': prompt_tokens + completion_tokens,
         }
         # Preserve Anthropic cache token fields for the token tracker
         if 'cache_read_input_tokens' in anthropic_usage:
             openai_format_usage['cache_read_input_tokens'] = anthropic_usage['cache_read_input_tokens']
         if 'cache_creation_input_tokens' in anthropic_usage:
             openai_format_usage['cache_creation_input_tokens'] = anthropic_usage['cache_creation_input_tokens']
+        # Preserve non-cache input count so cost estimation can bill only the
+        # non-cache portion without relying on fragile prompt_tokens subtraction.
+        if 'input_tokens' in anthropic_usage:
+            openai_format_usage['input_tokens'] = anthropic_usage['input_tokens']
 
         result = {
             "choices": [],
@@ -279,17 +289,26 @@ class AnthropicHandler:
 
         # Yield usage data as final item if captured
         # Convert Anthropic format (input_tokens/output_tokens) to OpenAI format (prompt_tokens/completion_tokens)
+        # Anthropic's input_tokens does NOT include cache tokens; total input =
+        #   input_tokens + cache_read_input_tokens + cache_creation_input_tokens
         if usage_data:
+            cache_read = usage_data.get('cache_read_input_tokens', 0)
+            cache_creation = usage_data.get('cache_creation_input_tokens', 0)
+            prompt_tokens = usage_data.get('input_tokens', 0) + cache_read + cache_creation
+            completion_tokens = usage_data.get('output_tokens', 0)
             openai_format_usage = {
-                'prompt_tokens': usage_data.get('input_tokens', 0),
-                'completion_tokens': usage_data.get('output_tokens', 0),
-                'total_tokens': usage_data.get('input_tokens', 0) + usage_data.get('output_tokens', 0),
+                'prompt_tokens': prompt_tokens,
+                'completion_tokens': completion_tokens,
+                'total_tokens': prompt_tokens + completion_tokens,
             }
             # Preserve Anthropic cache token fields for the token tracker
             if 'cache_read_input_tokens' in usage_data:
                 openai_format_usage['cache_read_input_tokens'] = usage_data['cache_read_input_tokens']
             if 'cache_creation_input_tokens' in usage_data:
                 openai_format_usage['cache_creation_input_tokens'] = usage_data['cache_creation_input_tokens']
+            # Preserve non-cache input count for accurate cost estimation
+            if 'input_tokens' in usage_data:
+                openai_format_usage['input_tokens'] = usage_data['input_tokens']
             yield {'__usage__': openai_format_usage}
 
     @staticmethod

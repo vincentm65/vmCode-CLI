@@ -105,6 +105,12 @@ class ContextSettings:
 
 
 @dataclass
+class PromptSettings:
+    """Prompt variant selection."""
+    variant: str = field(default_factory=lambda: _CONFIG.get("PROMPT_SETTINGS", {}).get("variant", "micro"))
+
+
+@dataclass
 class ObsidianSettings:
     """Obsidian vault integration settings.
 
@@ -166,6 +172,7 @@ file_settings = FileSettings()
 context_settings = ContextSettings()
 sub_agent_settings = SubAgentSettings()
 obsidian_settings = ObsidianSettings()
+prompt_settings = PromptSettings()
 
 # Tool execution constants
 MAX_TOOL_CALLS = tool_settings.max_tool_calls

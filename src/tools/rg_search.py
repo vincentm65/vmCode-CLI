@@ -3,6 +3,7 @@
 import logging
 import re
 import shlex
+import stat
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,68 @@ logger = logging.getLogger(__name__)
 
 # Default match limit for vault searches (separate from repo limit)
 _VAULT_MAX_MATCHES = 20
+
+# Regex for detecting file-path lines in rg output (shared by _annotate_file_sizes and _search_vault)
+_path_line_re = re.compile(r"^[^\s:|].*[/.]")
+
+
+def _format_file_size(size_bytes: int) -> str:
+    """Format file size in human-readable form."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def _annotate_file_sizes(formatted_output: str, base_path: Path, output_mode: str = "files_with_matches") -> str:
+    """Append human-readable file sizes to each file path line in rg output.
+
+    Works on files_with_matches and count output modes where each content
+    line starts with a file path. Skips metadata, truncation, and section
+    header lines. Skipped entirely for content mode (no benefit there).
+    """
+    if output_mode == "content":
+        return formatted_output
+
+    lines = formatted_output.split("\n")
+    annotated = []
+    for line in lines:
+        stripped = line.strip()
+        if (not stripped
+                or stripped.startswith("exit_code=")
+                or stripped.startswith("matches=")
+                or stripped.startswith("files=")
+                or stripped.startswith("... (")
+                or stripped.startswith("[repo]")
+                or stripped.startswith("[vault]")):
+            annotated.append(line)
+            continue
+        # Only annotate pure file-path lines (files_with_matches: "file",
+        # count: "file:N"). Skip content-mode match lines ("file:line:match")
+        # which always have 2+ colons or a colon-digit-dash pattern.
+        parts = line.split(":")
+        is_file_line = (
+            _path_line_re.match(line)
+            and len(parts) <= 2
+            and (len(parts) == 1 or parts[1].strip().isdigit())
+        )
+        if is_file_line:
+            file_part = parts[0].strip()
+            full_path = base_path / file_part
+            try:
+                st = full_path.stat()
+                if stat.S_ISREG(st.st_mode):
+                    size = _format_file_size(st.st_size)
+                    annotated.append(f"{line}  {size:>8}")
+                else:
+                    annotated.append(line)
+            except (OSError, ValueError):
+                annotated.append(line)
+        else:
+            annotated.append(line)
+    return "\n".join(annotated)
 
 
 @tool(
@@ -169,6 +232,7 @@ def rg(
 
     # If no vault configured, return repo results directly
     if not vault_root:
+        repo_result = _annotate_file_sizes(repo_result, repo_root, output_mode)
         return repo_result
 
     # Run vault search and merge results
@@ -184,9 +248,12 @@ def rg(
     )
 
     if not vault_output:
+        repo_result = _annotate_file_sizes(repo_result, repo_root, output_mode)
         return repo_result
 
     # Merge results: repo section + vault section with absolute paths
+    repo_result = _annotate_file_sizes(repo_result, repo_root, output_mode)
+    vault_output = _annotate_file_sizes(vault_output, Path(vault_root), output_mode)
     return _merge_results(repo_result, vault_output, output_mode)
 
 
@@ -288,7 +355,6 @@ def _search_vault(vault_root, rg_exe_path, output_mode, debug_mode, console,
         # rg output: "relative/path:linenum:match" or "relative/path-linenum-context"
         # or "relative/path:count" (count mode).  Must contain / or . before any
         # colon to avoid matching content-only lines or binary headers.
-        _path_line_re = re.compile(r"^[^\s:|].*[/.]")
         vault_prefix = str(vault_path)
 
         lines = formatted.split("\n")
