@@ -15,6 +15,7 @@ from pathlib import Path
 from llm.token_tracker import TokenTracker
 from utils.settings import server_settings, context_settings
 from utils.logger import MarkdownConversationLogger
+from utils.user_message_logger import UserMessageLogger
 from utils.result_parsers import extract_exit_code, extract_metadata_from_result
 
 # Token counting constants
@@ -61,6 +62,9 @@ class ChatManager:
             self.markdown_logger = MarkdownConversationLogger(
                 conversations_dir=context_settings.conversations_dir
             )
+
+        # User message logging (always on, for dream memory system)
+        self.user_message_logger = UserMessageLogger()
 
         # Compaction lock: prevents compaction during active tool execution
         # Set by agentic.py before executing tools, cleared after all results appended
@@ -1393,6 +1397,10 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             server_path,
             "-m", model_path,
             "-ngl", str(server_settings.ngl_layers),
+            "--threads", str(server_settings.threads),
+            "--batch-size", str(server_settings.batch_size),
+            "--ubatch-size", str(server_settings.ubatch_size),
+            "--flash-attn" if server_settings.flash_attn else "--no-flash-attn",
             "--split-mode", "none",
             "--ctx-size", str(server_settings.ctx_size),
             "--n-predict", str(server_settings.n_predict),
@@ -1400,6 +1408,7 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             "--host", host,
             "--port", str(port),
             "--jinja",
+            "--reasoning", "off",
         ]
 
         # Restrict to RTX 5070 Ti only (GPU 0)
@@ -1475,6 +1484,10 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         """
         if self.markdown_logger:
             self.markdown_logger.log_message(message)
+
+        # Always log user messages to JSONL for dream memory processing
+        if message.get("role") == "user" and message.get("content"):
+            self.user_message_logger.log_user_message(message["content"])
 
     def sync_log(self):
         """Rewrite the entire conversation log to match current message state.

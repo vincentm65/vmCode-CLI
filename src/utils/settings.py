@@ -28,10 +28,14 @@ def left_align_headings(text: str) -> str:
 @dataclass
 class ServerSettings:
     """Local llama-server configuration."""
-    ngl_layers: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("ngl_layers", 30))
+    ngl_layers: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("ngl_layers", 99))
     ctx_size: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("ctx_size", 8192))
     n_predict: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("n_predict", 8192))
     rope_scale: float = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("rope_scale", 1.0))
+    threads: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("threads", 4))
+    batch_size: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("batch_size", 2048))
+    ubatch_size: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("ubatch_size", 512))
+    flash_attn: bool = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("flash_attn", True))
     health_check_timeout_sec: int = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("health_check_timeout_sec", 120))
     health_check_interval_sec: float = field(default_factory=lambda: _CONFIG.get("SERVER_SETTINGS", {}).get("health_check_interval_sec", 1.0))
 
@@ -111,6 +115,12 @@ class PromptSettings:
 
 
 @dataclass
+class DreamSettings:
+    """Dream memory consolidation settings."""
+    enabled: bool = field(default_factory=lambda: _CONFIG.get("DREAM_SETTINGS", {}).get("enabled", True))
+
+
+@dataclass
 class ObsidianSettings:
     """Obsidian vault integration settings.
 
@@ -171,9 +181,9 @@ tool_settings = ToolSettings()
 file_settings = FileSettings()
 context_settings = ContextSettings()
 sub_agent_settings = SubAgentSettings()
+dream_settings = DreamSettings()
 obsidian_settings = ObsidianSettings()
 prompt_settings = PromptSettings()
-
 # Tool execution constants
 MAX_TOOL_CALLS = tool_settings.max_tool_calls
 MAX_COMMAND_OUTPUT_LINES = tool_settings.max_command_output_lines

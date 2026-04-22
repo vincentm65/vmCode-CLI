@@ -155,6 +155,9 @@ def _cron_remove(console, sub_args, cron_config, notify_scheduler):
     if not job_id:
         console.print("[red]Usage: /cron remove <id>[/red]")
         return CommandResult(status="handled")
+    if job_id == "dream":
+        console.print("[red]The 'dream' job is managed by DREAM_SETTINGS.enabled in config.yaml and cannot be removed.[/red]")
+        return CommandResult(status="handled")
     if cron_config.remove_job(job_id):
         notify_scheduler()
         console.print(f"[green]Removed cron job '{job_id}'[/green]")
@@ -170,6 +173,9 @@ def _cron_toggle(console, sub_args, cron_config, notify_scheduler, enable):
     job_id = sub_args.strip()
     if not job_id:
         console.print(f"[red]Usage: /cron {verb} <id>[/red]")
+        return CommandResult(status="handled")
+    if not enable and job_id == "dream":
+        console.print("[red]The 'dream' job is managed by DREAM_SETTINGS.enabled in config.yaml and cannot be disabled via /cron.[/red]")
         return CommandResult(status="handled")
     if job_id in cron_config.jobs:
         cron_config.update_job(job_id, enabled=enable)

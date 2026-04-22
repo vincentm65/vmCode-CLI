@@ -273,6 +273,40 @@ def _write_job_log(job: CronJob, output: str, error: bool):
         logger.error("Failed to write cron log: %s", e)
 
 
+# ── Dream job (auto-seeded) ─────────────────────────────────────────────
+
+DREAM_JOB_ID = "dream"
+DREAM_JOB_SCHEDULE = "daily at 4am"
+
+
+def ensure_dream_job(config: CronConfig) -> None:
+    """Sync the dream memory job with the DREAM_SETTINGS.enabled config.
+
+    - Enabled and missing  → seed the job
+    - Enabled and present  → no-op
+    - Disabled and present → remove the job
+    - Disabled and missing → no-op
+    """
+    from utils.settings import dream_settings
+
+    if dream_settings.enabled:
+        if DREAM_JOB_ID in config.jobs:
+            return
+        job = CronJob(
+            id=DREAM_JOB_ID,
+            schedule=DREAM_JOB_SCHEDULE,
+            command="Run the dream memory consolidation process. Read yesterday's user messages from ~/.bone/conversations/, analyze them for preferences and patterns, and consolidate into memory files. Then clean up JSONL files older than 7 days.",
+            enabled=True,
+            description="Dream memory consolidation — scans user messages and updates memories",
+        )
+        config.add_job(job)
+        logger.info("Seeded dream memory cron job (daily at 4am)")
+    else:
+        if DREAM_JOB_ID in config.jobs:
+            config.remove_job(DREAM_JOB_ID)
+            logger.info("Removed dream memory cron job (disabled in config)")
+
+
 def run_single_job(job: CronJob, console=None, interactive=False) -> None:
     """Execute a single cron job without requiring a CronScheduler instance.
 
@@ -321,10 +355,27 @@ def run_single_job(job: CronJob, console=None, interactive=False) -> None:
         # Fresh ChatManager for this job
         chat_manager = ChatManager()
 
-        # Build the prompt — inject context about cron execution
+        # Dream job: auto-approve edits and run cleanup before agent starts
+        if job.id == DREAM_JOB_ID:
+            chat_manager.approve_mode = "accept_edits"
+            from utils.user_message_logger import UserMessageLogger
+            removed = UserMessageLogger.cleanup_old_files()
+            if removed:
+                logger.info("Dream job: removed %d old JSONL files", removed)
+
+        # Build the prompt — load dream.md for dream job, else use command field
+        if job.id == DREAM_JOB_ID:
+            dream_prompt_path = Path(__file__).resolve().parents[2] / "prompts" / "main" / "dream.md"
+            if dream_prompt_path.is_file():
+                command_text = dream_prompt_path.read_text(encoding="utf-8").strip()
+            else:
+                command_text = job.command
+        else:
+            command_text = job.command
+
         prompt = (
             f"[Cron job: {job.id}]\n"
-            f"{job.command}"
+            f"{command_text}"
         )
 
         repo_root = Path.cwd().resolve()
@@ -371,6 +422,9 @@ class CronScheduler:
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
         self._running = False
+
+        # Auto-seed the dream memory job if it doesn't exist
+        ensure_dream_job(self.config)
 
     def start(self):
         """Start the cron scheduler background thread."""

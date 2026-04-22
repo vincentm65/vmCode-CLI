@@ -4,8 +4,9 @@ Two-layer persistent memory:
 - User memory (global): ~/.bone/user_memory.md
 - Project memory (per-repo): {repo_root}/.bone/agents.md
 
-The agent writes to these files via edit_file (auto-approved, fire-and-forget).
-Memory content is injected into the system prompt on every conversation start.
+Memory files are read-only during conversations — loaded into the system prompt
+for context but never written inline. All writes happen through the dream cron job,
+which consolidates user messages into focused memories nightly.
 """
 
 import logging
@@ -16,8 +17,6 @@ logger = logging.getLogger(__name__)
 
 # Capacity constants (prompt-enforced, no code enforcement)
 CHAR_LIMIT = 1500  # suggested chars per layer (~500 tokens)
-SECTION_LIMIT = 8   # suggested max sections per layer
-ENTRY_LIMIT = 20    # suggested max entries per section
 
 
 class MemoryManager:
@@ -80,17 +79,6 @@ class MemoryManager:
         """Read and return project memory file content. Returns empty string if missing."""
         return self._read_file(self.project_memory_path)
 
-    def load_all(self) -> str:
-        """Load both layers, combined for prompt injection."""
-        parts = []
-        user = self.load_user_memory()
-        project = self.load_project_memory()
-        if user.strip():
-            parts.append(user.strip())
-        if project.strip():
-            parts.append(project.strip())
-        return "\n\n".join(parts)
-
     def get_user_usage(self) -> dict:
         """Return {chars_used, chars_limit} for user memory."""
         content = self.load_user_memory()
@@ -100,81 +88,6 @@ class MemoryManager:
         """Return {chars_used, chars_limit} for project memory."""
         content = self.load_project_memory()
         return {"chars_used": len(content), "chars_limit": CHAR_LIMIT}
-
-    def get_prompt_section(self) -> str:
-        """Build the full memory system prompt section.
-
-        Includes:
-        - Guidelines text with resolved file paths
-        - Capacity headers and memory content (if files have entries beyond headers)
-
-        Returns:
-            Complete prompt section string. Includes guidelines even when
-            memory files are empty (just headers). Returns guidelines with
-            placeholder paths if no MemoryManager instance exists.
-        """
-        user_path = str(self.user_memory_path)
-        project_path = str(self.project_memory_path)
-
-        lines = [
-            "## Memory System",
-            "",
-            "You have a two-layer memory system that persists across conversations:",
-            f"- User memory (global): {user_path} — preferences, identity, work patterns",
-            f"- Project memory (per-repo): {project_path} — context, conventions, decisions, current work",
-            "",
-            "Both memory layers are loaded into this prompt at conversation start. "
-            "You can already see all memories below.",
-            "",
-            "To save information, use `edit_file` to write directly to the memory files. "
-            "These edits are auto-approved and run silently.",
-            "Add a timestamp in parentheses: `*(YYYY-MM-DD)*`",
-            "",
-            "### Save these (proactively):",
-            "- User preferences: \"I prefer TypeScript over JavaScript\" → user memory",
-            "- Environment facts: \"This project uses Python 3.11 with pytest\" → project memory",
-            "- Corrections: \"Don't use sudo for docker, user is in docker group\" → project memory",
-            "- Conventions: \"Project uses tabs, 120-char line width\" → project memory",
-            "- Completed work: \"Migrated database schema on 2026-04-20\" → project memory",
-            "- Explicit requests: \"Remember that my API key rotation happens monthly\" → user memory",
-            "",
-            "### Skip these:",
-            "- Trivial/obvious info: \"User asked about Python\" — too vague to be useful",
-            "- Easily re-discovered facts: \"Python 3.12 supports f-string nesting\" — can web search this",
-            "- Raw data dumps: Large code blocks, log files, data tables — too big for memory",
-            "- Session-specific ephemera: Temporary file paths, one-off debugging context",
-            "- Information already in agents.md or other context files",
-            "",
-            "Keep memories concise and information-dense. Use the section that best fits the information.",
-            "To update a memory, edit the entry in place with a new timestamp.",
-            "To remove a memory, delete the line.",
-            f"Stay under {CHAR_LIMIT} chars per file (~500 tokens). "
-            f"When above 80% ({int(CHAR_LIMIT * 0.8)} chars), consolidate older entries before adding new ones.",
-        ]
-
-        # Add capacity headers and memory content if files have real content
-        user_content = self.load_user_memory()
-        user_usage = self.get_user_usage()
-        # Only show block if file has more than just the header
-        if self._has_entries(user_content):
-            pct = user_usage["chars_used"] * 100 // user_usage["chars_limit"]
-            lines.extend([
-                "",
-                f"USER MEMORY [{pct}% — {user_usage['chars_used']}/{user_usage['chars_limit']} chars]",
-                user_content.strip(),
-            ])
-
-        project_content = self.load_project_memory()
-        project_usage = self.get_project_usage()
-        if self._has_entries(project_content):
-            pct = project_usage["chars_used"] * 100 // project_usage["chars_limit"]
-            lines.extend([
-                "",
-                f"PROJECT MEMORY [{pct}% — {project_usage['chars_used']}/{project_usage['chars_limit']} chars]",
-                project_content.strip(),
-            ])
-
-        return "\n".join(lines)
 
     # ---- Private helpers ----
 

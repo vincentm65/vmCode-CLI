@@ -223,9 +223,11 @@ def _prepare_edit(arguments, repo_root, gitignore_spec=None, vault_root=None) ->
     if not path or not isinstance(path, str) or not path.strip():
         raise FileEditError("Missing or invalid 'path' parameter")
 
-    # Memory files (.bone/ and user_memory.md) are auto-approved writes that the
-    # system itself adds to .gitignore, so gitignore filtering would block them.
-    is_memory = Path(path).parent.name == ".bone" or Path(path).name == "user_memory.md"
+    # Memory files (.bone/ under repo root and user_memory.md) are auto-approved
+    # writes that the system itself adds to .gitignore, so gitignore filtering
+    # would block them. Must anchor to repo_root to avoid matching any .bone/ dir.
+    _resolved = (repo_root / path).resolve()
+    is_memory = str(_resolved).startswith(str((repo_root / ".bone").resolve()) + os.sep) or Path(path).name == "user_memory.md"
 
     # Resolve and validate path using PathResolver
     try:
@@ -236,9 +238,9 @@ def _prepare_edit(arguments, repo_root, gitignore_spec=None, vault_root=None) ->
         raise FileEditError(str(e), details=e.details)
 
     if not file_path.exists():
-        # Auto-create memory files (.bone/) with default header on first write.
-        # These are already auto-approved, so directory+file creation is safe.
-        if file_path.parent.name == ".bone" or file_path.name == "user_memory.md":
+        # Auto-create memory files (.bone/ under repo root) with default header
+        # on first write. Already auto-approved, so creation is safe.
+        if is_memory:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             header = "# Project Memory\n\n" if file_path.name == "agents.md" else "# User Memory\n\n"
             file_path.write_text(header, encoding="utf-8")

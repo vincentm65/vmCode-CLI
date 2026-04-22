@@ -1,4 +1,4 @@
-﻿
+
 
 # Modular prompt composition for native function calling
 #
@@ -145,27 +145,40 @@ SECTION_TOOL_DEPS = {
     "editing_pattern": ["edit_file"],
     "task_lists_pattern": ["create_task_list", "complete_task", "show_task_list", "edit_file"],
     "temp_folder": ["create_file"],
-    "memory_system": ["edit_file"],
 }
 
 
 def _build_memory_section() -> str | None:
-    """Build the memory system section for the system prompt.
+    """Build the read-only memory context section for the system prompt.
 
-    Returns the section from MemoryManager if the singleton is available
-    and edit_file tool is enabled. Returns None otherwise.
+    Injects live memory content blocks with capacity headers.
+    No writing instructions — memory files are read-only during conversations.
+    All writes happen through the dream cron job.
+
+    Returns None if MemoryManager is not initialized.
     """
-    # Check tool availability (memory system requires edit_file)
-    from tools.helpers.base import ToolRegistry
-    if ToolRegistry.is_disabled("edit_file"):
-        return None
-
     try:
         from core.memory import MemoryManager
         manager = MemoryManager.get_instance()
         if manager is None:
             return None
-        return manager.get_prompt_section()
+
+        result = ""
+
+        # Append capacity headers and memory content if files have real content
+        user_content = manager.load_user_memory()
+        user_usage = manager.get_user_usage()
+        if manager._has_entries(user_content):
+            pct = user_usage["chars_used"] * 100 // user_usage["chars_limit"]
+            result += f"USER MEMORY [{pct}% — {user_usage['chars_used']}/{user_usage['chars_limit']} chars]\n{user_content.strip()}\n\n"
+
+        project_content = manager.load_project_memory()
+        project_usage = manager.get_project_usage()
+        if manager._has_entries(project_content):
+            pct = project_usage["chars_used"] * 100 // project_usage["chars_limit"]
+            result += f"PROJECT MEMORY [{pct}% — {project_usage['chars_used']}/{project_usage['chars_limit']} chars]\n{project_content.strip()}\n\n"
+
+        return result.strip() if result else None
     except Exception:
         return None
 

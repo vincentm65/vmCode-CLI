@@ -2,7 +2,6 @@
 
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Optional
 
@@ -171,63 +170,6 @@ class AgenticOrchestrator:
         """
         # Check if we're in a parallel context with suppressed console
         return self._parallel_context.get('console', self.console)
-
-    def _is_memory_file(self, path: str) -> bool:
-        """Check if path targets a memory file (auto-approved).
-
-        Auto-approve scope (restricted to known memory paths):
-        - {repo_root}/.bone/agents.md — project memory
-        - ~/.bone/user_memory.md — global user memory
-        - Any file under {repo_root}/.bone/ — project memory directory
-
-        Args:
-            path: File path from tool arguments.
-
-        Returns:
-            True if the file should be auto-approved as a memory file.
-        """
-        p = Path(path).resolve()
-        repo_root = Path(self.repo_root).resolve()
-        # Known memory paths
-        if p == Path.home() / ".bone" / "user_memory.md":
-            return True
-        # Any file under {repo_root}/.bone/ (future memory files)
-        bone_dir = repo_root / ".bone"
-        if p.is_relative_to(bone_dir):
-            return True
-        return False
-
-    def _execute_memory_edit(self, arguments) -> bool:
-        """Apply a memory file edit synchronously with one retry on failure.
-
-        Args:
-            arguments: Tool arguments dict (path, search, replace, etc.)
-        """
-        from tools.edit import _execute_edit_file
-
-        kwargs = dict(
-            path=arguments.get("path"),
-            search=arguments.get("search"),
-            replace=arguments.get("replace"),
-            repo_root=self.repo_root,
-            console=None,  # silent — no output in chat
-            gitignore_spec=self.gitignore_spec,
-            context_lines=arguments.get("context_lines", 3),
-            vault_root=vault_root_str(),
-        )
-        try:
-            _execute_edit_file(**kwargs)
-            return True
-        except Exception as e:
-            logger.warning("Memory edit failed (retrying in 0.5s): %s", e)
-            time.sleep(0.5)
-            try:
-                _execute_edit_file(**kwargs)
-                logger.info("Memory edit retry succeeded after initial failure.")
-                return True
-            except Exception as e2:
-                logger.error("Memory edit failed after retry: %s", e2)
-                return False
 
     def run(self, user_input, thinking_indicator=None, allowed_tools=None):
         """Main orchestration loop.
@@ -908,25 +850,11 @@ class AgenticOrchestrator:
 
                 # Check if tool requires approval
                 if tool.requires_approval:
-                    # For edit_file: check memory file auto-approve first
+                    # For edit_file: validate path then request approval
                     if function_name == "edit_file":
                         edit_path = arguments.get("path", "")
                         if not edit_path:
                             return False, "Error: path is required for edit_file."
-
-                        # Memory file: auto-approve, fire-and-forget
-                        if self._is_memory_file(edit_path):
-                            # Generate preview to validate the edit (reuses existing logic)
-                            result = tool.execute(arguments, context)
-                            preview, is_valid = resolve_edit_preview(result)
-                            if is_valid:
-                                ok = self._execute_memory_edit(arguments)
-                                if self.debug_mode:
-                                    console = self._get_console()
-                                    if console:
-                                        console.print(f"[dim]Memory edit auto-approved: {edit_path}[/dim]")
-                                return False, "Memory saved." if ok else f"Memory edit failed: {edit_path}"
-                            return False, str(result)
 
                         # Normal edit: generate preview and request approval
                         result = tool.execute(arguments, context)
