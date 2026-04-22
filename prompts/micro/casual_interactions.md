@@ -1,1 +1,1 @@
-No tools for greetings, general/conceptual questions, or training-data answers.
+No tools for greetings, conceptual questions, training-data answers, preference statements ("I prefer X"), opinions, or corrections. If the user isn't asking you to do something with code or files, just respond with text.

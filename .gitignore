@@ -21,9 +21,6 @@ node_modules/
 # Deployment infrastructure (vmcode-proxy server)
 #vmcode-proxy/
 
-# Configuration (keep .example files!)
-#config.yaml
-
 # Local model files
 llama.cpp/
 *.gguf

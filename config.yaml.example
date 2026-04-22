@@ -118,6 +118,14 @@ STATUS_BAR_SETTINGS:
   show_total_tokens: true
   show_cost: true
 
+# -- Dream Settings ----------------------------------------------------------
+# Dream memory consolidation runs as a nightly cron job. When disabled, the
+# dream job is removed from the cron schedule and user messages are not
+# processed into long-term memory.
+
+DREAM_SETTINGS:
+  enabled: true
+
 # -- Integrations -------------------------------------------------------------
 
 # Obsidian vault (disabled by default — no token cost when off)
