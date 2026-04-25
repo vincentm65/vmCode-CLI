@@ -88,7 +88,6 @@ def _handle_tool_limit_reached(chat_manager, console):
             response,
             model_name=provider_cfg.get("model", ""),
         )
-
     try:
         final_message = response["choices"][0]["message"]
     except (KeyError, IndexError):
@@ -105,8 +104,6 @@ def _handle_tool_limit_reached(chat_manager, console):
 
     console.print("[red]Error: model returned empty response after tool limit reached.[/red]")
     return False
-
-
 
 class AgenticOrchestrator:
     """Orchestrates the agentic tool-calling loop.

@@ -591,12 +591,15 @@ def _handle_clear(chat_manager, console, debug_mode_container, args, cron_schedu
     conv_cache_creation = chat_manager.token_tracker.conv_cache_creation_tokens
     if conv_cache_read > 0 or conv_cache_creation > 0:
         total_cached = conv_cache_read + conv_cache_creation
-        cache_hit_pct = (
+        cache_activity_read_pct = (
             conv_cache_read / total_cached * 100
         ) if total_cached > 0 else 0
+        cache_coverage_pct = (
+            conv_cache_read / conv_in * 100
+        ) if conv_in > 0 else 0
         console.print(f"  Cache read:   {conv_cache_read:,} tokens")
         console.print(f"  Cache write:  {conv_cache_creation:,} tokens")
-        console.print(f"  ({cache_hit_pct:.0f}% cache hit rate)")
+        console.print(f"  ({cache_coverage_pct:.0f}% input cached, {cache_activity_read_pct:.0f}% cache reads)")
 
     # Display cost — combined actual + estimated, with config-based fallback
     tracker_conv = chat_manager.token_tracker
@@ -1104,14 +1107,28 @@ def _handle_usage(chat_manager, console, debug_mode_container, args, cron_schedu
     )
     if show_cache:
         total_cached = tracker.total_cache_read_tokens + tracker.total_cache_creation_tokens
-        cache_hit_pct = (
+        cache_activity_read_pct = (
             tracker.total_cache_read_tokens
             / total_cached * 100
         ) if total_cached > 0 else 0
+        cache_coverage_pct = (
+            tracker.total_cache_read_tokens
+            / tracker.total_prompt_tokens * 100
+        ) if tracker.total_prompt_tokens > 0 else 0
         console.print()
-        console.print(f"[#5F9EA0]Input Cache ({cache_hit_pct:.0f}% hit rate):[/#5F9EA0]")
+        console.print(
+            f"[#5F9EA0]Input Cache ({cache_coverage_pct:.0f}% input cached, "
+            f"{cache_activity_read_pct:.0f}% cache reads):[/#5F9EA0]"
+        )
         console.print(f"  Cache read:   {tracker.total_cache_read_tokens:,} tokens")
         console.print(f"  Cache write:  {tracker.total_cache_creation_tokens:,} tokens")
+        if current_provider == "codex" and total_cached == 0:
+            if tracker.last_cache_metrics_reported is False:
+                keys = ", ".join(tracker.last_usage_keys) if tracker.last_usage_keys else "none"
+                console.print("  [dim]Codex did not report any cache-token fields in the last usage payload.[/dim]")
+                console.print(f"  [dim]Last usage keys: {keys}[/dim]")
+            elif tracker.last_cache_metrics_reported is None:
+                console.print("  [dim]No usage payload has been recorded yet for this Codex session.[/dim]")
     console.print()
     
 

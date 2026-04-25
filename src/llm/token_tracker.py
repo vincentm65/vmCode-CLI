@@ -56,6 +56,11 @@ class TokenTracker:
         self.conv_cache_read_tokens = 0        # Per-conversation cache read tokens
         self.conv_cache_creation_tokens = 0    # Per-conversation cache creation tokens
 
+        # Last usage payload diagnostics (useful for debugging provider reporting gaps)
+        self.last_usage_snapshot = None
+        self.last_usage_keys = []
+        self.last_cache_metrics_reported = None
+
         # Active prompt variant (loaded from prompts/ directory)
         self.current_variant = "main"
 
@@ -84,6 +89,16 @@ class TokenTracker:
         # Pre-extracted usage dicts (streaming) pass through unchanged.
         if "usage" in usage_data:
             usage_data = usage_with_cost(usage_data)
+
+        self.last_usage_snapshot = dict(usage_data)
+        self.last_usage_keys = sorted(usage_data.keys())
+        details = usage_data.get('prompt_tokens_details')
+        self.last_cache_metrics_reported = (
+            usage_data.get('cache_read_input_tokens') is not None
+            or usage_data.get('cache_creation_input_tokens') is not None
+            or usage_data.get('cached_tokens') is not None
+            or (isinstance(details, dict) and details.get('cached_tokens') is not None)
+        )
 
         # Update cumulative token counts (accumulated for billing, never reset by compaction)
         prompt_tokens = usage_data.get('prompt_tokens', 0)

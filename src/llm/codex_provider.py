@@ -97,13 +97,16 @@ class CodexResponsesHandler:
             if model_name:
                 payload["model"] = model_name
 
-        if "prompt_cache_key" not in payload:
-            model = payload.get("model") or "unknown-model"
-            instructions_hash = hashlib.sha256(instructions.encode("utf-8")).hexdigest()[:16]
-            payload["prompt_cache_key"] = f"bone-agent:{model}:{instructions_hash}"
-
         if tools:
             payload["tools"] = [self._convert_tool_to_responses(tool) for tool in tools]
+
+        if "prompt_cache_key" not in payload:
+            model = payload.get("model") or "unknown-model"
+            payload["prompt_cache_key"] = self._build_prompt_cache_key(
+                model=model,
+                instructions=instructions,
+                tools=payload.get("tools"),
+            )
 
         if "temperature" not in payload and config.get("allow_temperature", True):
             payload["temperature"] = config.get("default_temperature", 0.1)
@@ -111,6 +114,28 @@ class CodexResponsesHandler:
             payload["top_p"] = config.get("default_top_p", 0.9)
 
         return payload
+
+    def _build_prompt_cache_key(
+        self,
+        *,
+        model: str,
+        instructions: str,
+        tools: Optional[list] = None,
+    ) -> str:
+        """Build a stable prompt-cache key for the reusable Codex prefix."""
+        cache_scope = {
+            "model": model,
+            "instructions": instructions,
+            "tools": tools or [],
+        }
+        canonical = json.dumps(
+            cache_scope,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+        cache_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:24]
+        return f"bone-agent:{cache_hash}"
 
     def parse_response(self, response_json: Dict[str, Any]) -> Dict[str, Any]:
         """Parse Responses API output into Chat Completions format."""
