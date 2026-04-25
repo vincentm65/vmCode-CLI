@@ -45,6 +45,10 @@ class ChatManager:
         self.task_list = []
         self.task_list_title = None
 
+        # In-session loaded skill tracking. The actual skill instructions live
+        # in message history; this only prevents duplicate explicit injections.
+        self.loaded_skills = set()
+
         # .gitignore filtering state
         self._gitignore_spec = None
         self._gitignore_mtime = None
@@ -93,6 +97,9 @@ class ChatManager:
         # Start new conversation logging session
         if self.markdown_logger:
             self.markdown_logger.start_session()
+
+        # Loaded skills are scoped to the current message history.
+        self.loaded_skills = set()
 
         # Start with system prompt only
         self.messages = [{"role": "system", "content": self._build_system_prompt()}]

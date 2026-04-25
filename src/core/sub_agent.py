@@ -17,6 +17,11 @@ class HardLimitExceeded(Exception):
     pass
 
 
+class BilledLimitExceeded(Exception):
+    """Raised when the sub-agent hits its cumulative billed token limit."""
+    pass
+
+
 def _format_messages_dump(messages) -> str:
     """Format sub-agent message history as a markdown dump.
 
@@ -208,27 +213,40 @@ def run_sub_agent(
     original_chat_completion = temp_chat_manager.client.chat_completion
 
     _soft_limit_warned = False
+    _billed_warning_sent = False
 
     def _chat_completion_with_token_hint(messages, **kwargs):
-        """Prepend a system-level token budget hint (and soft-limit warning once) to every LLM call."""
-        nonlocal _soft_limit_warned
+        """Prepend a system-level token budget hint and one-time warnings to every LLM call."""
+        nonlocal _soft_limit_warned, _billed_warning_sent
         tt = temp_chat_manager.token_tracker
-        hint = f"[Token budget: {tt.current_context_tokens:,} curr / {tt.conv_total_tokens:,} total]"
+        hint = f"[Token budget: {tt.current_context_tokens:,} curr / {tt.conv_total_tokens:,} total billed]"
+        warnings = []
 
         if not _soft_limit_warned and tt.current_context_tokens >= sub_agent_settings.soft_limit_tokens:
             _soft_limit_warned = True
-            hint = (
-                f"WARNING: You have exceeded the soft token limit "
+            warnings.append(
+                f"WARNING: You have exceeded the current-context soft token limit "
                 f"({tt.current_context_tokens:,} / {sub_agent_settings.soft_limit_tokens:,}). "
-                "STOP exploring and return your findings immediately. Do NOT call any more tools. "
-                + hint
+                "STOP exploring and return your findings immediately. Do NOT call any more tools."
             )
+
+        if not _billed_warning_sent and tt.conv_total_tokens >= sub_agent_settings.billed_warning_tokens:
+            _billed_warning_sent = True
+            warnings.append(
+                f"WARNING: You have exceeded the cumulative billed token warning limit "
+                f"({tt.conv_total_tokens:,} / {sub_agent_settings.billed_warning_tokens:,}). "
+                "This sub-agent may be running away. STOP exploring and return your findings immediately. "
+                "Do NOT call any more tools."
+            )
+
+        if warnings:
+            hint = "\n".join([*warnings, hint])
 
         token_msg = {"role": "system", "content": hint}
         return original_chat_completion([token_msg, *messages], **kwargs)
 
     def _get_llm_response_with_hard_limit(allowed_tools=None):
-        """Wrapper to check hard token limit and update panel with live token counts."""
+        """Wrapper to check context and billed token limits and update panel state."""
         tt = temp_chat_manager.token_tracker
 
         # Check hard token limit before making LLM call
@@ -238,6 +256,19 @@ def run_sub_agent(
             raise HardLimitExceeded(
                 f"Sub-agent hard token limit exceeded: "
                 f"{tt.current_context_tokens:,} / {sub_agent_settings.hard_limit_tokens:,} tokens."
+            )
+
+        # Check cumulative billed tokens to stop runaway sub-agents even when
+        # current context remains below the prompt-size hard limit.
+        #
+        # Note: the billed warning is injected by _chat_completion_with_token_hint
+        # on the next chat_completion call. This hard stop runs before each LLM
+        # response, so once we hit the billed hard limit the warning may never be
+        # delivered if no further chat_completion call is made.
+        if tt.conv_total_tokens >= sub_agent_settings.billed_hard_limit_tokens:
+            raise BilledLimitExceeded(
+                f"Sub-agent billed token limit exceeded: "
+                f"{tt.conv_total_tokens:,} / {sub_agent_settings.billed_hard_limit_tokens:,} tokens."
             )
 
         # Update panel with live token counts
@@ -255,6 +286,7 @@ def run_sub_agent(
     temp_chat_manager.client.chat_completion = _chat_completion_with_token_hint
 
     hard_limit_exceeded = False
+    billed_limit_exceeded = False
 
     try:
         # Run sub-agent task
@@ -265,6 +297,8 @@ def run_sub_agent(
         )
     except HardLimitExceeded:
         hard_limit_exceeded = True
+    except BilledLimitExceeded:
+        billed_limit_exceeded = True
     except LLMError as e:
         return {
             "result": "",
@@ -309,7 +343,15 @@ def run_sub_agent(
             if msg.get("role") == "assistant" and msg.get("content"):
                 final_content = msg["content"].strip()
                 break
-        result = final_content
+
+        if billed_limit_exceeded:
+            prefix = (
+                "WARNING: Sub-agent billed token limit reached. "
+                "Returning current findings early to prevent runaway execution."
+            )
+            result = f"{prefix}\n\n{final_content}" if final_content else prefix
+        else:
+            result = final_content
 
     usage = {
         "prompt_tokens": delta_prompt,
@@ -326,4 +368,5 @@ def run_sub_agent(
         "model": temp_chat_manager.client.model,
         "error": None,
         "hard_limit_exceeded": hard_limit_exceeded,
+        "billed_limit_exceeded": billed_limit_exceeded,
     }

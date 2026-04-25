@@ -130,7 +130,24 @@ bone
 - `/account` - View your bone-agent account and plan details
 - `/plan` - View available plans and pricing
 - `/upgrade` - Upgrade your subscription
+- `/skills list [query]` - List saved skills, optionally filtered by name or content
+- `/skills show <name>` - Display a saved skill
+- `/skills add <name>` - Create a reusable prompt skill in your editor
+- `/skills edit <name>` - Open a saved skill in your editor
+- `/skills modify <name> [prompt]` - Update an existing saved skill inline or in your editor
+- `/skills load <name>` - Load a saved skill into the current chat
+- `/skills use <name>` - Alias for `/skills load`
+- `/skills remove <name>` - Delete a saved skill
+- `/skills dir` - Print the skills directory path
 - `/help` - Display all available commands
+
+Example:
+
+```text
+/skills add frontend_design
+/skills modify frontend_design Use restrained, production-quality UI patterns.
+/skills use frontend_design
+```
 
 /help Menu:
 <img width="1843" height="1349" alt="image" src="https://github.com/user-attachments/assets/631ab805-f012-4bb6-a031-c82a339e94c5" />

@@ -1,8 +1,9 @@
 """search_plugins core tool for on-demand plugin discovery.
 
 This tool lets the LLM agent search for available plugin tools and
-activate them. Plugin schemas are not sent by default to avoid context
-bloat — they are only included after activation.
+saved skills. Matching plugins are activated automatically, while skills
+must be loaded explicitly. Plugin schemas are not sent by default to
+avoid context bloat — they are only included after activation.
 """
 
 from typing import List, Optional
@@ -14,11 +15,11 @@ from tools.helpers.base import tool, ToolRegistry, TERMINAL_NONE
 @tool(
     name="search_plugins",
     description=(
-        "Search for available plugin tools that can help with your task. "
-        "Plugin tools are NOT in your available tools by default — use this "
-        "to discover and activate them. Returns matching plugin names and "
-        "descriptions. Once activated, the plugin's full schema will be "
-        "available in your next response."
+        "Search for available plugin tools and saved skills that can help "
+        "with your task. Plugins are NOT in your available tools by default "
+        "— use this to discover and activate them. Matching skills are "
+        "returned for explicit loading with load_skill. Once a plugin is "
+        "activated, its full schema will be available in your next response."
     ),
     parameters={
         "type": "object",
@@ -44,66 +45,74 @@ def search_plugins(
     query: str,
     category: str = None,
 ) -> str:
-    """Search the plugin manifest and activate matching plugins.
-
-    Args:
-        query: Search query describing the needed capability
-        category: Optional category filter
-
-    Returns:
-        Formatted result with activated plugin names and descriptions
-    """
+    """Search discoverable capabilities and activate matched plugins only."""
     from tools.helpers.plugin_manifest import plugin_manifest
 
-    # Check if any core tool matches the query — early return
     core_tools = ToolRegistry.get_all(include_plugins=False)
     query_lower = query.lower()
+    core_tool_note = None
     for ct in core_tools:
-        if query_lower == ct.name.lower() or query_lower in ct.name.lower():
-            return (
-                f"exit_code=0\n"
+        if query_lower == ct.name.lower():
+            core_tool_note = (
                 f"'{query}' matches a core tool that is already available: **{ct.name}**.\n"
                 f"Description: {ct.description}"
             )
+            break
 
-    # Search the plugin manifest
-    matches = plugin_manifest.search(query, category=category, max_results=5)
+    matches = plugin_manifest.search_capabilities(query, category=category, max_results=5)
 
     if not matches:
-        # No matches — suggest available categories
+        lines = ["exit_code=0"]
+        if core_tool_note:
+            lines.extend([core_tool_note, ""])
+
         categories = plugin_manifest.get_categories()
         if categories:
             cat_list = ", ".join(f"'{c}'" for c in categories)
-            return (
-                f"exit_code=0\n"
-                f"No plugins found matching '{query}'.\n"
-                f"Available plugin categories: {cat_list}\n"
-                f"Total plugins in manifest: {plugin_manifest.plugin_count()}"
-            )
-        return (
-            f"exit_code=0\n"
-            f"No plugins found matching '{query}'. "
+            lines.extend([
+                f"No plugins or skills found matching '{query}'.",
+                f"Available plugin categories: {cat_list}",
+                f"Total plugins in manifest: {plugin_manifest.plugin_count()}",
+            ])
+            return "\n".join(lines)
+
+        lines.append(
+            f"No plugins or skills found matching '{query}'. "
             f"No plugins are currently registered in the manifest."
         )
+        return "\n".join(lines)
 
-    # Activate matched plugins in the registry
-    activated = []
-    already_active = []
-    for tool_def in matches:
-        if ToolRegistry.is_plugin_active(tool_def.name):
-            already_active.append(tool_def.name)
+    plugin_count = 0
+    skill_count = 0
+    for match in matches:
+        if match.kind != "plugin" or not match.tool_def:
+            skill_count += 1
+            continue
+        plugin_count += 1
+        if ToolRegistry.is_plugin_active(match.tool_def.name):
+            match.already_active = True
         else:
-            ToolRegistry.activate_plugin(tool_def)
-            activated.append(tool_def.name)
+            ToolRegistry.activate_plugin(match.tool_def)
+            match.activated = True
 
-    # Build result
-    lines = [f"exit_code=0\nFound {len(matches)} plugin(s) matching '{query}':\n"]
+    lines = ["exit_code=0"]
+    if core_tool_note:
+        lines.extend([core_tool_note, ""])
 
-    for tool_def in matches:
-        status = "activated" if tool_def.name in activated else "already active"
-        cat_part = f" [{tool_def.category}]" if tool_def.category else ""
-        lines.append(f"- **{tool_def.name}**{cat_part} ({status}): {tool_def.description}")
-        if tool_def.tags:
-            lines.append(f"  Tags: {', '.join(tool_def.tags)}")
+    lines.append(
+        f"Found {len(matches)} capability match(es) for '{query}' "
+        f"({plugin_count} plugin(s), {skill_count} skill(s)):\n"
+    )
+
+    for match in matches:
+        cat_part = f" [{match.category}]" if match.category else ""
+        if match.kind == "plugin":
+            status = "activated" if match.activated else "already active"
+            lines.append(f"- **{match.name}**{cat_part} (plugin, {status}): {match.description}")
+            if match.tags:
+                lines.append(f"  Tags: {', '.join(match.tags)}")
+            continue
+        lines.append(f"- **{match.name}**{cat_part} (skill): {match.description}")
+        lines.append("  Load with: load_skill")
 
     return "\n".join(lines)

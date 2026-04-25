@@ -55,6 +55,7 @@ from . import sub_agent
 
 from . import task_list
 from . import select_option
+from . import skills
 
 # search_plugins — core meta-tool for plugin discovery
 from . import search_plugins

@@ -172,7 +172,8 @@ def review_changes(
             panel.set_complete({
                 'prompt_tokens': usage.get('prompt_tokens', 0),
                 'completion_tokens': usage.get('completion_tokens', 0),
-                'total_tokens': usage.get('total_tokens', 0)
+                'total_tokens': usage.get('total_tokens', 0),
+                'context_tokens': usage.get('context_tokens', 0),
             })
 
         raw_result = sub_agent_data.get('result', '')

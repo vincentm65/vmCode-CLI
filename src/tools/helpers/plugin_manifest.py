@@ -6,11 +6,27 @@ activated via the search_plugins core tool.
 """
 
 import logging
+from dataclasses import dataclass
 from typing import Dict, List, Optional
+
+from core.skills import SearchCandidate, SearchMatch, search_candidates, search_skill_matches
 
 from .base import ToolDefinition
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CapabilityMatch:
+    kind: str
+    name: str
+    description: str
+    category: str | None = None
+    tags: list[str] | None = None
+    tool_def: ToolDefinition | None = None
+    preview: str | None = None
+    activated: bool = False
+    already_active: bool = False
 
 
 class PluginManifest:
@@ -59,69 +75,113 @@ class PluginManifest:
         return list(self._plugins.values())
 
     def search(self, query: str, category: str = None, max_results: int = 5) -> List[ToolDefinition]:
-        """Search the manifest for plugins matching a query.
+        """Search the manifest for plugins matching a query."""
+        return [match.item for match in self.search_plugin_matches(query, category=category, max_results=max_results)]
 
-        Args:
-            query: Search query (matched against name, description, tags, category)
-            category: Optional category filter
-            max_results: Maximum number of results to return
+    def search_plugin_matches(
+        self,
+        query: str,
+        category: str = None,
+        max_results: int = 5,
+    ) -> List[SearchMatch[ToolDefinition]]:
+        """Return scored plugin matches using the shared discovery helper."""
+        candidates: list[SearchCandidate[ToolDefinition]] = []
 
-        Returns:
-            List of matching ToolDefinitions, sorted by relevance score
-        """
-        query_lower = query.lower()
-        query_terms = query_lower.split()
-
-        scored = []
         for tool_def in self._plugins.values():
-            # Apply category filter if specified
             if category and tool_def.category != category:
                 continue
+            text = " ".join(
+                part
+                for part in [
+                    tool_def.name,
+                    tool_def.description,
+                    tool_def.category or "",
+                    " ".join(tool_def.tags or []),
+                ]
+                if part
+            )
+            candidates.append(
+                SearchCandidate(
+                    item=tool_def,
+                    text=text,
+                    compact_text="",
+                    exact_text=tool_def.name,
+                )
+            )
 
-            # Calculate relevance score
-            score = 0.0
+        return search_candidates(
+            query,
+            candidates,
+            max_results=max_results,
+            item_key=lambda tool_def: tool_def.name,
+        )
 
-            # Exact name match (highest priority)
-            if query_lower == tool_def.name.lower():
-                score += 100.0
+    def search_capabilities(
+        self,
+        query: str,
+        category: str = None,
+        max_results: int = 5,
+    ) -> List[CapabilityMatch]:
+        """Search plugins and skills through one shared discovery path."""
+        capabilities: list[CapabilityMatch] = []
+        include_plugins = category in (None, "plugin")
+        include_skills = category in (None, "skill")
 
-            # Name contains query
-            if query_lower in tool_def.name.lower():
-                score += 50.0
+        if include_plugins:
+            for tool_def in self._plugins.values():
+                if category == "plugin":
+                    pass
+                elif category and tool_def.category != category:
+                    continue
+                capabilities.append(
+                    CapabilityMatch(
+                        kind="plugin",
+                        name=tool_def.name,
+                        description=tool_def.description,
+                        category=tool_def.category,
+                        tags=list(tool_def.tags or []),
+                        tool_def=tool_def,
+                    )
+                )
 
-            # Name contains individual terms
-            for term in query_terms:
-                if term in tool_def.name.lower():
-                    score += 20.0
+        if include_skills:
+            capabilities.extend(
+                CapabilityMatch(
+                    kind="skill",
+                    name=match.item.name,
+                    description=match.item.preview,
+                    category="skill",
+                    tags=["skill"],
+                    preview=match.item.preview,
+                )
+                for match in search_skill_matches(query, max_results=1000)
+            )
 
-            # Description match
-            if query_lower in tool_def.description.lower():
-                score += 30.0
-            for term in query_terms:
-                if term in tool_def.description.lower():
-                    score += 10.0
-
-            # Tag match
-            for tag in tool_def.tags:
-                if query_lower in tag.lower():
-                    score += 15.0
-                for term in query_terms:
-                    if term in tag.lower():
-                        score += 5.0
-
-            # Category match
-            if category and tool_def.category == category:
-                score += 10.0
-            elif not category and query_lower in tool_def.category.lower():
-                score += 15.0
-
-            if score > 0:
-                scored.append((score, tool_def))
-
-        # Sort by score descending
-        scored.sort(key=lambda x: x[0], reverse=True)
-
-        return [tool_def for _, tool_def in scored[:max_results]]
+        combined_candidates = [
+            SearchCandidate(
+                item=capability,
+                text=" ".join(
+                    part
+                    for part in [
+                        capability.name,
+                        capability.description,
+                        capability.category or "",
+                        " ".join(capability.tags or []),
+                    ]
+                    if part
+                ),
+                compact_text="",
+                exact_text=capability.name,
+            )
+            for capability in capabilities
+        ]
+        combined_matches = search_candidates(
+            query,
+            combined_candidates,
+            max_results=max_results,
+            item_key=lambda capability: f"{capability.kind}:{capability.name}",
+        )
+        return [match.item for match in combined_matches]
 
     def get_categories(self) -> List[str]:
         """Get all unique categories in the manifest.

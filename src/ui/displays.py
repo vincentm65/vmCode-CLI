@@ -66,6 +66,7 @@ def show_help_table(console):
     table.add_row("[bold #5F9EA0]/cd[/bold #5F9EA0] [path]", "Change working directory (no args to show current)")
     table.add_row("[bold #5F9EA0]/edit[/bold #5F9EA0], [bold #5F9EA0]/e[/bold #5F9EA0]", "Open editor for multi-line input")
     table.add_row("[bold #5F9EA0]/review[/bold #5F9EA0] [args], [bold #5F9EA0]/r[/bold #5F9EA0]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
+    table.add_row("[bold #5F9EA0]/skills[/bold #5F9EA0] [list|add|modify|remove|use]", "Manage reusable prompt skills")
     table.add_row("[bold #5F9EA0]/obsidian[/bold #5F9EA0] [set|enable|disable|status|init]", "Manage vault integration, scaffold project folders")
     table.add_row("[bold #5F9EA0]/tools[/bold #5F9EA0] [list|enable|disable|enable-group|disable-group]", "Toggle tools or groups (e.g. file_ops, task_mgmt)")
     table.add_row("[bold #5F9EA0]/setup[/bold #5F9EA0]", "Re-run the first-run setup wizard")
@@ -139,6 +140,30 @@ def show_cron_help_table(console):
     sched_table.add_row("<time>", "08:00, 17:30")
 
     console.print(Panel(sched_table, title="[bold #5F9EA0]Schedule Formats[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))
+    console.print("")
+
+
+def show_skills_help_table(console):
+    """Display skills command help table.
+
+    Args:
+        console: Rich Console instance for output.
+    """
+    console.print("")
+    table = Table(show_header=True, box=box.SIMPLE_HEAD)
+    table.add_column("Command", no_wrap=True)
+    table.add_column("Description")
+
+    table.add_row("[bold #5F9EA0]/skills list[/bold #5F9EA0]", "List skills")
+    table.add_row("[bold #5F9EA0]/skills add[/bold #5F9EA0] <name>", "Create a skill in your editor")
+    table.add_row("[bold #5F9EA0]/skills edit[/bold #5F9EA0] <name>", "Edit an existing skill")
+    table.add_row("[bold #5F9EA0]/skills modify[/bold #5F9EA0] <name> <prompt>", "Replace a skill")
+    table.add_row("[bold #5F9EA0]/skills show[/bold #5F9EA0] <name>", "Show a skill")
+    table.add_row("[bold #5F9EA0]/skills load[/bold #5F9EA0] <name>", "Load a skill into this chat")
+    table.add_row("[bold #5F9EA0]/skills remove[/bold #5F9EA0] <name>", "Delete a skill")
+    table.add_row("[bold #5F9EA0]/skills dir[/bold #5F9EA0]", "Show the skills directory")
+
+    console.print(Panel(table, title="[bold #5F9EA0]Skills[/bold #5F9EA0]", border_style="grey23", padding=(0, 2)))
     console.print("")
 
 

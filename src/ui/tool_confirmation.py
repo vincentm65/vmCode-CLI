@@ -51,11 +51,14 @@ class ToolConfirmationPanel:
         # Use appropriate options based on tool type
         self._options = self.EDIT_OPTIONS if is_edit_tool else self.STANDARD_OPTIONS
 
-    def _append_field(self, lines: list[str], label: str, value: object) -> None:
-        """Append an escaped single-line or multi-line field to the panel."""
-        escaped_lines = escape(str(value)).splitlines() or [""]
-        lines.append(f"<b>{escape(label)}:</b> {escaped_lines[0]}")
-        for continuation in escaped_lines[1:]:
+    def _append_field(self, lines: list[str], label: str, value: object, *, formatted: bool = False) -> None:
+        """Append a field to the panel, escaping untrusted values by default."""
+        value_text = str(value)
+        if not formatted:
+            value_text = escape(value_text)
+        value_lines = value_text.splitlines() or [""]
+        lines.append(f"<b>{escape(label)}:</b> {value_lines[0]}")
+        for continuation in value_lines[1:]:
             lines.append(f"    {continuation}")
 
     def _get_display_text(self) -> HTML:

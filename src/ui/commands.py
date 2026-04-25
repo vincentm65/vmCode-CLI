@@ -8,7 +8,7 @@ from typing import Optional
 from llm import config
 
 from core.config_manager import ConfigManager as ConfigManagerClass
-from ui.displays import show_help_table, show_cron_help_table
+from ui.displays import show_help_table, show_cron_help_table, show_skills_help_table
 from ui.banner import display_startup_banner
 from core.agentic import SubAgentPanel
 from ui.setting_selector import SettingSelector, SettingCategory, SettingOption
@@ -2546,6 +2546,198 @@ def _handle_prompt(chat_manager, console, debug_mode_container, args, cron_sched
     return CommandResult(status="handled")
 
 
+def _print_skills_usage(console):
+    show_skills_help_table(console)
+
+
+def _skills_list(console, query=None):
+    from datetime import datetime
+    from core.skills import get_skills_dir, list_skills
+
+    skills = list_skills(query=query)
+    if not skills:
+        console.print("[dim]No skills found.[/dim]")
+        console.print(f"[dim]Directory: {get_skills_dir()}[/dim]")
+        console.print("[dim]Create one with: [bold #5F9EA0]/skills add frontend_design[/bold #5F9EA0][/dim]")
+        return
+
+    table = Table(show_header=True, box=box.SIMPLE_HEAD)
+    table.add_column("Skill", no_wrap=True)
+    table.add_column("Preview")
+    table.add_column("Modified", no_wrap=True)
+    for skill in skills:
+        modified = datetime.fromtimestamp(skill.modified).strftime("%Y-%m-%d %H:%M")
+        table.add_row(f"[bold]{skill.name}[/bold]", skill.preview, modified)
+    console.print(table)
+    console.print("[dim]Load with: [bold #5F9EA0]/skills load <name>[/bold #5F9EA0][/dim]")
+
+
+def _open_skill_editor(console, debug_mode_container, initial_content):
+    from utils.editor import open_editor_for_content
+
+    return open_editor_for_content(
+        console,
+        initial_content=initial_content,
+        debug_mode=debug_mode_container["debug"],
+    )
+
+
+def _write_skill_from_editor(console, debug_mode_container, name, initial_content, *, overwrite, verb):
+    from core.skills import write_skill
+
+    success, content = _open_skill_editor(console, debug_mode_container, initial_content)
+    if not success or not content or not content.strip():
+        console.print("[dim]Cancelled.[/dim]")
+        return None
+    path = write_skill(name, content, overwrite=overwrite)
+    console.print(f"[green]{verb} skill '{name}'.[/green] [dim]{path}[/dim]")
+    return path
+
+
+def _handle_skills(chat_manager, console, debug_mode_container, args, cron_sched=None):
+    """Handle /skills command — manage reusable prompt snippets."""
+    from core.skills import (
+        SkillError,
+        get_skills_dir,
+        inject_skill,
+        read_skill,
+        remove_skill,
+        validate_skill_name,
+        write_skill,
+    )
+
+    if not args or not args.strip():
+        _skills_list(console)
+        return CommandResult(status="handled")
+
+    args_clean = args.strip()
+    parts = args_clean.split(maxsplit=2)
+    subcmd = parts[0].lower()
+
+    try:
+        if subcmd in ("help", "-h", "--help"):
+            _print_skills_usage(console)
+            return CommandResult(status="handled")
+
+        if subcmd in ("list", "ls"):
+            list_parts = args_clean.split(maxsplit=1)
+            query = list_parts[1] if len(list_parts) > 1 else None
+            _skills_list(console, query=query)
+            return CommandResult(status="handled")
+
+        if subcmd == "dir":
+            console.print(str(get_skills_dir()))
+            return CommandResult(status="handled")
+
+        if subcmd == "show":
+            if len(parts) < 2:
+                console.print("[red]Usage: /skills show <name>[/red]")
+                return CommandResult(status="handled")
+            name = validate_skill_name(parts[1])
+            content = read_skill(name, strip_heading=False)
+            console.print(Markdown(left_align_headings(content), code_theme=MonokaiDarkBGStyle, justify="left"))
+            return CommandResult(status="handled")
+
+        if subcmd in ("load", "use"):
+            if len(parts) < 2:
+                console.print(f"[red]Usage: /skills {subcmd} <name>[/red]")
+                return CommandResult(status="handled")
+            name = validate_skill_name(parts[1])
+            tokens = inject_skill(chat_manager, name, read_skill(name))
+            console.print(f"[green]Loaded skill '{name}' into this chat.[/green] [dim](~{tokens:,} tokens)[/dim]")
+            return CommandResult(status="handled")
+
+        if subcmd in ("remove", "rm", "delete"):
+            if len(parts) < 2:
+                console.print("[red]Usage: /skills remove <name>[/red]")
+                return CommandResult(status="handled")
+            name = validate_skill_name(parts[1])
+            from rich.prompt import Confirm
+            if not Confirm.ask(f"Remove skill '{name}'?", default=False):
+                console.print("[dim]Cancelled.[/dim]")
+                return CommandResult(status="handled")
+            remove_skill(name)
+            console.print(f"[green]Removed skill '{name}'.[/green]")
+            return CommandResult(status="handled")
+
+        if subcmd == "edit":
+            if len(parts) < 2:
+                console.print("[red]Usage: /skills edit <name>[/red]")
+                return CommandResult(status="handled")
+            name = validate_skill_name(parts[1])
+            try:
+                initial_content = read_skill(name, strip_heading=False)
+            except SkillError:
+                initial_content = f"# {name}\n\n"
+            _write_skill_from_editor(
+                console,
+                debug_mode_container,
+                name,
+                initial_content,
+                overwrite=True,
+                verb="Saved",
+            )
+            return CommandResult(status="handled")
+
+        if subcmd in ("add", "create", "new"):
+            if len(parts) < 2:
+                console.print(f"[red]Usage: /skills {subcmd} <name> [prompt][/red]")
+                return CommandResult(status="handled")
+            name = validate_skill_name(parts[1])
+            if len(parts) >= 3:
+                path = write_skill(name, parts[2], overwrite=False)
+                console.print(f"[green]Created skill '{name}'.[/green] [dim]{path}[/dim]")
+                return CommandResult(status="handled")
+            _write_skill_from_editor(
+                console,
+                debug_mode_container,
+                name,
+                f"# {name}\n\n",
+                overwrite=False,
+                verb="Created",
+            )
+            return CommandResult(status="handled")
+
+        if subcmd == "modify":
+            cmd_parts = args_clean.split(maxsplit=2)
+            if len(cmd_parts) < 2:
+                console.print("[red]Usage: /skills modify <name> [prompt][/red]")
+                return CommandResult(status="handled")
+            name = validate_skill_name(cmd_parts[1])
+            if len(cmd_parts) < 3:
+                _write_skill_from_editor(
+                    console,
+                    debug_mode_container,
+                    name,
+                    read_skill(name, strip_heading=False),
+                    overwrite=True,
+                    verb="Updated",
+                )
+                return CommandResult(status="handled")
+            read_skill(name)
+            path = write_skill(name, cmd_parts[2], overwrite=True)
+            console.print(f"[green]Updated skill '{name}'.[/green] [dim]{path}[/dim]")
+            return CommandResult(status="handled")
+
+        if len(parts) >= 2:
+            name = validate_skill_name(parts[0])
+            _, body = args_clean.split(maxsplit=1)
+            path = write_skill(name, body, overwrite=False)
+            console.print(f"[green]Created skill '{name}'.[/green] [dim]{path}[/dim]")
+            return CommandResult(status="handled")
+
+        console.print("[red]Usage: /skills add <name> [prompt][/red]")
+        console.print("[dim]Run [bold #5F9EA0]/skills help[/bold #5F9EA0] for all commands.[/dim]")
+        return CommandResult(status="handled")
+
+    except SkillError as e:
+        console.print(f"[red]{e}[/red]")
+        return CommandResult(status="handled")
+    except Exception as e:
+        console.print(f"[red]Skills command failed: {e}[/red]")
+        return CommandResult(status="handled")
+
+
 def _handle_obsidian_init(console, obsidian_settings):
     """Handle /obsidian init — scaffold project folder structure in vault."""
     if not obsidian_settings.is_active():
@@ -2772,6 +2964,7 @@ _COMMAND_HANDLERS = {
     "/setup": _handle_setup,
     "/cron": _handle_cron,
     "/prompt": _handle_prompt,
+    "/skills": _handle_skills,
 }
 
 

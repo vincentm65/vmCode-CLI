@@ -1,0 +1,1 @@
+`search_plugins`/`load_skill`: when the user asks to use a named skill, style, workflow, or saved instruction, search capabilities and load the best matching skill before continuing. `search_plugins` may return plugins and skills; use `load_skill` only for skill activation. Do not invent skill contents. Ask briefly if multiple skills match.

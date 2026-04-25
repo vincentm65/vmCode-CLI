@@ -1,6 +1,7 @@
 """External editor integration for bone-agent."""
 import os
 import platform
+import shlex
 import subprocess
 import tempfile
 import shutil
@@ -12,27 +13,30 @@ def get_editor() -> str:
     """Get editor command with OS-specific defaults.
 
     Priority:
-    1. EDITOR environment variable
-    2. OS defaults: notepad.exe (Windows) | nano/vi/vim (Unix)
+    1. Windows: notepad.exe
+    2. Linux: nvim, then EDITOR, then nano/vi/vim
+    3. Other Unix: EDITOR, then nano/vi/vim
 
     Returns:
         str: Editor command or path
     """
-    # 1. Check environment variable
+    system = platform.system()
+
+    if system == "Windows":
+        return "notepad.exe"
+
+    if system == "Linux" and shutil.which("nvim"):
+        return "nvim"
+
     editor = os.environ.get("EDITOR")
     if editor and editor.strip():
         return editor.strip()
 
-    # 2. OS-specific defaults
-    if platform.system() == "Windows":
-        return "notepad.exe"
-    else:
-        # Try to find common editors
-        for cmd in ["nvim", "nano", "vi", "vim"]:
-            if shutil.which(cmd):
-                return cmd
-        # Fallback to nano even if not found (will error later)
-        return "nano"
+    for cmd in ["nano", "vi", "vim"]:
+        if shutil.which(cmd):
+            return cmd
+
+    return "nano"
 
 
 def _create_temp_file() -> Tuple[Path, object]:
@@ -74,24 +78,38 @@ def _strip_comment_lines(content: str) -> str:
     return '\n'.join(lines).strip()
 
 
-def open_editor_for_input(console, debug_mode: bool = False) -> Tuple[bool, Optional[str]]:
-    """Open external editor and return user input.
+def _build_editor_command(editor_cmd: str, temp_path: Path) -> Tuple[bool, str | list[str]]:
+    """Build a subprocess command for launching the configured editor."""
+    use_shell = platform.system() == "Windows"
+    if use_shell:
+        return use_shell, f'{editor_cmd} "{temp_path}"'
 
-    Args:
-        console: Rich console for output
-        debug_mode: Whether to show debug information
+    try:
+        command_parts = shlex.split(editor_cmd)
+    except ValueError as e:
+        raise ValueError(f"Invalid EDITOR command: {e}") from e
 
-    Returns:
-        tuple: (success: bool, content: str or None)
-            - (True, content) if successful
-            - (False, None) if failed or cancelled
-    """
-    editor_cmd = get_editor()
+    if not command_parts:
+        raise FileNotFoundError(editor_cmd)
+
+    return use_shell, [*command_parts, str(temp_path)]
+
+
+def _open_editor_with_temp_file(
+    console,
+    editor_cmd: str,
+    debug_mode: bool = False,
+    initial_content: str = "",
+    post_process=None,
+) -> Tuple[bool, Optional[str]]:
+    """Open the configured editor for a temporary file and return the saved content."""
     temp_path = None
 
     try:
-        # Create temporary file
         temp_path, temp_fd = _create_temp_file()
+        if initial_content:
+            temp_fd.write(initial_content)
+            temp_fd.flush()
         temp_fd.close()
 
         if debug_mode:
@@ -101,24 +119,19 @@ def open_editor_for_input(console, debug_mode: bool = False) -> Tuple[bool, Opti
         console.print("[#5F9EA0]Opening editor...[/#5F9EA0]")
         console.print("[dim]Save and close the editor when done[/dim]")
 
-        # Launch editor and wait for it to close
-        # Use shell=True on Windows for notepad, False for better security on Unix
-        use_shell = platform.system() == "Windows"
-
+        use_shell, command = _build_editor_command(editor_cmd, temp_path)
         result = subprocess.run(
-            [editor_cmd, str(temp_path)],
+            command,
             shell=use_shell,
-            check=False  # Don't raise on non-zero exit
+            check=False,
         )
 
         if result.returncode != 0 and debug_mode:
             console.print(f"[yellow]Editor exited with code {result.returncode}[/yellow]")
 
-        # Read content from temp file
-        content = temp_path.read_text(encoding='utf-8')
-
-        # Strip comment lines
-        content = _strip_comment_lines(content)
+        content = temp_path.read_text(encoding="utf-8")
+        if post_process is not None:
+            content = post_process(content)
 
         if debug_mode:
             console.print(f"[dim]Read {len(content)} characters[/dim]")
@@ -145,14 +158,50 @@ def open_editor_for_input(console, debug_mode: bool = False) -> Tuple[bool, Opti
         return (False, None)
 
     finally:
-        # Cleanup temp file
         if temp_path and temp_path.exists():
             try:
                 temp_path.unlink()
                 if debug_mode:
-                    console.print(f"[dim]Cleaned up temp file[/dim]")
+                    console.print("[dim]Cleaned up temp file[/dim]")
             except Exception as e:
-                # Log but don't crash on cleanup failure
                 console.print(f"[yellow]Warning: Failed to delete temp file: {e}[/yellow]")
                 if debug_mode:
                     console.print(f"[dim]Temp file may remain at: {temp_path}[/dim]")
+
+
+def open_editor_for_input(console, debug_mode: bool = False) -> Tuple[bool, Optional[str]]:
+    """Open external editor and return user input.
+
+    Args:
+        console: Rich console for output
+        debug_mode: Whether to show debug information
+
+    Returns:
+        tuple: (success: bool, content: str or None)
+            - (True, content) if successful
+            - (False, None) if failed or cancelled
+    """
+    return _open_editor_with_temp_file(
+        console,
+        editor_cmd=get_editor(),
+        debug_mode=debug_mode,
+        post_process=_strip_comment_lines,
+    )
+
+
+def open_editor_for_content(
+    console,
+    initial_content: str = "",
+    debug_mode: bool = False,
+) -> Tuple[bool, Optional[str]]:
+    """Open external editor with initial content and return the saved file.
+
+    Unlike open_editor_for_input, this preserves markdown comment lines so it can
+    edit existing markdown files without dropping headings or notes.
+    """
+    return _open_editor_with_temp_file(
+        console,
+        editor_cmd=get_editor(),
+        debug_mode=debug_mode,
+        initial_content=initial_content or "",
+    )

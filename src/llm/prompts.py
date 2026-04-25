@@ -363,6 +363,7 @@ def _main_sections(variant: str) -> list[tuple[str, callable]]:
         ("communication_style", lambda: _static(variant, "communication_style.md")),
         ("trust_subagent_context", lambda: _static(variant, "trust_subagent_context.md")),
         ("context_reliability", lambda: _static(variant, "context_reliability.md")),
+        ("skills", lambda: _static(variant, "skills.md")),
         ("conversational_tool_calling", lambda: _static(variant, "conversational_tool_calling.md")),
         ("professional_objectivity", lambda: _static(variant, "professional_objectivity.md")),
         ("think_before_acting", lambda: _static(variant, "think_before_acting.md")),
@@ -404,12 +405,14 @@ def _sub_agent_sections(variant: str) -> list[tuple[str, callable]]:
         middle = [
             ("trust_subagent_context", lambda: _static(variant, "trust_subagent_context.md")),
             ("context_reliability", lambda: _static(variant, "context_reliability.md")),
+            ("skills", lambda: _static(variant, "skills.md")),
             ("exploration_pattern", lambda: _static(variant, "exploration_pattern.md")),
             ("targeted_searching", lambda: _static(variant, "targeted_searching.md")),
             ("tool_preferences", lambda: _static(variant, "tool_preferences.md")),
         ]
     else:
         middle = [
+            ("skills", lambda: _static(variant, "skills.md")),
             ("conversational_tool_calling", lambda: _static(variant, "conversational_tool_calling.md")),
             ("professional_objectivity", lambda: _static(variant, "professional_objectivity.md")),
             ("think_before_acting", lambda: _static(variant, "think_before_acting.md")),
@@ -483,6 +486,5 @@ def build_sub_agent_prompt(sub_agent_type: str = "research", soft_limit_tokens: 
         result.append(SUB_AGENT_SECTIONS["mode"])
 
     return "\n\n".join(result)
-
 
 

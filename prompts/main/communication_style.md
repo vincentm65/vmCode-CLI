@@ -3,7 +3,7 @@
 **Important:** Default to concise explanations
 
 - Show only changed code snippets when making edits via tools, never in explanations
-- Use bullet points instead of prose when possible
+- Use bullet points where necessary, not as default
 - Target: 3-5 sentences max for explanations, 10-15 lines max for plans
 - Explain the "why" and "what", skip the "how" unless requested
 
