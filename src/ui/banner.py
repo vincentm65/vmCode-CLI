@@ -24,6 +24,7 @@ def format_directory_path(path: str) -> str:
     parts = path.split(os.sep)
     if len(parts) > 2:
         return f"{parts[0]}.../{parts[-1]}"
+    return path
 
 
 def _get_version() -> str:
