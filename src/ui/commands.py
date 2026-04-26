@@ -59,6 +59,95 @@ def _handle_setup(chat_manager, console, debug_mode_container, args, cron_schedu
     return CommandResult(status="handled")
 
 
+def _parse_version(version: str) -> tuple[int, ...]:
+    """Parse a semver-ish version string into comparable integer parts."""
+    parts = []
+    for part in version.lstrip("v").split("."):
+        match = re.match(r"\d+", part)
+        if match:
+            parts.append(int(match.group(0)))
+        else:
+            parts.append(0)
+    return tuple(parts)
+
+
+def _get_latest_npm_version(package_name: str) -> str | None:
+    """Fetch the latest published version for an npm package."""
+    url = f"https://registry.npmjs.org/{package_name}/latest"
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=10, context=ssl.create_default_context()) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        logger.debug("npm registry check failed: %s", e)
+        return None
+
+    version = data.get("version")
+    return version if isinstance(version, str) and version else None
+
+
+def _handle_update(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
+    """Check for and install npm package updates."""
+    from rich.prompt import Confirm
+    from src import __version__
+
+    package_name = "bone-agent"
+    command = (args or "").strip().lower()
+    if command and command != "install":
+        console.print("[red]Usage: /update [install][/red]")
+        return CommandResult(status="handled")
+
+    latest_version = None
+    if command != "install":
+        console.print("[dim]Checking for updates...[/dim]")
+        latest_version = _get_latest_npm_version(package_name)
+        if not latest_version:
+            console.print("[red]Could not check npm for updates. Try again later.[/red]")
+            return CommandResult(status="handled")
+
+        console.print(f"Current: v{__version__} | Latest: v{latest_version}")
+        if _parse_version(latest_version) <= _parse_version(__version__):
+            console.print(f"[green]Already on the latest version (v{__version__})[/green]")
+            return CommandResult(status="handled")
+
+        if not Confirm.ask(f"Install {package_name}@{latest_version} now?", default=False):
+            console.print("[dim]Cancelled.[/dim]")
+            return CommandResult(status="handled")
+
+    target = f"{package_name}@latest"
+    console.print(f"[dim]Installing {target}...[/dim]")
+    try:
+        result = subprocess.run(
+            ["npm", "install", "-g", target],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=120,
+        )
+    except FileNotFoundError:
+        console.print("[red]npm was not found. Install npm or update manually.[/red]")
+        return CommandResult(status="handled")
+    except subprocess.TimeoutExpired:
+        console.print("[red]Update timed out after 120 seconds.[/red]")
+        return CommandResult(status="handled")
+    except Exception as e:
+        console.print(f"[red]Update failed: {e}[/red]")
+        return CommandResult(status="handled")
+
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    if result.returncode != 0:
+        console.print(f"[red]npm install failed with exit code {result.returncode}[/red]")
+        if output:
+            console.print(output)
+        return CommandResult(status="handled")
+
+    installed_version = latest_version or "latest"
+    console.print(f"[green]Updated {package_name} to {installed_version}.[/green]")
+    console.print("[dim]Restart bone to use the new version.[/dim]")
+    return CommandResult(status="handled")
+
+
 _CRON_ADD_EXAMPLES = [
     "[dim]  /cron add morning_brief weekdays at 8am Give me a morning briefing[/dim]",
     "[dim]  /cron add cleanup every 1 hour Clean up temp files[/dim]",
@@ -3061,6 +3150,7 @@ _COMMAND_HANDLERS = {
     "/tools": _handle_tools,
     "/cd": _handle_cd,
     "/setup": _handle_setup,
+    "/update": _handle_update,
     "/cron": _handle_cron,
     "/prompt": _handle_prompt,
     "/skills": _handle_skills,

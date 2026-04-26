@@ -229,15 +229,39 @@ def _read_windows_image() -> ClipboardImageResult:
     with tempfile.TemporaryDirectory(prefix="bone-clipboard-") as tmp_dir:
         output_path = Path(tmp_dir) / "clipboard.png"
         escaped_path = str(output_path).replace("'", "''")
-        script = (
-            "Add-Type -AssemblyName System.Windows.Forms; "
-            "Add-Type -AssemblyName System.Drawing; "
-            "if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) { exit 2 }; "
-            "$image = [System.Windows.Forms.Clipboard]::GetImage(); "
-            f"$image.Save('{escaped_path}', [System.Drawing.Imaging.ImageFormat]::Png)"
-        )
+        # escaped_path comes from tempfile.TemporaryDirectory which produces
+        # plain ASCII paths — safe to embed directly in the f-string below.
+        script = f"""
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+$exitCode = 0
+$thread = [System.Threading.Thread] {{
+    try {{
+        if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) {{
+            $script:exitCode = 2
+            return
+        }}
+
+        $image = [System.Windows.Forms.Clipboard]::GetImage()
+        try {{
+            $image.Save('{escaped_path}', [System.Drawing.Imaging.ImageFormat]::Png)
+        }} finally {{
+            if ($null -ne $image) {{ $image.Dispose() }}
+        }}
+    }} catch {{
+        Write-Error $_
+        $script:exitCode = 1
+    }}
+}}
+$thread.SetApartmentState([System.Threading.ApartmentState]::STA)
+$thread.Start()
+$thread.Join()
+exit $exitCode
+"""
         try:
-            result = _run([powershell, "-NoProfile", "-STA", "-Command", script])
+            result = _run([powershell, "-NoProfile", "-Command", script])
         except subprocess.TimeoutExpired:
             return ClipboardImageResult(reason="clipboard_error", message="Timed out reading clipboard image.")
         except OSError as exc:
