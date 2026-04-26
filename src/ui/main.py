@@ -1,6 +1,7 @@
 """Main entry point for bone-agent chatbot."""
 
 import os
+import shlex
 import sys
 import time
 import random
@@ -35,7 +36,7 @@ from ui.prompt_utils import get_bottom_toolbar_text, setup_common_bindings, TOOL
 from core.agentic import agentic_answer
 from utils.settings import MonokaiDarkBGStyle, left_align_headings
 from utils.paths import RG_EXE_PATH
-from utils.image_clipboard import read_clipboard_image
+from utils.image_clipboard import read_clipboard_image, read_image_file
 from utils.multimodal import ImageAttachment, build_message_content
 from exceptions import BoneAgentError
 
@@ -447,6 +448,34 @@ def main():
     bindings = setup_common_bindings(chat_manager)
     pending_attachments = []
 
+    def paste_text_from_clipboard(event):
+        """Fall back to prompt_toolkit's normal text paste behavior."""
+        event.app.current_buffer.paste_clipboard_data(event.app.clipboard.get_data())
+
+    def attach_image(image, *, insert_placeholder=None, source=None):
+        """Attach an image to the current prompt."""
+        attachment = ImageAttachment(
+            index=len(pending_attachments) + 1,
+            data=image.data,
+            mime_type=image.mime_type,
+        )
+        pending_attachments.append(attachment)
+        if insert_placeholder:
+            insert_placeholder(attachment.placeholder)
+        source_text = f" from {source}" if source else ""
+        console.print(
+            f"[dim]Attached {attachment.placeholder}{source_text} ({attachment.mime_type}, {len(attachment.data) // 1024} KB).[/dim]"
+        )
+        return attachment
+
+    def attach_image_from_path(path_text, *, insert_placeholder=None):
+        """Attach an image file by path and report any validation errors."""
+        result = read_image_file(path_text)
+        if result.image:
+            return attach_image(result.image, insert_placeholder=insert_placeholder, source=path_text)
+        console.print(f"[yellow]{result.message or 'Could not attach image file.'}[/yellow]")
+        return None
+
     def get_prompt(chat_manager):
         """Return colored prompt."""
         prompt_text = Text.assemble(
@@ -464,6 +493,8 @@ def main():
         buffer = event.app.current_buffer
         if buffer is not None:
             buffer.text = ""
+        if pending_attachments:
+            console.print("[dim]Cleared pending image attachments.[/dim]")
         pending_attachments.clear()
         event.app.invalidate()
 
@@ -475,23 +506,45 @@ def main():
 
         result = read_clipboard_image()
         if result.image:
-            attachment = ImageAttachment(
-                index=len(pending_attachments) + 1,
-                data=result.image.data,
-                mime_type=result.image.mime_type,
-            )
-            pending_attachments.append(attachment)
-            event.app.current_buffer.insert_text(attachment.placeholder)
-            console.print(f"[dim]Attached {attachment.placeholder} ({attachment.mime_type}).[/dim]")
+            attach_image(result.image, insert_placeholder=event.app.current_buffer.insert_text)
             event.app.invalidate()
             return
 
-        if result.reason in {"missing_tool", "clipboard_error", "too_large", "unsupported_platform"} and result.message:
+        if result.reason in {"clipboard_error", "too_large"} and result.message:
             console.print(f"[yellow]{result.message}[/yellow]")
             event.app.invalidate()
             return
 
-        event.app.current_buffer.paste_clipboard_data(event.app.clipboard.get_data())
+        if result.reason in {"missing_tool", "unsupported_platform"} and result.message:
+            console.print(f"[dim]{result.message} Falling back to text paste.[/dim]")
+            event.app.invalidate()
+
+        paste_text_from_clipboard(event)
+
+    def consume_image_attach_lines(text):
+        """Attach leading /image lines and return the remaining prompt text."""
+        remaining_lines = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("/image"):
+                remaining_lines.append(line)
+                continue
+
+            try:
+                parts = shlex.split(stripped)
+            except ValueError as exc:
+                console.print(f"[yellow]Invalid /image command: {exc}[/yellow]")
+                continue
+
+            if len(parts) != 2:
+                console.print("[yellow]Usage: /image path/to/file.png[/yellow]")
+                continue
+
+            attachment = attach_image_from_path(parts[1])
+            if attachment:
+                remaining_lines.append(attachment.placeholder)
+
+        return "\n".join(remaining_lines).strip()
 
     session = PromptSession(key_bindings=bindings, style=TOOLBAR_STYLE)
 
@@ -510,9 +563,9 @@ def main():
                     lambda: get_prompt(chat_manager),
                     **prompt_kwargs,
                 )
+                user_input = consume_image_attach_lines(raw_input.strip())
                 prompt_attachments = list(pending_attachments)
                 pending_attachments.clear()
-                user_input = raw_input.strip()
 
                 if not user_input and not prompt_attachments:
                     # Clear the empty input line to avoid multiple prompts stacking
@@ -527,7 +580,7 @@ def main():
                     break
                 elif cmd_result == "handled":
                     if prompt_attachments:
-                        console.print("[dim]Note: Pasted attachments discarded by slash command.[/dim]")
+                        console.print("[dim]Discarded pasted image attachments because slash commands do not use them.[/dim]")
                     continue
 
                 # Use modified input if provided (from /edit command)

@@ -6,6 +6,7 @@ import requests
 from llm import config as config_module
 from llm.config import PROVIDER_REGISTRY, get_provider_config, get_providers
 from llm.providers import get_handler
+from llm.capabilities import ensure_message_capabilities
 from exceptions import LLMConnectionError, LLMResponseError, ConfigurationError
 from utils.validation import validate_api_url
 
@@ -94,6 +95,7 @@ class LLMClient:
         """
         config = self.config
         registry = config["registry"]
+        ensure_message_capabilities(self.provider, registry, messages)
 
         # Build payload using handler
         payload = self.handler.build_payload(registry, messages, tools, stream)
