@@ -9,41 +9,12 @@ from exceptions import ConfigurationError
 from utils.multimodal import has_image_content
 
 
-_IMAGE_MODEL_HINTS = (
-    "4o",
-    "vision",
-    "vl",
-    "gpt-5",
-    "gpt-4.1",
-    "gpt-4.5",
-    "claude-3",
-    "claude-4",
-    "gemini",
-    "qwen-vl",
-    "glm-4v",
-    "glm-4.1v",
-    "kimi-vl",
-    "minimax-01",
-)
-
-_TEXT_ONLY_MODEL_HINTS = (
-    "embedding",
-    "moderation",
-    "rerank",
-    "whisper",
-)
-
-
 @dataclass(frozen=True)
 class CapabilityCheck:
     """Result of checking one request against provider capabilities."""
 
     ok: bool
     message: str = ""
-
-
-def _normalise_model_name(registry: dict[str, Any]) -> str:
-    return str(registry.get("api_model") or registry.get("model") or "").lower()
 
 
 def supports_images(provider: str, registry: dict[str, Any]) -> bool:
