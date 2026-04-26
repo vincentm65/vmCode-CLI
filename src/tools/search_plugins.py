@@ -105,9 +105,11 @@ def search_plugins(
             if ToolRegistry.is_plugin_active(match.tool_def.name):
                 match.already_active = True
             if match.name.lower() in requested_normalized and not match.already_active:
-                ToolRegistry.activate_plugin(match.tool_def)
-                match.activated = True
-                loaded_plugins.append(match.name)
+                if ToolRegistry.activate_plugin(match.tool_def):
+                    match.activated = True
+                    loaded_plugins.append(match.name)
+                else:
+                    load_errors.append(f"Plugin '{match.name}' is disabled. Enable it before loading.")
             continue
         skill_count += 1
         if match.name.lower() in requested_normalized:
@@ -148,7 +150,7 @@ def search_plugins(
 
     for match in matches:
         if match.kind == "plugin":
-            status = "activated" if match.activated else "active" if match.already_active else "available"
+            status = "disabled" if ToolRegistry.is_disabled(match.name) else "activated" if match.activated else "active" if match.already_active else "available"
             lines.append(f"- {match.name}")
             lines.append("  type: plugin")
             lines.append(f"  status: {status}")

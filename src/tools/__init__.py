@@ -142,5 +142,10 @@ try:
         plugin_manifest.plugin_count(),
         plugin_manifest.get_categories(),
     )
+
+    # Re-apply disabled_tools now that plugins are in the manifest
+    for tool_name in tool_settings.disabled_tools:
+        if plugin_manifest.has_plugin(tool_name):
+            ToolRegistry.disable(tool_name)
 except Exception as e:
     _logger.debug("Failed to load plugin tools: %s", e)

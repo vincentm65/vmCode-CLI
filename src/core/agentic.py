@@ -863,13 +863,16 @@ class AgenticOrchestrator:
         Returns:
             True if user granted access, False if denied.
         """
+        if self.is_sub_agent:
+            return False
+
         console = self._get_console()
         if console is None:
             return False
 
         from ui.tool_confirmation import ToolConfirmationPanel
         panel = ToolConfirmationPanel(
-            '<style fg="yellow" bold="true">Grant filesystem access</style>',
+            'Grant filesystem access',
             reason=f'Agent requested access outside project boundary: {path_str}',
             is_edit_tool=False
         )

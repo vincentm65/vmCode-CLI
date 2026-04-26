@@ -2209,8 +2209,8 @@ def _handle_obsidian(chat_manager, console, debug_mode_container, args, cron_sch
     return CommandResult(status="handled")
 
 
-def _persist_disabled_tools(console):
-    """Persist current disabled_tools to config file.
+def _persist_tool_visibility(console):
+    """Persist tool and skill visibility state to config file.
 
     Returns True on success, False on failure.
     """
@@ -2219,6 +2219,7 @@ def _persist_disabled_tools(console):
         if "TOOL_SETTINGS" not in cfg_data:
             cfg_data["TOOL_SETTINGS"] = {}
         cfg_data["TOOL_SETTINGS"]["disabled_tools"] = list(tool_settings.disabled_tools)
+        cfg_data["TOOL_SETTINGS"]["hidden_skills"] = list(tool_settings.hidden_skills)
         config_manager.save(cfg_data)
         return True
     except Exception as e:
@@ -2227,18 +2228,23 @@ def _persist_disabled_tools(console):
 
 
 def _handle_tools(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
-    """Handle /tools command — toggle individual tools or groups on/off.
+    """Handle /tools command — manage tool availability and skill discovery visibility.
 
-    No args: Launch interactive SettingSelector with tools grouped by category.
+    No args: Launch interactive SettingSelector with tools/plugins grouped by category
+    and a skills section for discovery visibility.
     Subcommands:
-      list — show all tools with group labels and status
-      enable <name> — enable a single tool
-      disable <name> — disable a single tool
-      enable-group <key> — enable all tools in a group (e.g. file_ops, search, shell)
+      list — show all tools, plugins, and skills with status
+      enable <name> — enable a core tool or plugin
+      disable <name> — disable a core tool or plugin
+      show-skill <name> — make a skill visible in discovery surfaces
+      hide-skill <name> — hide a skill from discovery surfaces
+      enable-group <key> — enable all tools in a group (e.g. file_ops, task_mgmt)
       disable-group <key> — disable all tools in a group
     """
+    from core.skills import iter_skill_summaries, validate_skill_name
     from ui.setting_selector import SettingOption, SettingCategory, SettingSelector
     from tools.helpers.base import ToolRegistry, TOOL_GROUPS
+    from tools.helpers.plugin_manifest import plugin_manifest
 
     # Text subcommands
     if args:
@@ -2246,17 +2252,27 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
 
         if args_clean.lower() in ("list", "status"):
             all_tools = sorted(ToolRegistry._tools.values(), key=lambda t: t.name)
+            plugin_defs = sorted(plugin_manifest.get_all(), key=lambda t: t.name)
+            skills = sorted(iter_skill_summaries(), key=lambda s: s.name)
             disabled = ToolRegistry.get_disabled()
-            console.print(f"[bold #5F9EA0]Tools: {len(all_tools) - len(disabled)} enabled, {len(disabled)} disabled[/bold #5F9EA0]")
+            hidden_skills = set(tool_settings.hidden_skills)
+            disabled_tools = {t.name for t in all_tools if t.name in disabled}
+            console.print(
+                f"[bold #5F9EA0]Tools: {len(all_tools) - len(disabled_tools)} enabled, {len(disabled_tools)} disabled[/bold #5F9EA0]"
+            )
+            console.print(
+                f"[bold #5F9EA0]User plugins: {sum(1 for p in plugin_defs if p.name not in disabled)} enabled, {sum(1 for p in plugin_defs if p.name in disabled)} disabled[/bold #5F9EA0]"
+            )
+            console.print(
+                f"[bold #5F9EA0]Skills: {len(skills) - len(hidden_skills)} visible, {len(hidden_skills)} hidden[/bold #5F9EA0]"
+            )
             console.print()
 
-            # Build reverse lookup: tool_name -> group_label
             tool_to_group = {}
             for gkey, gdef in TOOL_GROUPS.items():
                 for tname in gdef["tools"]:
                     tool_to_group.setdefault(tname, []).append(gdef["label"])
 
-            # Group tools for display
             current_group = None
             for t in all_tools:
                 groups = tool_to_group.get(t.name, [])
@@ -2267,6 +2283,18 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
                     console.print(f"  [bold]{group_label}[/bold]")
                 status = "[red]off[/red]" if is_off else "[green]on[/green] "
                 console.print(f"    {status} {t.name}")
+
+            console.print()
+            console.print("  [bold]User plugins[/bold]")
+            for plugin in plugin_defs:
+                status = "[red]off[/red]" if plugin.name in disabled else "[green]on[/green] "
+                console.print(f"    {status} {plugin.name}")
+
+            console.print()
+            console.print("  [bold]Skills[/bold]")
+            for skill in skills:
+                status = "[red]hidden[/red]" if skill.name in hidden_skills else "[green]visible[/green]"
+                console.print(f"    {status} {skill.name}")
 
             console.print()
             console.print("[dim]Groups:[/dim] " + ", ".join(
@@ -2306,17 +2334,17 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
 
                 # Sync and persist
                 tool_settings.disabled_tools = sorted(ToolRegistry.get_disabled())
-                _persist_disabled_tools(console)
+                _persist_tool_visibility(console)
                 console.print()
                 return CommandResult(status="handled")
 
-            # Single tool operations
+            # Single tool/plugin operations
             if action in ("enable", "disable"):
-                # Match case-insensitively against registered tools
                 all_registered_lower = {t.name.lower(): t.name for t in ToolRegistry._tools.values()}
+                all_registered_lower.update({t.name.lower(): t.name for t in plugin_manifest.get_all()})
                 matched = all_registered_lower.get(target.lower())
                 if not matched:
-                    console.print(f"[red]Unknown tool: {target}[/red]")
+                    console.print(f"[red]Unknown tool or plugin: {target}[/red]")
                     console.print(f"[dim]Run [bold #5F9EA0]/tools list[/bold #5F9EA0] to see all tools.[/dim]")
                     return CommandResult(status="handled")
 
@@ -2330,17 +2358,44 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
                         tool_settings.disabled_tools.append(matched)
                     console.print(f"[yellow]Disabled: {matched}[/yellow]")
 
-                _persist_disabled_tools(console)
+                _persist_tool_visibility(console)
+                console.print()
+                return CommandResult(status="handled")
+
+            if action in ("show-skill", "hide-skill"):
+                try:
+                    skill_name = validate_skill_name(target)
+                except Exception as e:
+                    console.print(f"[red]{e}[/red]")
+                    return CommandResult(status="handled")
+
+                known_skills = {skill.name for skill in iter_skill_summaries()}
+                if skill_name not in known_skills:
+                    console.print(f"[red]Unknown skill: {skill_name}[/red]")
+                    return CommandResult(status="handled")
+
+                if action == "show-skill":
+                    tool_settings.hidden_skills = [n for n in tool_settings.hidden_skills if n != skill_name]
+                    console.print(f"[green]Skill visible in discovery: {skill_name}[/green]")
+                else:
+                    if skill_name not in tool_settings.hidden_skills:
+                        tool_settings.hidden_skills.append(skill_name)
+                    console.print(f"[yellow]Skill hidden from discovery: {skill_name}[/yellow]")
+
+                tool_settings.hidden_skills = sorted(set(tool_settings.hidden_skills))
+                _persist_tool_visibility(console)
                 console.print()
                 return CommandResult(status="handled")
 
         console.print(f"[red]Unknown subcommand: {args}[/red]")
-        console.print("Usage: [bold #5F9EA0]/tools[/bold #5F9EA0] [list | enable <name> | disable <name> | enable-group <key> | disable-group <key>]")
+        console.print("Usage: [bold #5F9EA0]/tools[/bold #5F9EA0] [list | enable <name> | disable <name> | show-skill <name> | hide-skill <name> | enable-group <key> | disable-group <key>]")
         return CommandResult(status="handled")
 
     # No args — interactive toggle UI, organized by groups
     all_tools_map = {t.name: t for t in ToolRegistry._tools.values()}
+    plugin_tools = {t.name: t for t in plugin_manifest.get_all()}
     disabled = ToolRegistry.get_disabled()
+    hidden_skills = set(tool_settings.hidden_skills)
 
     categories = []
     for gkey, gdef in TOOL_GROUPS.items():
@@ -2383,6 +2438,33 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
             ))
         categories.append(SettingCategory(title="Other", settings=other_options))
 
+    plugin_options = []
+    for name in sorted(plugin_tools):
+        is_off = name in disabled
+        plugin_options.append(SettingOption(
+            key=name,
+            text=name,
+            value=not is_off,
+            input_type="boolean",
+            on_text="ON",
+            off_text="OFF",
+        ))
+    if plugin_options:
+        categories.append(SettingCategory(title="User plugins", settings=plugin_options))
+
+    skill_options = []
+    for skill in sorted(iter_skill_summaries(), key=lambda s: s.name):
+        skill_options.append(SettingOption(
+            key=f"skill:{skill.name}",
+            text=skill.name,
+            value=skill.name not in hidden_skills,
+            input_type="boolean",
+            on_text="VISIBLE",
+            off_text="HIDDEN",
+        ))
+    if skill_options:
+        categories.append(SettingCategory(title="Skills", settings=skill_options))
+
     selector = SettingSelector(
         categories=categories,
         title="Tool Settings",
@@ -2401,7 +2483,17 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
     # Apply changes
     newly_disabled = []
     newly_enabled = []
+    newly_hidden_skills = []
+    newly_visible_skills = []
     for name, enabled in changes.items():
+        if name.startswith("skill:"):
+            skill_name = name.split(":", 1)[1]
+            if enabled and skill_name in hidden_skills:
+                newly_visible_skills.append(skill_name)
+            elif not enabled and skill_name not in hidden_skills:
+                newly_hidden_skills.append(skill_name)
+            continue
+
         if not enabled and name not in disabled:
             ToolRegistry.disable(name)
             newly_disabled.append(name)
@@ -2409,10 +2501,13 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
             ToolRegistry.enable(name)
             newly_enabled.append(name)
 
-    # Sync tool_settings.disabled_tools to be the full current disabled set
     tool_settings.disabled_tools = sorted(ToolRegistry.get_disabled())
+    next_hidden_skills = set(hidden_skills)
+    next_hidden_skills.update(newly_hidden_skills)
+    next_hidden_skills.difference_update(newly_visible_skills)
+    tool_settings.hidden_skills = sorted(next_hidden_skills)
 
-    _persist_disabled_tools(console)
+    _persist_tool_visibility(console)
 
     # Summary
     change_lines = []
@@ -2420,6 +2515,10 @@ def _handle_tools(chat_manager, console, debug_mode_container, args, cron_schedu
         change_lines.append(f"  [yellow]Disabled:[/yellow] {name}")
     for name in newly_enabled:
         change_lines.append(f"  [green]Enabled:[/green] {name}")
+    for name in newly_hidden_skills:
+        change_lines.append(f"  [yellow]Hidden skill:[/yellow] {name}")
+    for name in newly_visible_skills:
+        change_lines.append(f"  [green]Visible skill:[/green] {name}")
 
     if change_lines:
         total_enabled = len(ToolRegistry.get_all())

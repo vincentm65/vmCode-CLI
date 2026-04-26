@@ -1,6 +1,7 @@
 """Tool result display functions for the agentic loop."""
 
 import re
+import textwrap
 from pathlib import Path
 from typing import Optional
 
@@ -383,6 +384,10 @@ def handle_search_plugins_feedback(tool_result, console, panel_updater):
             console.print()
         return
 
+    def append_wrapped_detail(line_parts, text, indent, width=72):
+        wrapped_lines = textwrap.wrap(text, width=width) or [text]
+        line_parts.extend(f"{indent}[dim]{wrapped}[/dim]" for wrapped in wrapped_lines)
+
     max_display = 10
     display_capabilities = capabilities[:max_display]
     remaining = max(0, len(capabilities) - max_display)
@@ -395,25 +400,19 @@ def handle_search_plugins_feedback(tool_result, console, panel_updater):
         connector = "└─" if is_last else "├─"
 
         if capability["type"] == "plugin":
-            status = capability["status"]
-            if status == "activated":
-                meta = "[dim](plugin, [/dim][green]activated[/green][dim])[/dim]"
-            elif status:
-                meta = f"[dim](plugin, {status})[/dim]"
-            else:
-                meta = "[dim](plugin)[/dim]"
+            meta = "[dim](plugin)[/dim]"
+            if capability["status"]:
+                meta += f" [dim][{capability['status']}][/dim]"
         else:
             meta = "[dim](skill)[/dim]"
 
-        details = []
+        detail_indent = "   │  " if not is_last else "      "
+        line_parts = [f"   {connector} {capability['name']} {meta}"]
         if capability["summary"]:
-            details.append(capability["summary"])
+            append_wrapped_detail(line_parts, capability["summary"], detail_indent)
         if capability["tags"]:
-            details.append(f"tags: {capability['tags']}")
-        details_suffix = f" [dim]— {' | '.join(details)}[/dim]" if details else ""
-
-        line = f"   {connector} {capability['name']} {meta}{details_suffix}"
-        tree_lines.append(line)
+            append_wrapped_detail(line_parts, f"tags: {capability['tags']}", detail_indent)
+        tree_lines.append("\n".join(line_parts))
 
     if remaining > 0:
         tree_lines.append(f"   └─ ... and {remaining} more")

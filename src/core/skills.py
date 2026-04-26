@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Generic, TypeVar
 
+import yaml
+
+
+logger = logging.getLogger(__name__)
 
 MAX_SKILL_BYTES = 32 * 1024
 SKILL_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 _HEADING_RE = re.compile(r"^#\s+(.+?)\s*$")
+_FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 
 
 @dataclass
@@ -21,6 +27,8 @@ class SkillSummary:
     path: Path
     preview: str
     modified: float
+    description: str = ""
+    tags: list[str] = field(default_factory=list)
 
 
 T = TypeVar("T")
@@ -89,6 +97,69 @@ def _check_size(content: str) -> None:
         raise SkillError(f"Skill is too large. Maximum size is {MAX_SKILL_BYTES} bytes.")
 
 
+def _parse_frontmatter(content: str) -> tuple[dict, str]:
+    """Extract YAML frontmatter and remaining body from content.
+
+    Returns:
+        (metadata_dict, body_text). metadata_dict may be empty.
+
+    Notes:
+        If a frontmatter block is present but invalid, preserve the original content
+        as body so callers do not silently discard user-authored metadata.
+    """
+    match = _FRONTMATTER_RE.match(content)
+    if not match:
+        return {}, content
+    try:
+        meta = yaml.safe_load(match.group(1)) or {}
+    except yaml.YAMLError:
+        return {}, content
+    if not isinstance(meta, dict):
+        return {}, content
+    body = content[match.end():]
+    return meta, body
+
+
+def _normalize_description(value: object) -> str:
+    text = str(value or "").strip()
+    return text
+
+
+def _normalize_tags(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        candidates = [value]
+    elif isinstance(value, (list, tuple, set)):
+        candidates = list(value)
+    else:
+        candidates = [value]
+
+    tags: list[str] = []
+    for candidate in candidates:
+        tag = str(candidate or "").strip()
+        if tag:
+            tags.append(tag)
+    return tags
+
+
+def _render_frontmatter(description: str, tags: list[str]) -> str:
+    """Render YAML frontmatter block for a skill file."""
+    if not description and not tags:
+        return ""
+    meta = {}
+    if description:
+        meta["description"] = description
+    if tags:
+        meta["tags"] = tags
+    return f"---\n{yaml.dump(meta, default_flow_style=False).strip()}\n---\n"
+
+
+def _needs_metadata(meta: dict) -> bool:
+    """Check if frontmatter is missing description or tags."""
+    return not meta.get("description") or not meta.get("tags")
+
+
 def _strip_heading(name: str, content: str) -> str:
     lines = content.splitlines()
     if not lines:
@@ -99,36 +170,83 @@ def _strip_heading(name: str, content: str) -> str:
     return content.strip()
 
 
-def format_skill_file(name: str, content: str) -> str:
-    """Format a skill as a markdown file with a title heading."""
+def format_skill_file(name: str, content: str, *, description: str = "", tags: list[str] | None = None) -> str:
+    """Format a skill as a markdown file with optional frontmatter and title heading."""
     valid_name = validate_skill_name(name)
     body = _strip_heading(valid_name, content)
     if not body:
         raise SkillError("Skill prompt cannot be empty.")
-    formatted = f"# {valid_name}\n\n{body.strip()}\n"
+
+    frontmatter = _render_frontmatter(description, tags or [])
+    formatted = f"{frontmatter}# {valid_name}\n\n{body.strip()}\n"
     _check_size(formatted)
     return formatted
 
 
 def read_skill(name: str, strip_heading: bool = True) -> str:
-    """Read a skill body by name."""
+    """Read a skill body by name.
+
+    Returns the prompt body without frontmatter or heading (unless strip_heading=False,
+    in which case frontmatter is still stripped but heading is kept).
+    """
     path = get_skill_path(name)
     if path.is_symlink():
         raise SkillError("Refusing to read a symlinked skill.")
     if not path.is_file():
         raise SkillError(f"Skill '{validate_skill_name(name)}' not found.")
     content = path.read_text(encoding="utf-8")
+    _, body = _parse_frontmatter(content)
     if strip_heading:
-        return _strip_heading(name, content)
-    return content.strip()
+        return _strip_heading(name, body)
+    return body.strip()
 
 
 def write_skill(name: str, content: str, overwrite: bool = False) -> Path:
-    """Create or replace a skill file."""
-    path = get_skill_path(name)
+    """Create or replace a skill file.
+
+    If the content contains YAML frontmatter with description and tags, those are
+    preserved. Otherwise, metadata is auto-generated from the content via the LLM.
+    """
+    valid_name = validate_skill_name(name)
+    path = get_skill_path(valid_name)
     if path.exists() and not overwrite:
-        raise SkillError(f"Skill '{validate_skill_name(name)}' already exists.")
-    formatted = format_skill_file(name, content)
+        raise SkillError(f"Skill '{valid_name}' already exists.")
+
+    # Parse any existing frontmatter from the content
+    body = content
+    description = ""
+    tags: list[str] = []
+
+    # Check if the raw content has frontmatter already
+    raw_meta, raw_body = _parse_frontmatter(content)
+    if raw_meta:
+        description = _normalize_description(raw_meta.get("description", ""))
+        tags = _normalize_tags(raw_meta.get("tags"))
+        body = raw_body
+
+    # If still missing metadata, try to preserve from existing file
+    if _needs_metadata({"description": description, "tags": tags}) and path.is_file():
+        existing_content = path.read_text(encoding="utf-8")
+        existing_meta, _ = _parse_frontmatter(existing_content)
+        if not description and existing_meta.get("description"):
+            description = _normalize_description(existing_meta["description"])
+        if not tags and existing_meta.get("tags"):
+            tags = _normalize_tags(existing_meta.get("tags"))
+
+    # If still missing, auto-generate
+    if _needs_metadata({"description": description, "tags": tags}):
+        prompt_body = _strip_heading(valid_name, body)
+        if prompt_body:
+            from core.metadata import generate_metadata
+            generated = generate_metadata(prompt_body, valid_name)
+            generated_description = _normalize_description(generated.get("description", ""))
+            generated_tags = _normalize_tags(generated.get("tags"))
+            if not description:
+                description = generated_description
+            if not tags:
+                tags = generated_tags
+
+    formatted = format_skill_file(valid_name, body, description=description, tags=tags)
     _atomic_write(path, formatted)
     return path
 
@@ -159,15 +277,20 @@ def iter_skill_summaries() -> list[SkillSummary]:
             continue
         try:
             name = validate_skill_name(path.stem)
-            body = read_skill(name)
+            raw = path.read_text(encoding="utf-8")
+            meta, body_text = _parse_frontmatter(raw)
+            heading_stripped = _strip_heading(name, body_text)
         except SkillError:
             continue
+
         summaries.append(
             SkillSummary(
                 name=name,
                 path=path,
-                preview=_preview(body),
+                preview=_preview(heading_stripped),
                 modified=path.stat().st_mtime,
+                description=_normalize_description(meta.get("description", "")),
+                tags=_normalize_tags(meta.get("tags")),
             )
         )
     return summaries
@@ -231,8 +354,23 @@ def search_skill_matches(query: str | None = None, max_results: int = 20) -> lis
     candidates = [
         SearchCandidate(
             item=skill,
-            text=f"{skill.name} {skill.preview}",
-            compact_text=_compact_match_text(f"{skill.name} {skill.preview}"),
+            text=" ".join(
+                part
+                for part in [
+                    skill.name,
+                    skill.description,
+                    skill.preview,
+                    " ".join(skill.tags),
+                ]
+                if part
+            ),
+            compact_text=_compact_match_text(
+                " ".join(
+                    part
+                    for part in [skill.name, skill.description, " ".join(skill.tags)]
+                    if part
+                )
+            ),
             exact_text=skill.name,
         )
         for skill in skills

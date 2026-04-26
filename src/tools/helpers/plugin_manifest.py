@@ -14,6 +14,7 @@ from core.skills import (
     iter_skill_summaries,
     search_candidates,
 )
+from utils.settings import tool_settings
 
 from .base import ToolDefinition
 
@@ -83,9 +84,13 @@ class PluginManifest:
         """Yield available plugin and skill capabilities for discovery surfaces."""
         include_plugins = category in (None, "plugin")
         include_skills = category in (None, "skill")
+        disabled_tools = set(tool_settings.disabled_tools or [])
+        hidden_skills = set(tool_settings.hidden_skills or [])
 
         if include_plugins:
             for tool_def in self._plugins.values():
+                if tool_def.name in disabled_tools:
+                    continue
                 if category not in (None, "plugin") and tool_def.category != category:
                     continue
                 yield CapabilityMatch(
@@ -99,12 +104,14 @@ class PluginManifest:
 
         if include_skills:
             for summary in iter_skill_summaries():
+                if summary.name in hidden_skills:
+                    continue
                 yield CapabilityMatch(
                     kind="skill",
                     name=summary.name,
-                    description=summary.preview,
+                    description=summary.description or summary.preview,
                     category="skill",
-                    tags=["skill"],
+                    tags=summary.tags or ["skill"],
                     preview=summary.preview,
                 )
 
