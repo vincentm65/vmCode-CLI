@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import imghdr
 import os
 import platform
 import shutil
@@ -67,6 +66,18 @@ _DETECTED_MIME_TYPES = {
 }
 
 
+def _detect_image_type(data: bytes) -> Optional[str]:
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if len(data) >= 12 and data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
 def _normalise_mime_type(mime_type: str) -> str:
     return _MIME_ALIASES.get(mime_type, mime_type)
 
@@ -87,7 +98,7 @@ def _mime_type_for_path(path: Path, data: bytes) -> Optional[str]:
     extension_mime = _EXTENSION_MIME_TYPES.get(path.suffix.lower())
     if extension_mime:
         return extension_mime
-    detected = imghdr.what(None, h=data)
+    detected = _detect_image_type(data)
     return _DETECTED_MIME_TYPES.get(detected or "")
 
 
