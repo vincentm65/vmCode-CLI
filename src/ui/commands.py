@@ -914,12 +914,13 @@ def _handle_model(chat_manager, console, debug_mode_container, args, cron_schedu
         # Format: (display_name, openrouter_model_id)
         bone_models = [
             # DeepSeek
-            ("DeepSeek-V3.2       1×", "deepseek/deepseek-v3.2"),
+            ("DeepSeek-V4-Pro     1×", "deepseek/deepseek-v4-pro"),
+            ("DeepSeek-V4-Flash   1×", "deepseek/deepseek-v4-flash"),
             # MiniMax
             ("MiniMax-M2.5        1×", "minimax/minimax-m2.5"),
             ("MiniMax-M2.7        1.5×", "minimax/minimax-m2.7"),
             # Moonshot AI
-            ("Kimi-K2.5           3×", "moonshotai/kimi-k2.5"),
+            ("Kimi-K2.6           3×", "moonshotai/kimi-k2.6"),
             # xAI
             ("Grok-Code-Fast-1    1.5×", "x-ai/grok-code-fast-1"),
             ("Grok-4.1-Fast       1×", "x-ai/grok-4.1-fast"),

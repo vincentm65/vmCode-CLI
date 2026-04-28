@@ -216,10 +216,10 @@ def run_sub_agent(
     _billed_warning_sent = False
 
     def _chat_completion_with_token_hint(messages, **kwargs):
-        """Prepend a system-level token budget hint and one-time warnings to every LLM call."""
+        """Inject one-time limit warnings when thresholds are crossed. Passes messages
+        through unchanged on normal turns to keep the message prefix stable for caching."""
         nonlocal _soft_limit_warned, _billed_warning_sent
         tt = temp_chat_manager.token_tracker
-        hint = f"[Token budget: {tt.current_context_tokens:,} curr / {tt.conv_total_tokens:,} total billed]"
         warnings = []
 
         if not _soft_limit_warned and tt.current_context_tokens >= sub_agent_settings.soft_limit_tokens:
@@ -240,10 +240,10 @@ def run_sub_agent(
             )
 
         if warnings:
-            hint = "\n".join([*warnings, hint])
+            warning_msg = {"role": "system", "content": "\n".join(warnings)}
+            return original_chat_completion([warning_msg, *messages], **kwargs)
 
-        token_msg = {"role": "system", "content": hint}
-        return original_chat_completion([token_msg, *messages], **kwargs)
+        return original_chat_completion(messages, **kwargs)
 
     def _get_llm_response_with_hard_limit(allowed_tools=None, allow_active_plugins=False):
         """Wrapper to check context and billed token limits and update panel state."""

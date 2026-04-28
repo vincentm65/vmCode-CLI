@@ -48,6 +48,9 @@ class OpenAIHandler:
         if "top_p" not in payload and config.get("allow_top_p", True):
             payload["top_p"] = config.get("default_top_p", 0.9)
 
+        if config.get("provider") == "bone" and payload.get("model", "").startswith("deepseek/"):
+            payload["provider"] = {"order": ["deepseek"]}
+
         return payload
 
     def parse_response(self, response_json: Dict[str, Any]) -> Dict[str, Any]:

@@ -367,6 +367,7 @@ def _get_provider_registry():
         },
         "bone": {
             "type": "api",
+            "provider": "bone",
             "api_key": _CONFIG.get("BONE_PROXY_API_KEY", ""),
             "model": _CONFIG.get("BONE_PROXY_MODEL", "openai/gpt-4o-mini"),
             "api_base": _CONFIG.get("BONE_PROXY_API_BASE", "https://api.vmcode.dev"),
