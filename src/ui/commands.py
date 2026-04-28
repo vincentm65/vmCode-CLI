@@ -819,9 +819,6 @@ def _open_provider_editor(chat_manager, console, provider):
     else:
         console.print(f"[green]{provider} activated.[/green]")
 
-    if "Failed" not in result and "failed" not in result:
-        console.print(f"[dim]{result}[/dim]")
-
     return True
 
 
@@ -854,8 +851,6 @@ def _handle_provider(chat_manager, console, debug_mode_container, args, cron_sch
         if model:
             label += f" ({model})"
         console.print(f"[green]Switched to {label}[/green]")
-        if "Failed" not in result and "failed" not in result:
-            console.print(f"[dim]{result}[/dim]")
 
         return CommandResult(status="handled")
     else:

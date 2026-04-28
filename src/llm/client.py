@@ -98,7 +98,9 @@ class LLMClient:
         ensure_message_capabilities(self.provider, registry, messages)
 
         # Build payload using handler
-        payload = self.handler.build_payload(registry, messages, tools, stream)
+        conversation_id = getattr(self, 'conversation_id', None)
+        payload = self.handler.build_payload(registry, messages, tools, stream,
+                                             conversation_id=conversation_id)
 
         try:
             response = requests.post(

@@ -5,6 +5,7 @@ import json
 import logging
 import subprocess
 import time
+import uuid
 import requests
 from typing import Optional, IO
 
@@ -37,6 +38,8 @@ class ChatManager:
     def __init__(self, compact_trigger_tokens: Optional[int] = None):
         # Initialize client with provider from global config
         self.client = LLMClient()
+        self.conversation_id = str(uuid.uuid4())
+        self.client.conversation_id = self.conversation_id
         self.messages = []
         self.server_process: Optional[subprocess.Popen] = None
         self._log_file: Optional[IO] = None  # Track llama_server log file handle

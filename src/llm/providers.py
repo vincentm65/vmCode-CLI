@@ -28,7 +28,8 @@ class OpenAIHandler:
         return headers
 
     def build_payload(self, config: Dict[str, Any], messages: list,
-                      tools: Optional[list] = None, stream: bool = True) -> Dict[str, Any]:
+                      tools: Optional[list] = None, stream: bool = True,
+                      conversation_id: Optional[str] = None) -> Dict[str, Any]:
         """Build request payload."""
         payload = {**config.get("payload", {}), "messages": messages, "stream": stream}
 
@@ -135,7 +136,8 @@ class AnthropicHandler:
         return headers
 
     def build_payload(self, config: Dict[str, Any], messages: list,
-                      tools: Optional[list] = None, stream: bool = True) -> Dict[str, Any]:
+                      tools: Optional[list] = None, stream: bool = True,
+                      conversation_id: Optional[str] = None) -> Dict[str, Any]:
         """Build request payload (Anthropic format)."""
         # Extract system messages to top-level parameter
         system_messages = [msg["content"] for msg in messages if msg.get("role") == "system"]

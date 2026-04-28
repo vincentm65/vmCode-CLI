@@ -39,7 +39,8 @@ class CodexResponsesHandler:
         return headers
 
     def build_payload(self, config: Dict[str, Any], messages: list,
-                      tools: Optional[list] = None, stream: bool = True) -> Dict[str, Any]:
+                      tools: Optional[list] = None, stream: bool = True,
+                      conversation_id: Optional[str] = None) -> Dict[str, Any]:
         """Build request payload for Codex backend Responses API."""
         system_parts = [m["content"] for m in messages if m.get("role") == "system"]
         instructions = "\n".join(system_parts) if system_parts else "You are a helpful assistant."
@@ -106,6 +107,7 @@ class CodexResponsesHandler:
                 model=model,
                 instructions=instructions,
                 tools=payload.get("tools"),
+                conversation_id=conversation_id,
             )
 
         if "temperature" not in payload and config.get("allow_temperature", True):
@@ -121,8 +123,18 @@ class CodexResponsesHandler:
         model: str,
         instructions: str,
         tools: Optional[list] = None,
+        conversation_id: Optional[str] = None,
     ) -> str:
-        """Build a stable prompt-cache key for the reusable Codex prefix."""
+        """Build a stable prompt-cache key for the reusable Codex prefix.
+
+        When conversation_id is available (normal chat flow), the cache key
+        is conversation-scoped so each conversation gets its own cache
+        affinity. When absent (ephemeral/one-shot calls), falls back to
+        the system-prompt hash.
+        """
+        if conversation_id:
+            return f"bone-agent:conv-{conversation_id}"
+
         cache_scope = {
             "model": model,
             "instructions": instructions,
