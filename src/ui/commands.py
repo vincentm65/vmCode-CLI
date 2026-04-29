@@ -1244,6 +1244,42 @@ def _handle_usage(chat_manager, console, debug_mode_container, args, cron_schedu
     return CommandResult(status="handled")
 
 
+def _build_ask_context(chat_manager, num_turns):
+    """Build context string from the last N user turns for /ask -c.
+
+    A user turn is: one role=user message plus all following messages
+    (assistant, tool, system) up to the next user message or end of list.
+
+    Args:
+        chat_manager: ChatManager instance with .messages list
+        num_turns: Number of user turns to include (positive int), or None for all
+
+    Returns:
+        Formatted string of messages suitable as initial_context for sub-agent.
+        Returns empty string if num_turns is 0 or no user messages exist.
+    """
+    messages = chat_manager.messages
+
+    if num_turns is None:
+        return "\n".join(
+            f"[{m['role']}]: {m.get('content', '')}" for m in messages
+        )
+
+    if num_turns <= 0:
+        return ""
+
+    # Find indices of all user messages, take the last N
+    user_indices = [i for i, m in enumerate(messages) if m["role"] == "user"]
+    if not user_indices:
+        return ""
+
+    start_idx = user_indices[-min(num_turns, len(user_indices))]
+
+    return "\n".join(
+        f"[{m['role']}]: {m.get('content', '')}" for m in messages[start_idx:]
+    )
+
+
 def _handle_review(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
     """Handle review command - run code review on git changes."""
     import subprocess
@@ -1371,6 +1407,154 @@ def _handle_review(chat_manager, console, debug_mode_container, args, cron_sched
         # Update context token tracker so compaction timing stays accurate
         injected_tokens = chat_manager.token_tracker.estimate_tokens(
             f"{review_cmd}\n\n{history_text}"
+        )
+        chat_manager.token_tracker.current_context_tokens += injected_tokens
+
+    return CommandResult(status="handled")
+
+
+def _handle_ask(chat_manager, console, debug_mode_container, args, cron_scheduler=None):
+    """Handle /ask command - invoke sub-agent with an arbitrary query.
+
+    Usage:
+        /ask <query>          Fresh sub-agent, result in history
+        /ask -c N <query>     Last N user turns as context, result in history
+        /ask -c <query>       All chat history as context, result in history
+        /ask -f <query>       Fresh sub-agent, display only (no history)
+        /ask -cf N <query>    N turns context, display only
+        /ask -cf <query>      All history context, display only
+
+    Alias: /a
+    """
+    from core.sub_agent import run_sub_agent
+    from core.agentic import SubAgentPanel
+    from rich.markdown import Markdown
+    from utils.settings import MonokaiDarkBGStyle, left_align_headings
+
+    # ── Parse flags ──────────────────────────────────────────────
+    carry_context = False
+    display_only = False
+    num_turns = None
+    query_parts = []
+
+    if args and args.strip():
+        tokens = args.strip().split()
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token == "-c":
+                carry_context = True
+                if i + 1 < len(tokens) and tokens[i + 1].lstrip("+-").isdigit():
+                    i += 1
+                    num_turns = int(tokens[i])
+                    if num_turns <= 0:
+                        console.print("[red]Error: -c count must be a positive number[/red]")
+                        return CommandResult(status="handled")
+            elif token == "-f":
+                display_only = True
+            elif token.startswith("-"):
+                # Check for combined flags: -cf, -fc
+                flag_chars = token[1:]
+                if flag_chars and all(ch in "cf" for ch in flag_chars):
+                    if "c" in flag_chars:
+                        carry_context = True
+                        if i + 1 < len(tokens) and tokens[i + 1].lstrip("+-").isdigit():
+                            i += 1
+                            num_turns = int(tokens[i])
+                            if num_turns <= 0:
+                                console.print("[red]Error: -c count must be a positive number[/red]")
+                                return CommandResult(status="handled")
+                    if "f" in flag_chars:
+                        display_only = True
+                else:
+                    # Unknown flag — treat as query (user might have typed a hyphenated word)
+                    query_parts.append(token)
+            else:
+                query_parts.append(token)
+            i += 1
+
+    query = " ".join(query_parts).strip()
+
+    if not query:
+        console.print("[yellow]Usage: /ask [-c [N]] [-f] <query>[/yellow]")
+        console.print("[dim]  -c N   Carry last N user turns as context[/dim]")
+        console.print("[dim]  -c     Carry all chat history as context[/dim]")
+        console.print("[dim]  -f     Display only, don't save to history[/dim]")
+        console.print("[dim]Alias: /a[/dim]")
+        return CommandResult(status="handled")
+
+    # ── Build context ────────────────────────────────────────────
+    if carry_context:
+        context_str = _build_ask_context(chat_manager, num_turns)
+        if not context_str:
+            console.print("[yellow]No chat context available to carry.[/yellow]")
+            console.print("[dim]Falling back to fresh context.[/dim]")
+            context_str = None
+    else:
+        context_str = None
+
+    # ── Run sub-agent ────────────────────────────────────────────
+    from pathlib import Path
+    from utils.paths import RG_EXE_PATH as _RG_EXE_PATH
+
+    if carry_context:
+        context_desc = "all history" if num_turns is None else f"last {num_turns} turns"
+    else:
+        context_desc = "fresh"
+
+    panel = SubAgentPanel(f"Asking with {context_desc} context", console)
+
+    try:
+        sub_result = run_sub_agent(
+            task_query=query,
+            repo_root=Path.cwd().resolve(),
+            rg_exe_path=str(_RG_EXE_PATH),
+            console=console,
+            panel_updater=panel,
+            sub_agent_type="ask",
+            initial_context=context_str,
+        )
+    except Exception as e:
+        console.print(f"[red]Sub-agent failed: {e}[/red]")
+        return CommandResult(status="handled")
+
+    if sub_result.get("error"):
+        console.print(f"[red]Sub-agent error: {sub_result['error']}[/red]")
+        return CommandResult(status="handled")
+
+    # Track sub-agent usage in main chat_manager
+    usage = sub_result.get("usage", {})
+    if usage:
+        chat_manager.token_tracker.add_usage(usage, model_name=sub_result.get("model", ""))
+
+    result_text = sub_result.get("result", "")
+
+    # ── Display result ───────────────────────────────────────────
+    if result_text:
+        console.print()
+        md = Markdown(
+            left_align_headings(result_text),
+            code_theme=MonokaiDarkBGStyle,
+            justify="left",
+        )
+        console.print(md)
+        console.print()
+
+    # ── Inject into history (unless -f) ──────────────────────────
+    if not display_only and result_text:
+        context_note = f" (with {context_desc} context)" if carry_context else ""
+        chat_manager.messages.append({
+            "role": "user",
+            "content": f"/ask{context_note}: {query}",
+        })
+        chat_manager.messages.append({
+            "role": "assistant",
+            "content": result_text,
+        })
+
+        # Update context token tracker so compaction timing stays accurate
+        injected_tokens = chat_manager.token_tracker.estimate_tokens(
+            f"/ask{context_note}: {query}\n\n{result_text}"
         )
         chat_manager.token_tracker.current_context_tokens += injected_tokens
 
@@ -3151,6 +3335,8 @@ _COMMAND_HANDLERS = {
     "/prompt": _handle_prompt,
     "/skills": _handle_skills,
     "/skill": _handle_skills,
+    "/ask": _handle_ask,
+    "/a": _handle_ask,
 }
 
 

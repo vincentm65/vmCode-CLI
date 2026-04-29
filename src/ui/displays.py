@@ -66,6 +66,7 @@ def show_help_table(console):
     table.add_row("[bold #5F9EA0]/cd[/bold #5F9EA0] [path]", "Change working directory (no args to show current)")
     table.add_row("[bold #5F9EA0]/edit[/bold #5F9EA0], [bold #5F9EA0]/e[/bold #5F9EA0]", "Open editor for multi-line input")
     table.add_row("[bold #5F9EA0]/review[/bold #5F9EA0] [args], [bold #5F9EA0]/r[/bold #5F9EA0]", "Code review git changes (e.g. /review --staged, /review main..HEAD)")
+    table.add_row("[bold #5F9EA0]/ask[/bold #5F9EA0] [-c [N]] [-f] <query>, [bold #5F9EA0]/a[/bold #5F9EA0]", "Invoke sub-agent with a query (use -c N for context, -f for display only)")
     table.add_row("[bold #5F9EA0]/skills[/bold #5F9EA0] [list|add|modify|remove|use]", "Manage reusable prompt skills")
     table.add_row("[bold #5F9EA0]/obsidian[/bold #5F9EA0] [set|enable|disable|status|init]", "Manage vault integration, scaffold project folders")
     table.add_row("[bold #5F9EA0]/tools[/bold #5F9EA0] [list|enable|disable|enable-group|disable-group]", "Toggle tools or groups (e.g. file_ops, task_mgmt)")

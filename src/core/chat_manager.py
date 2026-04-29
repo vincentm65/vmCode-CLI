@@ -1382,22 +1382,38 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
             return f"Invalid provider. Use /provider to list. Available: {available}"
 
         previous_provider = self.client.provider
+        had_local_server = previous_provider == "local" and self.server_process is not None
 
         # Terminate server if switching away from local
         if previous_provider == "local" and provider_name != "local":
             self.cleanup()
 
         if self.client.switch_provider(provider_name):
-            self._init_messages(reset_costs=True)
+            self.token_tracker.reset_all()
+            self.token_tracker.reset_conversation()
+            self._update_context_tokens()
+            self.context_token_estimate = self.token_tracker.current_context_tokens
+            if self.markdown_logger:
+                self.markdown_logger.start_session()
             if provider_name == "local":
                 server = self.start_server_if_needed()
-                if not server:
+                if server:
+                    self.server_process = server
+                elif not self.server_process:
                     # Failed to start server - revert
                     self.client.switch_provider(previous_provider)
-                    self._init_messages(reset_costs=True)
+                    if had_local_server:
+                        restored_server = self.start_server_if_needed()
+                        if restored_server:
+                            self.server_process = restored_server
+                        elif not self.server_process:
+                            return "Failed to start local server. Failed to restore previous local provider."
+                    self.token_tracker.reset_all()
+                    self.token_tracker.reset_conversation()
+                    self._update_context_tokens()
+                    self.context_token_estimate = self.token_tracker.current_context_tokens
                     previous_label = get_provider_display_name(previous_provider)
                     return f"Failed to start local server. Reverted to {previous_label} provider."
-                self.server_process = server
                 provider_label = get_provider_display_name(provider_name)
                 return f"Switched to {provider_label} provider (server ready)."
             provider_label = get_provider_display_name(provider_name)
@@ -1613,6 +1629,7 @@ Provide a concise summary (2-4 paragraphs) that captures all essential context f
         if self.server_process:
             self.server_process.terminate()
             self.server_process.wait()
+            self.server_process = None
 
         # Close log file handle if open
         if self._log_file:
