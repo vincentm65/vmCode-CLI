@@ -169,6 +169,27 @@ def _matches_safe_subcommand(arg: str, safe_set: frozenset) -> bool:
     return False
 
 
+def is_git_command(command: str) -> bool:
+    """Check if a command is a git invocation.
+
+    Returns True for 'git', 'git.exe', and any command starting with 'git '.
+    This is used to gate git operations separately in danger mode.
+
+    Args:
+        command: Command string to check
+
+    Returns:
+        bool: True if the command is a git invocation
+    """
+    command = command.strip()
+    if not command:
+        return False
+    tokens = _tokenize(command)
+    if not tokens:
+        return False
+    return _normalize_command_name(tokens[0]) == "git"
+
+
 def is_safe_command(command: str) -> bool:
     """Check if a command should be auto-approved (safe, read-only).
 

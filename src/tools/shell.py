@@ -64,17 +64,23 @@ def confirm_tool(command, console, reason=None, requires_approval=True, approve_
     if not TOOLS_REQUIRE_CONFIRMATION and not requires_approval:
         return ("accept", None)
 
-    # In danger mode, auto-approve everything except unsafe commands.
-    # Safe commands (per SAFE_COMMAND_RULES) auto-approve.
-    # Unsafe commands (e.g., git push) still require confirmation.
     if approve_mode == "danger":
-        from utils.safe_commands import is_safe_command
+        from utils.safe_commands import is_safe_command, is_git_command
+
+        # Safe commands (per SAFE_COMMAND_RULES) auto-approve.
+        # This includes read-only git operations like status, log, diff, etc.
         if is_safe_command(command):
             return ("accept", None)
-        # Auto-accept all edit operations in danger mode
-        if is_edit_tool or (requires_approval and "edit_file" in command):
+
+        # Git commands are explicitly excluded from danger mode auto-approval.
+        # Only the safe git operations checked above pass through — all other
+        # git commands (push, commit, reset, rebase, etc.) require explicit
+        # user confirmation. No git operation gets a free pass.
+        # Auto-accept all edit operations in danger mode.
+        elif is_edit_tool or (requires_approval and "edit_file" in command):
             return ("accept", None)
-        # Fall through to normal confirmation for unsafe commands
+
+        # Fall through to normal confirmation for other unsafe commands
 
     # Skip confirmation for edit operations in accept_edits mode
     # This only applies to file edits, not execute_command
